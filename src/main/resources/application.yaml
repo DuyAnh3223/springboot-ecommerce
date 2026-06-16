@@ -15,10 +15,7 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-#  security:
-#    user:
-#      name: admin
-#      password: admin
+
 
 jwt:
   signerKey: "c1a82dd9443f07d5dc82ed097662030773c7f2ead8baa97fcfa0dba99f96407a"
