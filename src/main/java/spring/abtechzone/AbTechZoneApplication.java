@@ -9,5 +9,4 @@ public class AbTechZoneApplication {
     public static void main(String[] args) {
         SpringApplication.run(AbTechZoneApplication.class, args);
     }
-
 }

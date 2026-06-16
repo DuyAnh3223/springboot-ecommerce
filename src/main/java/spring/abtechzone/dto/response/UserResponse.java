@@ -1,10 +1,9 @@
 package spring.abtechzone.dto.response;
 
+import java.util.Set;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.entity.Role;
-
-import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -12,11 +11,11 @@ import java.util.Set;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserResponse {
-     String id;
-     String username;
-     String firstName;
-     String lastName;
-//     boolean delFlag;
-//     boolean status;
-     Set<RoleResponse> roles;
+    String id;
+    String username;
+    String firstName;
+    String lastName;
+    //     boolean delFlag;
+    //     boolean status;
+    Set<RoleResponse> roles;
 }

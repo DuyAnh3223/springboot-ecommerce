@@ -1,14 +1,17 @@
 package spring.abtechzone.service;
 
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
+import java.util.HashSet;
+import java.util.List;
+
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import spring.abtechzone.dto.request.UserCreationRequest;
 import spring.abtechzone.dto.request.UserUpdateRequest;
 import spring.abtechzone.dto.response.UserResponse;
@@ -19,9 +22,6 @@ import spring.abtechzone.exception.ErrorCode;
 import spring.abtechzone.mapper.UserMapper;
 import spring.abtechzone.repository.RoleRepository;
 import spring.abtechzone.repository.UserRepository;
-
-import java.util.HashSet;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor // Auto generate constructor but required "final"
@@ -34,7 +34,7 @@ public class UserService {
     PasswordEncoder passwordEncoder;
 
     public UserResponse createUser(UserCreationRequest request) {
-        if(userRepository.existsByUsername(request.getUsername())) {
+        if (userRepository.existsByUsername(request.getUsername())) {
             throw new AppException(ErrorCode.USER_EXISTS);
         }
 
@@ -43,19 +43,18 @@ public class UserService {
 
         HashSet<String> roles = new HashSet<>();
         roles.add(Role.USER.name());
-       // user.setRoles(roles);
-
+        // user.setRoles(roles);
 
         return userMapper.toUserResponse(userRepository.save(user));
     }
 
-    public UserResponse getMyInfo(){
-       var context =  SecurityContextHolder.getContext();
-       String name = context.getAuthentication().getName();
+    public UserResponse getMyInfo() {
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
 
-       User user =  userRepository.findByUsername(name).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByUsername(name).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-       return userMapper.toUserResponse(user);
+        return userMapper.toUserResponse(user);
     }
 
     @PreAuthorize("hasRole('ADMIN')") // Ktra quyền trước khi chạy ~~ @PreAuthorize("hasAuthority('ROLE_ADMIN')")
@@ -64,16 +63,15 @@ public class UserService {
     }
 
     private User findUserById(String userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        return userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @PostAuthorize("returnObject.username == authentication.name") // Chạy xong rồi mới ktra quyền => Đúng thì return
-    public UserResponse getUser(String userId){
+    public UserResponse getUser(String userId) {
         return userMapper.toUserResponse(findUserById(userId));
     }
 
-    public UserResponse updateUser(String userId, UserUpdateRequest request){
+    public UserResponse updateUser(String userId, UserUpdateRequest request) {
         User user = findUserById(userId);
 
         userMapper.updateUser(user, request);
@@ -85,7 +83,7 @@ public class UserService {
         return userMapper.toUserResponse(userRepository.save(user));
     }
 
-    public void  deleteUser(String userId){
+    public void deleteUser(String userId) {
         userRepository.deleteById(userId);
     }
 }

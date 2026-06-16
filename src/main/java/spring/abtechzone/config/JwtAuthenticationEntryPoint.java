@@ -1,20 +1,24 @@
 package spring.abtechzone.config;
 
+import java.io.IOException;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+
 import spring.abtechzone.dto.ApiResponse;
 import spring.abtechzone.exception.ErrorCode;
 import tools.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
-
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+    public void commence(
+            HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
+            throws IOException, ServletException {
         ErrorCode errorCode = ErrorCode.UNAUTHENTICATED;
 
         response.setStatus(errorCode.getStatusCode().value());
@@ -25,11 +29,9 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .message(errorCode.getMessage())
                 .build();
 
-
         ObjectMapper mapper = new ObjectMapper();
 
         response.getWriter().write(mapper.writeValueAsString(apiResponse));
         response.flushBuffer();
-
     }
 }

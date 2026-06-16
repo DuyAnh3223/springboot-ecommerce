@@ -1,8 +1,9 @@
 package spring.abtechzone.dto.request;
 
+import java.util.List;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import java.util.List;
 
 @Data
 @Builder
@@ -11,13 +12,10 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserUpdateRequest {
 
-
-     String password;
-     String firstName;
-     String lastName;
-//     boolean delFlag;
-//     boolean status;
-     List<String> roles;
-
-
+    String password;
+    String firstName;
+    String lastName;
+    //     boolean delFlag;
+    //     boolean status;
+    List<String> roles;
 }

@@ -1,9 +1,9 @@
 package spring.abtechzone.dto.request;
 
 import jakarta.validation.constraints.Size;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.exception.ErrorCode;
 
 @Data
 @NoArgsConstructor
@@ -13,13 +13,14 @@ import spring.abtechzone.exception.ErrorCode;
 public class UserCreationRequest {
 
     @Size(min = 3, message = "USERNAME_INVALID")
-     String username;
+    String username;
 
     @Size(min = 3, message = "PASSWORD_INVALID")
-     String password;
-     String firstName;
-     String lastName;
-//     boolean delFlag;
-//     boolean status;
+    String password;
+
+    String firstName;
+    String lastName;
+    //     boolean delFlag;
+    //     boolean status;
 
 }

@@ -1,6 +1,9 @@
 package spring.abtechzone.controller;
 
-import lombok.extern.slf4j.Slf4j;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,14 +14,12 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
+
+import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.dto.request.UserCreationRequest;
 import spring.abtechzone.dto.response.UserResponse;
 import spring.abtechzone.service.UserService;
 import tools.jackson.databind.ObjectMapper;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.mockito.Mockito.when;
 
 @Slf4j
 @SpringBootTest
@@ -36,7 +37,7 @@ public class UserControllerTest {
     private UserResponse response;
 
     @BeforeEach
-    void initData(){
+    void initData() {
         request = UserCreationRequest.builder()
                 .username("username")
                 .password("password")
@@ -62,41 +63,30 @@ public class UserControllerTest {
         when(userService.createUser(any())).thenReturn(response);
 
         // WHEN
-        mockMvc.perform(post("/users")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(content))
+        mockMvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON).content(content))
                 .andExpect(MockMvcResultMatchers.status().isOk())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.code")
-                        .value(1000))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.result.id")
-                        .value("dwqsadsadg563433")
-        );
+                .andExpect(MockMvcResultMatchers.jsonPath("$.code").value(1000))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.result.id").value("dwqsadsadg563433"));
 
         // THEN
     }
 
     @Test
-        //
+    //
     void createUser_usernameInvalid_fail() throws Exception {
         // GIVEN
         request.setUsername("us");
         ObjectMapper mapper = new ObjectMapper();
         String content = mapper.writeValueAsString(request);
 
-//        Mockito.when(userService.createUser(any())).thenReturn(response);
+        //        Mockito.when(userService.createUser(any())).thenReturn(response);
 
         // WHEN
-        mockMvc.perform(post("/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(content))
+        mockMvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON).content(content))
                 .andExpect(MockMvcResultMatchers.status().isBadRequest())
-                .andExpect(MockMvcResultMatchers.jsonPath("$.code")
-                        .value(1003))
-                .andExpect(MockMvcResultMatchers.jsonPath("$.message")
-                        .value("Username must be at least 3 characters")
-                );
+                .andExpect(MockMvcResultMatchers.jsonPath("$.code").value(1003))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.message").value("Username must be at least 3 characters"));
 
         // THEN
     }
-
 }
