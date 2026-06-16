@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.Mockito.when;
 
 @Slf4j
 @SpringBootTest
@@ -57,7 +58,7 @@ public class UserControllerTest {
         ObjectMapper mapper = new ObjectMapper();
         String content = mapper.writeValueAsString(request);
 
-        Mockito.when(userService.createUser(any())).thenReturn(response);
+        when(userService.createUser(any())).thenReturn(response);
 
         // WHEN
         mockMvc.perform(post("/users")
