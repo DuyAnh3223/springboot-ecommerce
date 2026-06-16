@@ -9,10 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import spring.abtechzone.dto.ApiResponse;
-import spring.abtechzone.dto.auth.AuthRequest;
-import spring.abtechzone.dto.auth.AuthResponse;
-import spring.abtechzone.dto.auth.IntrospectRequest;
-import spring.abtechzone.dto.auth.IntrospectResponse;
+import spring.abtechzone.dto.auth.*;
 import spring.abtechzone.service.AuthService;
 
 import java.text.ParseException;
@@ -39,6 +36,23 @@ public class AuthController {
         var result = authService.introspect(request);
 
         return ApiResponse.<IntrospectResponse>builder()
+                .result(result)
+                .build();
+    }
+
+    @PostMapping("/logout")
+    ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
+       authService.logout(request);
+
+        return ApiResponse.<Void>builder()
+                .build();
+    }
+
+    @PostMapping("/refresh")
+    ApiResponse<AuthResponse> refreshToken(@RequestBody RefreshTokenRequest request) throws ParseException, JOSEException {
+        var result = authService.refreshToken(request);
+
+        return ApiResponse.<AuthResponse>builder()
                 .result(result)
                 .build();
     }
