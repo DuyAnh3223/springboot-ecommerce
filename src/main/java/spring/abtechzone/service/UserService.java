@@ -12,11 +12,12 @@ import org.springframework.stereotype.Service;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import spring.abtechzone.constant.PredefinedRole;
 import spring.abtechzone.dto.request.UserCreationRequest;
 import spring.abtechzone.dto.request.UserUpdateRequest;
 import spring.abtechzone.dto.response.UserResponse;
+import spring.abtechzone.entity.Role;
 import spring.abtechzone.entity.User;
-import spring.abtechzone.enums.Role;
 import spring.abtechzone.exception.AppException;
 import spring.abtechzone.exception.ErrorCode;
 import spring.abtechzone.mapper.UserMapper;
@@ -41,9 +42,9 @@ public class UserService {
         User user = userMapper.toUser(request);
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        HashSet<String> roles = new HashSet<>();
-        roles.add(Role.USER.name());
-        // user.setRoles(roles);
+        HashSet<Role> roles = new HashSet<>();
+        roleRepository.findById(PredefinedRole.USER_ROLE).ifPresent(roles::add);
+        user.setRoles(roles);
 
         return userMapper.toUserResponse(userRepository.save(user));
     }
