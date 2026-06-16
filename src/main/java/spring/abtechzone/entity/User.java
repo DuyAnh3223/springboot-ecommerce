@@ -20,12 +20,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
+    @Column(name = "username" ,unique = true, columnDefinition = "VARCHAR(255) COLLATE utf8mb4_unicode_ci")
     String username;
     String password;
     String firstName;
     String lastName;
-    //     boolean delFlag;
-    //     boolean status;
 
     @ManyToMany
     Set<Role> roles; // Các phần tử trong Set là unique
