@@ -69,14 +69,15 @@ public class UserService {
     }
 
     private User findUserById(String userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        return userRepository.findById(userId).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 
-    @PostAuthorize("returnObject.username == authentication.name") // Chạy xong rồi mới ktra quyền => Đúng thì return
+    @PreAuthorize("hasRole('ADMIN')")
     public UserResponse getUser(String userId) {
         return userMapper.toUserResponse(findUserById(userId));
     }
 
+    @PostAuthorize("returnObject.username == authentication.name") // Chạy xong rồi mới ktra quyền => Đúng thì return
     public UserResponse updateUser(String userId, UserUpdateRequest request) {
         User user = findUserById(userId);
 
@@ -89,6 +90,7 @@ public class UserService {
         return userMapper.toUserResponse(userRepository.save(user));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public void deleteUser(String userId) {
         userRepository.deleteById(userId);
     }

@@ -2,6 +2,7 @@ package spring.abtechzone.config;
 
 import java.util.HashSet;
 
+import lombok.experimental.NonFinal;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -12,8 +13,10 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import spring.abtechzone.constant.PredefinedRole;
 import spring.abtechzone.entity.User;
-import spring.abtechzone.enums.Role;
+import spring.abtechzone.entity.Role;
+import spring.abtechzone.repository.RoleRepository;
 import spring.abtechzone.repository.UserRepository;
 
 @Configuration
@@ -24,23 +27,39 @@ public class AppInitConfig {
 
     PasswordEncoder passwordEncoder;
 
+    @NonFinal
+    static final String ADMIN_USER_NAME = "admin";
+
+    @NonFinal
+    static final String ADMIN_PASSWORD = "admin";
+
     @Bean
     @ConditionalOnProperty(
             prefix = "spring",
             value = "datasource.driver-class-name",
             havingValue = "com.mysql.cj.jdbc.Driver")
-    ApplicationRunner applicationRunner(UserRepository userRepository) {
+    ApplicationRunner applicationRunner(UserRepository userRepository, RoleRepository roleRepository) {
         log.info("Init ApplicationRunner");
         return args -> {
-            if (userRepository.findByUsername("admin").isEmpty()) {
+            if (userRepository.findByUsername(ADMIN_USER_NAME).isEmpty()) {
 
-                var roles = new HashSet<String>();
-                roles.add(Role.ADMIN.name());
+                roleRepository.save(Role.builder()
+                                .name(PredefinedRole.USER_ROLE)
+                                .description("User role")
+                                .build());
+
+                Role adminRole = roleRepository.save(Role.builder()
+                        .name(PredefinedRole.ADMIN_ROLE)
+                        .description("Admin role")
+                        .build());
+
+                var roles = new HashSet<Role>();
+                roles.add(adminRole);
 
                 User user = User.builder()
-                        .username("admin")
-                        .password(passwordEncoder.encode("admin"))
-                        // .roles(roles)
+                        .username(ADMIN_USER_NAME)
+                        .password(passwordEncoder.encode(ADMIN_PASSWORD))
+                        .roles(roles)
                         .build();
 
                 userRepository.save(user);
