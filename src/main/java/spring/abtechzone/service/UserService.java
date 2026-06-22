@@ -46,10 +46,9 @@ public class UserService {
 
         try {
             user = userRepository.save(user);
-        } catch (DataIntegrityViolationException ex){
+        } catch (DataIntegrityViolationException ex) {
             throw new AppException(ErrorCode.USER_EXISTS);
         }
-
 
         return userMapper.toUserResponse(user);
     }

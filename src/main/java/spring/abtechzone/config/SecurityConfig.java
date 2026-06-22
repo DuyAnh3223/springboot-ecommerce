@@ -23,7 +23,7 @@ import org.springframework.web.filter.CorsFilter;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/users", "/auth/token", "/auth/introspect", "/auth/logout", "/auth/refresh",
+        "/users", "/auth/log-in", "/auth/introspect", "/auth/log-out", "/auth/refresh",
     };
 
     @Value("${jwt.signerKey}")

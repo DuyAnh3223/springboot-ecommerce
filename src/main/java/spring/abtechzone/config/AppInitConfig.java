@@ -2,7 +2,6 @@ package spring.abtechzone.config;
 
 import java.util.HashSet;
 
-import lombok.experimental.NonFinal;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -12,10 +11,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.constant.PredefinedRole;
-import spring.abtechzone.entity.User;
 import spring.abtechzone.entity.Role;
+import spring.abtechzone.entity.User;
 import spring.abtechzone.repository.RoleRepository;
 import spring.abtechzone.repository.UserRepository;
 
@@ -44,9 +44,9 @@ public class AppInitConfig {
             if (userRepository.findByUsername(ADMIN_USER_NAME).isEmpty()) {
 
                 roleRepository.save(Role.builder()
-                                .name(PredefinedRole.USER_ROLE)
-                                .description("User role")
-                                .build());
+                        .name(PredefinedRole.USER_ROLE)
+                        .description("User role")
+                        .build());
 
                 Role adminRole = roleRepository.save(Role.builder()
                         .name(PredefinedRole.ADMIN_ROLE)

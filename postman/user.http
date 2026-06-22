@@ -1,0 +1,8 @@
+### Create User
+POST http://localhost:8080/abtechzone/users
+Content-Type: application/json
+
+{
+  "username":"user1",
+  "password":"user1"
+}
