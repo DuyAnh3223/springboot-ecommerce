@@ -1,12 +1,17 @@
 package spring.abtechzone.entity;
 
-import io.hypersistence.utils.hibernate.type.json.JsonType;
+import java.text.Normalizer;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
+
 import jakarta.persistence.*;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.hibernate.annotations.Type;
-
-import java.util.List;
 
 @Entity
 @Getter
@@ -23,14 +28,51 @@ public class Product {
 
     @Column(nullable = false)
     String name;
+
+    @Column(nullable = false, unique = true)
+    String slug;
+
     String thumbnail;
+
+    @Column(length = 2000)
     String description;
 
-    @Type(JsonType.class)
-    @Column(name ="attributes", columnDefinition = "json")
+    Double rating;
+
+    boolean isDraft;
+
+    boolean isPublished;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attributes", columnDefinition = "json")
     List<ProductAttribute> attributes;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<ProductSku> skus;
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    List<ProductSku> skus;
 
+    @PrePersist
+    protected void onCreate() {
+        if (this.slug == null || this.slug.trim().isEmpty()) {
+            this.slug = generateSlug(this.name);
+        }
+    }
+
+    private String generateSlug(String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return "";
+        }
+        // Normalize and remove accents
+        String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        String slug = pattern.matcher(normalized).replaceAll("");
+
+        // Handle Vietnamese specific characters 'Đ' and 'đ'
+        slug = slug.replace("đ", "d").replace("Đ", "D");
+
+        return slug.toLowerCase(Locale.ENGLISH)
+                .replaceAll("[^a-z0-9\\s-]", "") // Remove special characters
+                .replaceAll("\\s+", "-") // Replace spaces with hyphens
+                .replaceAll("-+", "-") // Remove duplicate hyphens
+                .replaceAll("^-|-$", ""); // Remove leading/trailing hyphens
+    }
 }

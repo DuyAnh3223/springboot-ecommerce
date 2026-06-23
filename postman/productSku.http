@@ -1,0 +1,90 @@
+### Login to get token
+# @name login
+POST http://localhost:8080/abtechzone/auth/log-in
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+###
+
+@token = {{login.response.body.result.token}}
+
+### Create a Product first to have a valid productId
+# @name createProduct
+POST http://localhost:8080/abtechzone/products
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "iPad Pro M4",
+  "thumbnail": "https://example.com/ipadpro-thumbnail.jpg",
+  "description": "Ultra Retina XDR display, Tandem OLED, Apple M4 chip.",
+  "isDraft": false,
+  "isPublished": true,
+  "attributes": [
+    {
+      "name": "Storage",
+      "values": ["256GB", "512GB"]
+    },
+    {
+      "name": "Color",
+      "values": ["Space Black", "Silver"]
+    }
+  ]
+}
+
+###
+
+@productId = {{createProduct.response.body.result.id}}
+
+### 1. Add a SKU to the Product
+# @name createSku
+POST http://localhost:8080/abtechzone/products/{{productId}}/skus
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "sku": "IPAD-M4-SB-256",
+  "price": 999.00,
+  "stock": 40,
+  "imageUrl": "https://example.com/ipad-sb-256.jpg",
+  "attributes": {
+    "Storage": "256GB",
+    "Color": "Space Black"
+  }
+}
+
+###
+
+@skuId = {{createSku.response.body.result.id}}
+
+### 2. Get SKU by ID
+GET http://localhost:8080/abtechzone/skus/{{skuId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+
+### 3. Update SKU details
+PUT http://localhost:8080/abtechzone/skus/{{skuId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "sku": "IPAD-M4-SB-256-UPDATED",
+  "price": 949.00,
+  "stock": 35,
+  "imageUrl": "https://example.com/ipad-sb-256-new.jpg",
+  "attributes": {
+    "Storage": "256GB",
+    "Color": "Space Black"
+  }
+}
+
+
+### 4. Delete SKU
+DELETE http://localhost:8080/abtechzone/skus/{{skuId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}

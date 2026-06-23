@@ -58,25 +58,29 @@
             <version>${mapstruct.version}</version>
         </dependency>
 
-<!--        Database Dependencies-->
+        <!--        Database Dependencies-->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-<!--        For Hibernate: map JSON(MySQL) -> Object(Java) -->
+        <!--        For Hibernate: map JSON(MySQL) -> Object(Java) -->
+<!--        <dependency>-->
+<!--            <groupId>io.hypersistence</groupId>-->
+<!--            <artifactId>hypersistence-utils-hibernate-63</artifactId>-->
+<!--            <version>3.7.0</version>-->
+<!--        </dependency>-->
         <dependency>
-            <groupId>io.hypersistence</groupId>
-            <artifactId>hypersistence-utils-hibernate-63</artifactId>
-            <version>3.7.0</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
 
 
 
 
 
-<!--        Security Dependencies-->
+        <!--        Security Dependencies-->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
@@ -94,7 +98,7 @@
         </dependency>
 
 
-<!--Testing Denpendencies-->
+        <!--Testing Denpendencies-->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -115,7 +119,7 @@
         </dependency>
 
 
-<!--        Test Containers Dependencies-->
+        <!--        Test Containers Dependencies-->
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -143,7 +147,7 @@
 
     </dependencies>
 
-<!--    Test Containers Management-->
+    <!--    Test Containers Management-->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -202,10 +206,10 @@
                 </configuration>
             </plugin>
 
-<!--            Test Coverage with Jacoco
-                ./mvnw clean test jacoco:report
-                /target/site/jacoco/index.html (Open in Browser)
--->
+            <!--            Test Coverage with Jacoco
+                            ./mvnw clean test jacoco:report
+                            /target/site/jacoco/index.html (Open in Browser)
+            -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -234,7 +238,7 @@
                 </configuration>
             </plugin>
 
-<!--            Code Formatter with Spotless-->
+            <!--            Code Formatter with Spotless-->
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>

@@ -1,0 +1,52 @@
+package spring.abtechzone.controller;
+
+import jakarta.validation.Valid;
+
+import org.springframework.web.bind.annotation.*;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import spring.abtechzone.dto.ApiResponse;
+import spring.abtechzone.dto.request.ProductSkuRequest;
+import spring.abtechzone.dto.response.ProductSkuResponse;
+import spring.abtechzone.service.ProductSkuService;
+
+@RestController
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class ProductSkuController {
+
+    ProductSkuService productSkuService;
+
+    @GetMapping("/skus/{skuId}")
+    public ApiResponse<ProductSkuResponse> getSku(@PathVariable Long skuId) {
+        return ApiResponse.<ProductSkuResponse>builder()
+                .result(productSkuService.getSku(skuId))
+                .build();
+    }
+
+    @PostMapping("/products/{productId}/skus")
+    public ApiResponse<ProductSkuResponse> createSku(
+            @PathVariable Long productId, @RequestBody @Valid ProductSkuRequest request) {
+        return ApiResponse.<ProductSkuResponse>builder()
+                .result(productSkuService.createSku(productId, request))
+                .build();
+    }
+
+    @PutMapping("/skus/{skuId}")
+    public ApiResponse<ProductSkuResponse> updateSku(
+            @PathVariable Long skuId, @RequestBody @Valid ProductSkuRequest request) {
+        return ApiResponse.<ProductSkuResponse>builder()
+                .result(productSkuService.updateSku(skuId, request))
+                .build();
+    }
+
+    @DeleteMapping("/skus/{skuId}")
+    public ApiResponse<String> deleteSku(@PathVariable Long skuId) {
+        productSkuService.deleteSku(skuId);
+        return ApiResponse.<String>builder()
+                .result("Product SKU has been successfully deleted")
+                .build();
+    }
+}

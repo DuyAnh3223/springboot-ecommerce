@@ -1,10 +1,15 @@
 package spring.abtechzone.entity;
 
+import java.math.BigDecimal;
+import java.util.Map;
+
 import jakarta.persistence.*;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.math.BigDecimal;
 
 @Entity
 @Getter
@@ -21,12 +26,18 @@ public class ProductSku {
 
     @Column(nullable = false, unique = true)
     String sku;
+
     @Column(nullable = false)
     BigDecimal price;
+
     @Column(nullable = false)
-    int stock;
+    Integer stock;
 
     String imageUrl;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attributes", columnDefinition = "json")
+    Map<String, String> attributes;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)

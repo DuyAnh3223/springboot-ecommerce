@@ -1,0 +1,101 @@
+### Login to get token
+# @name login
+POST http://localhost:8080/abtechzone/auth/log-in
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+
+### 1. Create a Product
+# @name createProduct
+POST http://localhost:8080/abtechzone/products
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.result.token}}
+
+{
+  "name": "iPhone 15 Pro Max",
+  "thumbnail": "https://example.com/iphone15-thumbnail.jpg",
+  "description": "Super Retina XDR display, Titanium design, A17 Pro chip.",
+  "isDraft": false,
+  "isPublished": true,
+  "attributes": [
+    {
+      "name": "Storage",
+      "values": ["128GB", "256GB"]
+    },
+    {
+      "name": "Color",
+      "values": ["Titanium Grey", "Black"]
+    }
+  ],
+  "productSkus": [
+    {
+      "sku": "IP15PM-TG-128",
+      "price": 1099.00,
+      "stock": 100,
+      "imageUrl": "https://example.com/tg-128.jpg",
+      "attributes": {
+        "Storage": "128GB",
+        "Color": "Titanium Grey"
+      }
+    },
+    {
+      "sku": "IP15PM-BK-256",
+      "price": 1199.00,
+      "stock": 50,
+      "imageUrl": "https://example.com/bk-256.jpg",
+      "attributes": {
+        "Storage": "256GB",
+        "Color": "Black"
+      }
+    }
+  ]
+}
+
+###
+
+
+
+### 2. Get All Products
+GET http://localhost:8080/abtechzone/products
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.result.token}}
+
+
+### 3. Get Product by ID
+GET http://localhost:8080/abtechzone/products/1
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.result.token}}
+
+
+### 4. Update Product by ID (Updates product details only, SKUs are managed separately)
+PUT http://localhost:8080/abtechzone/products/1
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.result.token}}
+
+{
+  "name": "iPhone 15 Pro Max (Updated Name)",
+  "thumbnail": "https://example.com/iphone15-thumbnail-updated.jpg",
+  "description": "Updated product description here.",
+  "isDraft": false,
+  "isPublished": true,
+  "attributes": [
+    {
+      "name": "Storage",
+      "values": ["128GB", "256GB", "512GB"]
+    },
+    {
+      "name": "Color",
+      "values": ["Titanium Grey", "Black", "Natural Titanium"]
+    }
+  ]
+}
+
+
+### 5. Delete Product by ID
+DELETE http://localhost:8080/abtechzone/products/1
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.result.token}}
