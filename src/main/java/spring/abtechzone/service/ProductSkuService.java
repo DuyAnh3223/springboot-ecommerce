@@ -28,18 +28,12 @@ public class ProductSkuService {
     ProductRepository productRepository;
     ProductSkuMapper productSkuMapper;
 
-    /**
-     * Lấy thông tin chi tiết một SKU
-     */
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
         return productSkuMapper.toProductSkuResponse(sku);
     }
 
-    /**
-     * Thêm mới một SKU cho sản phẩm có sẵn
-     */
     @Transactional
     public ProductSkuResponse createSku(Long productId, ProductSkuRequest request) {
         Product product =
@@ -57,9 +51,6 @@ public class ProductSkuService {
         return productSkuMapper.toProductSkuResponse(sku);
     }
 
-    /**
-     * Cập nhật thông tin chi tiết một SKU (In-place update)
-     */
     @Transactional
     public ProductSkuResponse updateSku(Long skuId, ProductSkuRequest request) {
         ProductSku sku =
@@ -87,9 +78,6 @@ public class ProductSkuService {
         return productSkuMapper.toProductSkuResponse(sku);
     }
 
-    /**
-     * Xóa một SKU cụ thể
-     */
     @Transactional
     public void deleteSku(Long skuId) {
         if (!productSkuRepository.existsById(skuId)) {
