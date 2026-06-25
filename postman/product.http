@@ -60,7 +60,7 @@ Authorization: Bearer {{login.response.body.result.token}}
 
 
 ### 2. Get All Products
-GET http://localhost:8080/abtechzone/products
+GET http://localhost:8080/abtechzone/products?search=iphone&page=1&size=20&sortBy=createdAt&order=desc
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.result.token}}
 

@@ -1,6 +1,7 @@
 package spring.abtechzone.controller;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -114,5 +115,88 @@ class ProductControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1009))
                 .andExpect(jsonPath("$.message").value("Product SKU already exists"));
+    }
+
+    @Test
+    void getProducts_withParameters_success() throws Exception {
+        // 1. Seed some products
+        ProductRequest product1 = ProductRequest.builder()
+                .name("iPhone 15 Pro")
+                .slug("")
+                .description("Latest Apple flagship")
+                .isDraft(false)
+                .isPublished(true)
+                .productSkus(List.of(ProductSkuRequest.builder()
+                        .sku("IPHONE15PRO-128")
+                        .price(new BigDecimal("999.99"))
+                        .stock(50)
+                        .imageUrl("http://example.com/iphone15pro.jpg")
+                        .build()))
+                .build();
+
+        ProductRequest product2 = ProductRequest.builder()
+                .name("Samsung Galaxy S24")
+                .slug("")
+                .description("Latest Samsung flagship")
+                .isDraft(false)
+                .isPublished(true)
+                .productSkus(List.of(ProductSkuRequest.builder()
+                        .sku("SAMSUNG-S24-128")
+                        .price(new BigDecimal("799.99"))
+                        .stock(100)
+                        .imageUrl("http://example.com/samsung_s24.jpg")
+                        .build()))
+                .build();
+
+        mockMvc.perform(post("/products")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(product1)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/products")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(product2)))
+                .andExpect(status().isOk());
+
+        // 2. Test filter by name (keyword)
+        mockMvc.perform(get("/products").param("search", "iphone").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.content[0].name").value("iPhone 15 Pro"));
+
+        // 3. Test pagination metadata
+        mockMvc.perform(get("/products")
+                        .param("search", "flagship")
+                        .param("size", "1")
+                        .param("page", "1")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.totalElements").value(2))
+                .andExpect(jsonPath("$.result.size").value(1))
+                .andExpect(jsonPath("$.result.number").value(0));
+
+        // 4. Test sorting by name desc
+        mockMvc.perform(get("/products")
+                        .param("sortBy", "name")
+                        .param("order", "desc")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content[0].name").value("Samsung Galaxy S24"))
+                .andExpect(jsonPath("$.result.content[1].name").value("iPhone 15 Pro"));
+
+        // 5. Test pagination (size=1, page=2 sorted by name asc)
+        mockMvc.perform(get("/products")
+                        .param("sortBy", "name")
+                        .param("order", "asc")
+                        .param("size", "1")
+                        .param("page", "2")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.content[0].name").value("Samsung Galaxy S24"))
+                .andExpect(jsonPath("$.result.number").value(1));
     }
 }

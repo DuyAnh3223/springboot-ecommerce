@@ -1,8 +1,8 @@
 package spring.abtechzone.service;
 
-import java.util.List;
-
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,13 +11,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.dto.request.ProductRequest;
+import spring.abtechzone.dto.request.ProductSearchRequest;
 import spring.abtechzone.dto.response.ProductResponse;
 import spring.abtechzone.entity.Product;
 import spring.abtechzone.exception.AppException;
 import spring.abtechzone.exception.ErrorCode;
 import spring.abtechzone.mapper.ProductMapper;
-import spring.abtechzone.mapper.ProductSkuMapper;
 import spring.abtechzone.repository.ProductRepository;
+import spring.abtechzone.repository.specification.ProductSpecifications;
 
 @Service
 @Slf4j
@@ -26,7 +27,6 @@ import spring.abtechzone.repository.ProductRepository;
 public class ProductService {
     ProductRepository productRepository;
     ProductMapper productMapper;
-    ProductSkuMapper productSkuMapper;
 
     @Transactional
     public ProductResponse create(ProductRequest request) {
@@ -49,10 +49,14 @@ public class ProductService {
         return productMapper.toProductResponse(findProductById(id));
     }
 
-    public List<ProductResponse> getProducts() {
-        return productRepository.findAll().stream()
-                .map(productMapper::toProductResponse)
-                .toList();
+    public Page<ProductResponse> getProducts(ProductSearchRequest request) {
+
+        Specification<Product> spec = Specification.where(ProductSpecifications.isPublished())
+                .and(ProductSpecifications.hasKeyword(request.getSearch()));
+
+        Page<Product> productsPage = productRepository.findAll(spec, request.toPageable());
+
+        return productsPage.map(productMapper::toProductResponse);
     }
 
     @Transactional

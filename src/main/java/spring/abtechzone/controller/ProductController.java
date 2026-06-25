@@ -1,9 +1,8 @@
 package spring.abtechzone.controller;
 
-import java.util.List;
-
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;
@@ -11,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.dto.ApiResponse;
 import spring.abtechzone.dto.request.ProductRequest;
+import spring.abtechzone.dto.request.ProductSearchRequest;
 import spring.abtechzone.dto.response.ProductResponse;
 import spring.abtechzone.service.ProductService;
 
@@ -23,23 +23,23 @@ public class ProductController {
     ProductService productService;
 
     @PostMapping
-    ApiResponse<ProductResponse> createUser(@RequestBody @Valid ProductRequest request) {
+    ApiResponse<ProductResponse> createProduct(@RequestBody @Valid ProductRequest request) {
         return ApiResponse.<ProductResponse>builder()
                 .result(productService.create(request))
                 .build();
     }
 
     @GetMapping("/{productId}")
-    ApiResponse<ProductResponse> getUser(@PathVariable("productId") Long id) {
+    ApiResponse<ProductResponse> getProduct(@PathVariable("productId") Long id) {
         return ApiResponse.<ProductResponse>builder()
                 .result(productService.getProduct(id))
                 .build();
     }
 
     @GetMapping
-    ApiResponse<List<ProductResponse>> getProducts() {
-        return ApiResponse.<List<ProductResponse>>builder()
-                .result(productService.getProducts())
+    ApiResponse<Page<ProductResponse>> getProducts(@Valid @ModelAttribute ProductSearchRequest request) {
+        return ApiResponse.<Page<ProductResponse>>builder()
+                .result(productService.getProducts(request))
                 .build();
     }
 
