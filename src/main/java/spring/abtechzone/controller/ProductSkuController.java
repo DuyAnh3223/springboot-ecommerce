@@ -8,11 +8,13 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.dto.ApiResponse;
-import spring.abtechzone.dto.request.ProductSkuRequest;
+import spring.abtechzone.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.dto.response.ProductSkuResponse;
 import spring.abtechzone.service.ProductSkuService;
 
 @RestController
+@RequestMapping("/products")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductSkuController {
@@ -26,17 +28,17 @@ public class ProductSkuController {
                 .build();
     }
 
-    @PostMapping("/products/{productId}/skus")
+    @PostMapping("/{productId}/skus")
     public ApiResponse<ProductSkuResponse> createSku(
-            @PathVariable Long productId, @RequestBody @Valid ProductSkuRequest request) {
+            @PathVariable Long productId, @RequestBody @Valid ProductSkuCreateRequest request) {
         return ApiResponse.<ProductSkuResponse>builder()
                 .result(productSkuService.createSku(productId, request))
                 .build();
     }
 
-    @PutMapping("/skus/{skuId}")
+    @PatchMapping("/skus/{skuId}")
     public ApiResponse<ProductSkuResponse> updateSku(
-            @PathVariable Long skuId, @RequestBody @Valid ProductSkuRequest request) {
+            @PathVariable Long skuId, @RequestBody @Valid ProductSkuUpdateRequest request) {
         return ApiResponse.<ProductSkuResponse>builder()
                 .result(productSkuService.updateSku(skuId, request))
                 .build();

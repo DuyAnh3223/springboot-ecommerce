@@ -6,4 +6,8 @@ import org.springframework.stereotype.Repository;
 import spring.abtechzone.entity.ProductSku;
 
 @Repository
-public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {}
+public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
+    boolean existsBySku(String sku);
+
+    boolean existsBySkuAndIdNot(String sku, Long id);
+}

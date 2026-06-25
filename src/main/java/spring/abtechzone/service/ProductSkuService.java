@@ -1,5 +1,7 @@
 package spring.abtechzone.service;
 
+import java.util.Map;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,7 +10,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.dto.request.ProductSkuRequest;
+import spring.abtechzone.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.dto.response.ProductSkuResponse;
 import spring.abtechzone.entity.Product;
 import spring.abtechzone.entity.ProductSku;
@@ -27,6 +30,7 @@ public class ProductSkuService {
     ProductSkuRepository productSkuRepository;
     ProductRepository productRepository;
     ProductSkuMapper productSkuMapper;
+    ProductAttributeValidator productAttributeValidator;
 
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
@@ -35,12 +39,15 @@ public class ProductSkuService {
     }
 
     @Transactional
-    public ProductSkuResponse createSku(Long productId, ProductSkuRequest request) {
+    public ProductSkuResponse createSku(Long productId, ProductSkuCreateRequest request) {
+        validateSkuForCreate(request.getSku());
+
         Product product =
                 productRepository.findById(productId).orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         ProductSku sku = productSkuMapper.toProductSku(request);
         sku.setProduct(product);
+        productAttributeValidator.validateSkuAttributes(product, sku.getAttributes());
 
         try {
             sku = productSkuRepository.save(sku);
@@ -52,22 +59,18 @@ public class ProductSkuService {
     }
 
     @Transactional
-    public ProductSkuResponse updateSku(Long skuId, ProductSkuRequest request) {
+    public ProductSkuResponse updateSku(Long skuId, ProductSkuUpdateRequest request) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
 
         // Cập nhật các trường cụ thể
-        sku.setPrice(request.getPrice());
-        sku.setStock(request.getStock());
-        if (request.getSku() != null) {
-            sku.setSku(request.getSku());
-        }
-        if (request.getImageUrl() != null) {
-            sku.setImageUrl(request.getImageUrl());
-        }
-        if (request.getAttributes() != null) {
-            sku.setAttributes(request.getAttributes());
-        }
+        validateSkuForUpdate(skuId, request.getSku());
+
+        Map<String, String> updatedAttributes =
+                request.getAttributes() == null ? sku.getAttributes() : request.getAttributes();
+        productAttributeValidator.validateSkuAttributes(sku.getProduct(), updatedAttributes);
+
+        productSkuMapper.updateProductSku(sku, request);
 
         try {
             sku = productSkuRepository.save(sku);
@@ -84,5 +87,29 @@ public class ProductSkuService {
             throw new AppException(ErrorCode.SKU_NOT_FOUND);
         }
         productSkuRepository.deleteById(skuId);
+    }
+
+    private void validateSkuForCreate(String sku) {
+        if (sku == null || sku.isBlank()) {
+            throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
+        }
+
+        if (productSkuRepository.existsBySku(sku)) {
+            throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+        }
+    }
+
+    private void validateSkuForUpdate(Long skuId, String sku) {
+        if (sku == null) {
+            return;
+        }
+
+        if (sku.isBlank()) {
+            throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
+        }
+
+        if (productSkuRepository.existsBySkuAndIdNot(sku, skuId)) {
+            throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+        }
     }
 }

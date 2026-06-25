@@ -2,6 +2,9 @@ package spring.abtechzone.dto.request;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.entity.ProductAttribute;
@@ -11,16 +14,20 @@ import spring.abtechzone.entity.ProductAttribute;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProductRequest {
+public class ProductCreateRequest {
 
+    @NotBlank(message = "PRODUCT_NAME_INVALID")
     String name;
-    String slug;
+
     String thumbnail;
     String description;
 
     Boolean isDraft;
     Boolean isPublished;
 
+    @Valid
     List<ProductAttribute> attributes;
-    List<ProductSkuRequest> productSkus;
+
+    @Valid
+    List<ProductSkuCreateRequest> productSkus;
 }

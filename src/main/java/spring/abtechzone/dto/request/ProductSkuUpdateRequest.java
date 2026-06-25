@@ -3,6 +3,8 @@ package spring.abtechzone.dto.request;
 import java.math.BigDecimal;
 import java.util.Map;
 
+import jakarta.validation.constraints.PositiveOrZero;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -11,11 +13,16 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ProductSkuRequest {
+public class ProductSkuUpdateRequest {
 
     String sku;
+
+    @PositiveOrZero(message = "PRODUCT_PRICE_INVALID")
     BigDecimal price;
+
+    @PositiveOrZero(message = "PRODUCT_STOCK_INVALID")
     Integer stock;
+
     String imageUrl;
     Map<String, String> attributes;
 }

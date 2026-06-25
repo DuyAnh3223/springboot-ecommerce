@@ -1,5 +1,8 @@
 package spring.abtechzone.service;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
@@ -10,14 +13,17 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.dto.request.ProductRequest;
+import spring.abtechzone.dto.request.ProductCreateRequest;
 import spring.abtechzone.dto.request.ProductSearchRequest;
+import spring.abtechzone.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.dto.request.ProductUpdateRequest;
 import spring.abtechzone.dto.response.ProductResponse;
 import spring.abtechzone.entity.Product;
 import spring.abtechzone.exception.AppException;
 import spring.abtechzone.exception.ErrorCode;
 import spring.abtechzone.mapper.ProductMapper;
 import spring.abtechzone.repository.ProductRepository;
+import spring.abtechzone.repository.ProductSkuRepository;
 import spring.abtechzone.repository.specification.ProductSpecifications;
 
 @Service
@@ -26,16 +32,22 @@ import spring.abtechzone.repository.specification.ProductSpecifications;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductService {
     ProductRepository productRepository;
+    ProductSkuRepository productSkuRepository;
     ProductMapper productMapper;
+    ProductAttributeValidator productAttributeValidator;
 
     @Transactional
-    public ProductResponse create(ProductRequest request) {
+    public ProductResponse create(ProductCreateRequest request) {
+        validateSkusForCreate(request);
+
         Product product = productMapper.toProduct(request);
+        productAttributeValidator.validateProductAttributes(product.getAttributes());
+        productAttributeValidator.validateProductSkus(product);
 
         try {
             product = productRepository.save(product);
         } catch (DataIntegrityViolationException ex) {
-            throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+            handleProductSaveException(ex);
         }
 
         return productMapper.toProductResponse(product);
@@ -60,26 +72,57 @@ public class ProductService {
     }
 
     @Transactional
-    public ProductResponse update(Long id, ProductRequest request) {
-        // 1. Tìm sản phẩm hiện tại trong Database
+    public ProductResponse update(Long id, ProductUpdateRequest request) {
+
         Product product = findProductById(id);
 
-        // 2. Ghi đè các trường thông tin cơ bản từ DTO sang Entity hiện tại
+        validateProductFieldsForUpdate(request);
+        productAttributeValidator.validateExistingSkusAgainstUpdatedAttributes(product, request.getAttributes());
+
         productMapper.updateProduct(product, request);
 
-        // 3. Lưu sản phẩm
         try {
             product = productRepository.save(product);
         } catch (DataIntegrityViolationException ex) {
-            throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+            handleProductSaveException(ex);
         }
 
-        // 4. Trả về kết quả Response DTO
         return productMapper.toProductResponse(product);
     }
 
     @Transactional
     public void delete(Long id) {
         productRepository.deleteById(id);
+    }
+
+    private void validateProductFieldsForUpdate(ProductUpdateRequest request) {
+        if (request.getName() != null && request.getName().isBlank()) {
+            throw new AppException(ErrorCode.PRODUCT_NAME_INVALID);
+        }
+    }
+
+    private void validateSkusForCreate(ProductCreateRequest request) {
+        if (request.getProductSkus() == null) {
+            return;
+        }
+
+        Set<String> skus = new HashSet<>();
+        for (ProductSkuCreateRequest skuRequest : request.getProductSkus()) {
+            if (skuRequest.getSku() == null || skuRequest.getSku().isBlank()) {
+                continue;
+            }
+
+            if (!skus.add(skuRequest.getSku()) || productSkuRepository.existsBySku(skuRequest.getSku())) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+            }
+        }
+    }
+
+    private void handleProductSaveException(DataIntegrityViolationException ex) {
+        String msg = ex.getRootCause() != null ? ex.getRootCause().getMessage() : ex.getMessage();
+        if (msg != null && (msg.contains("product_sku") || msg.toLowerCase().contains("sku"))) {
+            throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+        }
+        throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
     }
 }

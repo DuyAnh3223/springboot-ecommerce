@@ -51,10 +51,9 @@ public class Product {
     List<ProductSku> skus;
 
     @PrePersist
-    protected void onCreate() {
-        if (this.slug == null || this.slug.trim().isEmpty()) {
-            this.slug = generateSlug(this.name);
-        }
+    @PreUpdate
+    protected void onSave() {
+        this.slug = generateSlug(this.name);
     }
 
     private String generateSlug(String input) {

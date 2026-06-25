@@ -72,7 +72,7 @@ Authorization: Bearer {{login.response.body.result.token}}
 
 
 ### 4. Update Product by ID (Updates product details only, SKUs are managed separately)
-PUT http://localhost:8080/abtechzone/products/1
+PATCH http://localhost:8080/abtechzone/products/1
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.result.token}}
 

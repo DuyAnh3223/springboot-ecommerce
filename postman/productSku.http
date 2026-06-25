@@ -62,13 +62,13 @@ Authorization: Bearer {{token}}
 @skuId = {{createSku.response.body.result.id}}
 
 ### 2. Get SKU by ID
-GET http://localhost:8080/abtechzone/skus/{{skuId}}
+GET http://localhost:8080/abtechzone/products/skus/{{skuId}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 
 ### 3. Update SKU details
-PUT http://localhost:8080/abtechzone/skus/{{skuId}}
+PATCH http://localhost:8080/abtechzone/products/skus/{{skuId}}
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
@@ -85,6 +85,6 @@ Authorization: Bearer {{token}}
 
 
 ### 4. Delete SKU
-DELETE http://localhost:8080/abtechzone/skus/{{skuId}}
+DELETE http://localhost:8080/abtechzone/products/skus/{{skuId}}
 Content-Type: application/json
 Authorization: Bearer {{token}}

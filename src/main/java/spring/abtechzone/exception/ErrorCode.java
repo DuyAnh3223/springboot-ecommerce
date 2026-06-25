@@ -19,6 +19,15 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(1008, "Product not found", HttpStatus.NOT_FOUND),
     PRODUCT_SKU_EXISTS(1009, "Product SKU already exists", HttpStatus.BAD_REQUEST),
     SKU_NOT_FOUND(1010, "SKU not found", HttpStatus.NOT_FOUND),
+    PRODUCT_ATTRIBUTES_INVALID(1011, "Product attributes do not match existing SKUs", HttpStatus.BAD_REQUEST),
+    PRODUCT_NAME_INVALID(1012, "Product name is required", HttpStatus.BAD_REQUEST),
+    PRODUCT_SKU_INVALID(1013, "Product SKU is required", HttpStatus.BAD_REQUEST),
+    PRODUCT_PRICE_INVALID(1014, "Product price must be zero or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_STOCK_INVALID(1015, "Product stock must be zero or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_PAGE_INVALID(1016, "Product page must be one or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_SIZE_INVALID(1017, "Product size must be one or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_SLUG_EXISTS(1018, "Product slug already exists", HttpStatus.BAD_REQUEST),
+    PRODUCT_SLUG_INVALID(1019, "Product slug is invalid", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
