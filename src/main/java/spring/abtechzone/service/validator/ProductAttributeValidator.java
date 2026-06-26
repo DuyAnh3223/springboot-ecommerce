@@ -1,4 +1,4 @@
-package spring.abtechzone.service;
+package spring.abtechzone.service.validator;
 
 import java.util.HashMap;
 import java.util.HashSet;

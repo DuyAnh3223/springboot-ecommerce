@@ -20,6 +20,7 @@ import spring.abtechzone.exception.ErrorCode;
 import spring.abtechzone.mapper.ProductSkuMapper;
 import spring.abtechzone.repository.ProductRepository;
 import spring.abtechzone.repository.ProductSkuRepository;
+import spring.abtechzone.service.validator.ProductAttributeValidator;
 
 @Service
 @Slf4j

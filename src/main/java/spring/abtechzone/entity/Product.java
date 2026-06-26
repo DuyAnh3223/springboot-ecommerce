@@ -6,6 +6,8 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -37,6 +39,8 @@ public class Product {
     @Column(length = 2000)
     String description;
 
+    @DecimalMin("0.0")
+    @DecimalMax("5.0")
     Double rating;
 
     boolean isDraft;

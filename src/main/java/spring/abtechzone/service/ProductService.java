@@ -25,6 +25,7 @@ import spring.abtechzone.mapper.ProductMapper;
 import spring.abtechzone.repository.ProductRepository;
 import spring.abtechzone.repository.ProductSkuRepository;
 import spring.abtechzone.repository.specification.ProductSpecifications;
+import spring.abtechzone.service.validator.ProductAttributeValidator;
 
 @Service
 @Slf4j
