@@ -2,6 +2,7 @@ package spring.abtechzone.modules.product.controller;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResponse;
 import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.modules.product.dto.request.ProductSkuSearchRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.service.ProductSkuService;
@@ -20,6 +22,13 @@ import spring.abtechzone.modules.product.service.ProductSkuService;
 public class ProductSkuController {
 
     ProductSkuService productSkuService;
+
+    @GetMapping("/skus")
+    public ApiResponse<Page<ProductSkuResponse>> getSkus(@Valid @ModelAttribute ProductSkuSearchRequest request) {
+        return ApiResponse.<Page<ProductSkuResponse>>builder()
+                .result(productSkuService.getSkus(request))
+                .build();
+    }
 
     @GetMapping("/skus/{skuId}")
     public ApiResponse<ProductSkuResponse> getSku(@PathVariable Long skuId) {

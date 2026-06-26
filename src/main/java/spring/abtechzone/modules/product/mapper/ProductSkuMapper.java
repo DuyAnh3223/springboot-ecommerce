@@ -14,6 +14,8 @@ public interface ProductSkuMapper {
     @Mapping(target = "product", ignore = true)
     ProductSku toProductSku(ProductSkuCreateRequest productSkuRequest);
 
+    @Mapping(source = "product.id", target = "productId")
+    @Mapping(source = "product.name", target = "productName")
     ProductSkuResponse toProductSkuResponse(ProductSku productSku);
 
     @Mapping(target = "id", ignore = true)

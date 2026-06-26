@@ -1,9 +1,7 @@
 package spring.abtechzone.modules.voucher.service;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,14 +10,18 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
-import spring.abtechzone.modules.voucher.dto.response.VoucherResponse;
-import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.voucher.mapper.VoucherMapper;
+import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.mapper.ProductSkuMapper;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
+import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
+import spring.abtechzone.modules.voucher.dto.response.VoucherResponse;
+import spring.abtechzone.modules.voucher.entity.Voucher;
+import spring.abtechzone.modules.voucher.mapper.VoucherMapper;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
@@ -42,30 +44,89 @@ public class VoucherService {
     ProductSkuRepository productSkuRepository;
     VoucherMapper voucherMapper;
     VoucherValidator voucherValidator;
+    ProductSkuMapper productSkuMapper;
 
     @Transactional
     public VoucherResponse create(VoucherCreateRequest request) {
+        if (voucherRepository.existsByCode(request.getCode())) {
+            throw new AppException(ErrorCode.VOUCHER_EXISTED);
+        }
+
         voucherValidator.validateCreate(request);
 
         Voucher voucher = voucherMapper.toVoucher(request);
-        voucher.setProductSkuIds(resolveProductSkus(request.getProductSkuIds()));
+
+        if (request.getApplyScope() == VoucherApplyScope.ALL) {
+            voucher.setProductSkus(new HashSet<>());
+        } else {
+            var productSkus = productSkuRepository.findAllById(request.getProductSkuIds());
+            if (productSkus.size() != request.getProductSkuIds().size()) {
+                throw new AppException(ErrorCode.SKU_NOT_FOUND);
+            }
+            voucher.setProductSkus(new HashSet<>(productSkus));
+        }
 
         voucher = voucherRepository.save(voucher);
         return voucherMapper.toVoucherResponse(voucher);
     }
 
-    private List<ProductSku> resolveProductSkus(List<Long> productSkuIds) {
-        if (productSkuIds == null || productSkuIds.isEmpty()) {
-            return new ArrayList<>();
+    private Voucher findVoucherByCode(String code) {
+        return voucherRepository.findByCode(code).orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+    }
+
+    public List<Voucher> getVouchers() {
+        return voucherRepository.findAll();
+    }
+
+    public List<Voucher> getAvailableVouchers() {
+        return voucherRepository.findAllByIsActiveTrue();
+    }
+
+    public VoucherResponse getVoucher(String code) {
+        return voucherMapper.toVoucherResponse(findVoucherByCode(code));
+    }
+
+    @Transactional
+    public VoucherResponse update(String code, VoucherUpdateRequest request) {
+        Voucher voucher = findVoucherByCode(code);
+
+        if (!voucher.getCode().equals(request.getCode()) && voucherRepository.existsByCode(request.getCode())) {
+            throw new AppException(ErrorCode.VOUCHER_EXISTED);
         }
 
-        Set<Long> uniqueIds = new HashSet<>(productSkuIds);
-        List<ProductSku> productSkus = productSkuRepository.findAllById(uniqueIds);
+        voucherValidator.validateUpdate(request);
+        voucherMapper.updateVoucher(voucher, request);
 
-        if (productSkus.size() != uniqueIds.size()) {
-            throw new AppException(ErrorCode.SKU_NOT_FOUND);
+        if (request.getApplyScope() == VoucherApplyScope.ALL) {
+            voucher.setProductSkus(new HashSet<>());
+        } else {
+            var productSkus = productSkuRepository.findAllById(request.getProductSkuIds());
+            if (productSkus.size() != request.getProductSkuIds().size()) {
+                throw new AppException(ErrorCode.SKU_NOT_FOUND);
+            }
+            voucher.setProductSkus(new HashSet<>(productSkus));
         }
 
-        return productSkus;
+        return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
+    }
+
+    public void delete(String code) {
+        Voucher voucher = findVoucherByCode(code);
+        voucher.setActive(false);
+        voucherRepository.save(voucher);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductSkuResponse> getAllProductSkusByVoucherCode(String code) {
+        Voucher voucher = findVoucherByCode(code);
+
+        List<ProductSku> skus;
+        if (voucher.getApplyScope() == VoucherApplyScope.ALL) {
+            skus = productSkuRepository.findAll();
+        } else {
+            skus = List.copyOf(voucher.getProductSkus());
+        }
+
+        return skus.stream().map(productSkuMapper::toProductSkuResponse).toList();
     }
 }

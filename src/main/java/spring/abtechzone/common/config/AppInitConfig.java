@@ -15,8 +15,8 @@ import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.constant.PredefinedRole;
 import spring.abtechzone.modules.auth.entity.Role;
-import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.auth.repository.RoleRepository;
+import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Configuration

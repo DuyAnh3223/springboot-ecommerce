@@ -3,6 +3,8 @@ package spring.abtechzone.modules.product.service;
 import java.util.Map;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,16 +12,18 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.modules.product.dto.request.ProductSkuSearchRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.common.exception.AppException;
-import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.product.mapper.ProductSkuMapper;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.product.repository.specification.ProductSkuSpecifications;
 import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 
 @Service
@@ -33,6 +37,17 @@ public class ProductSkuService {
     ProductSkuMapper productSkuMapper;
     ProductAttributeValidator productAttributeValidator;
 
+    @Transactional(readOnly = true)
+    public Page<ProductSkuResponse> getSkus(ProductSkuSearchRequest request) {
+        Specification<ProductSku> spec = Specification.where(ProductSkuSpecifications.hasKeyword(request.getSearch()))
+                .and(ProductSkuSpecifications.hasProductId(request.getProductId()))
+                .and(ProductSkuSpecifications.hasMinPrice(request.getMinPrice()))
+                .and(ProductSkuSpecifications.hasMaxPrice(request.getMaxPrice()));
+
+        return productSkuRepository.findAll(spec, request.toPageable()).map(productSkuMapper::toProductSkuResponse);
+    }
+
+    @Transactional(readOnly = true)
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));

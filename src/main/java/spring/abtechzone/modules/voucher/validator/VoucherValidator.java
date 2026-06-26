@@ -2,16 +2,16 @@ package spring.abtechzone.modules.voucher.validator;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Collection;
 
 import org.springframework.stereotype.Component;
 
+import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
-import spring.abtechzone.common.exception.AppException;
-import spring.abtechzone.common.exception.ErrorCode;
 
 @Component
 public class VoucherValidator {
@@ -19,12 +19,6 @@ public class VoucherValidator {
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
 
     public void validateCreate(VoucherCreateRequest request) {
-        validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
-        validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
-    }
-
-    public void validateUpdate(VoucherUpdateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
         validateValue(request.getType(), request.getValue());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
@@ -49,12 +43,12 @@ public class VoucherValidator {
             throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
         }
 
-        if (type == VoucherType.PERCENTAGE && value.compareTo(ONE_HUNDRED) > 0) {
+        if (type == VoucherType.PERCENTAGE && value.compareTo(ONE_HUNDRED) >= 0) {
             throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
         }
     }
 
-    private void validateApplyScope(VoucherApplyScope applyScope, List<Long> productSkuIds) {
+    private void validateApplyScope(VoucherApplyScope applyScope, Collection<Long> productSkuIds) {
         if (applyScope == null) {
             return;
         }
@@ -68,5 +62,11 @@ public class VoucherValidator {
         if (applyScope == VoucherApplyScope.SPECIFIC && !hasProductSkus) {
             throw new AppException(ErrorCode.VOUCHER_SCOPE_INVALID);
         }
+    }
+
+    public void validateUpdate(VoucherUpdateRequest request) {
+        validateDates(request.getStartDate(), request.getEndDate());
+        validateValue(request.getType(), request.getValue());
+        validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
     }
 }

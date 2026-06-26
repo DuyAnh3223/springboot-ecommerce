@@ -24,8 +24,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.modules.auth.entity.InvalidatedToken;
-import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.auth.dto.request.AuthRequest;
@@ -34,7 +32,9 @@ import spring.abtechzone.modules.auth.dto.request.LogoutRequest;
 import spring.abtechzone.modules.auth.dto.request.RefreshTokenRequest;
 import spring.abtechzone.modules.auth.dto.response.AuthResponse;
 import spring.abtechzone.modules.auth.dto.response.IntrospectResponse;
+import spring.abtechzone.modules.auth.entity.InvalidatedToken;
 import spring.abtechzone.modules.auth.repository.InvalidatedTokenRepository;
+import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Slf4j

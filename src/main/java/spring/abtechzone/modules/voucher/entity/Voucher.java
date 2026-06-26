@@ -3,7 +3,9 @@ package spring.abtechzone.modules.voucher.entity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
@@ -12,10 +14,10 @@ import jakarta.validation.constraints.NotNull;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
-import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.user.entity.User;
+import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.constant.VoucherType;
 
 @Entity
 @Getter
@@ -44,9 +46,13 @@ public class Voucher {
     @Column(nullable = false, precision = 12, scale = 2)
     BigDecimal value;
 
+    @NotBlank
+    @Column(nullable = false, unique = true)
     String code; // voucher code
+
     LocalDateTime startDate;
     LocalDateTime endDate;
+
     Integer maxUses; // Số lượng voucher được áp dụng
     Integer usedCount; // Số voucher đã sử dụng
     Integer maxPerUser; // Số voucher tối đa 1 user dc dùng
@@ -75,5 +81,5 @@ public class Voucher {
             joinColumns = @JoinColumn(name = "voucher_id"),
             inverseJoinColumns = @JoinColumn(name = "product_sku_id"))
     @Builder.Default
-    List<ProductSku> productSkuIds = new ArrayList<>();
+    Set<ProductSku> productSkus = new HashSet<>();
 }

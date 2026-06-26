@@ -16,7 +16,7 @@ import spring.abtechzone.modules.voucher.constant.VoucherType;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class VoucherCreateRequest {
+public class VoucherRequest {
 
     @NotBlank(message = "VOUCHER_NAME_NOT_BLANK")
     String name;

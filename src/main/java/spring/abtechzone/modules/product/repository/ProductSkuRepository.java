@@ -1,13 +1,28 @@
 package spring.abtechzone.modules.product.repository;
 
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import spring.abtechzone.modules.product.entity.ProductSku;
 
 @Repository
-public interface ProductSkuRepository extends JpaRepository<ProductSku, Long> {
+public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, JpaSpecificationExecutor<ProductSku> {
     boolean existsBySku(String sku);
 
     boolean existsBySkuAndIdNot(String sku, Long id);
+
+    @Override
+    @EntityGraph(attributePaths = "product")
+    Optional<ProductSku> findById(Long id);
+
+    @Override
+    @EntityGraph(attributePaths = "product")
+    Page<ProductSku> findAll(Specification<ProductSku> spec, Pageable pageable);
 }

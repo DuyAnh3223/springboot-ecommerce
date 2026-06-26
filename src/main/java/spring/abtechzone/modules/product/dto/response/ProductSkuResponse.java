@@ -14,6 +14,8 @@ import lombok.experimental.FieldDefaults;
 public class ProductSkuResponse {
 
     Long id;
+    Long productId;
+    String productName;
     String sku;
     BigDecimal price;
     Integer stock;

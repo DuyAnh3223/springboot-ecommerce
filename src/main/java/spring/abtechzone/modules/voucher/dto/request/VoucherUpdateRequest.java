@@ -2,7 +2,7 @@ package spring.abtechzone.modules.voucher.dto.request;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -51,10 +51,10 @@ public class VoucherUpdateRequest {
     @PositiveOrZero(message = "VOUCHER_MIN_ORDER_VALUE_INVALID")
     BigDecimal minOrderValue;
 
-    boolean isActive;
+    Boolean isActive;
 
     @NotNull(message = "SCOPE_NOT_NULL")
     VoucherApplyScope applyScope;
 
-    List<Long> productSkuIds;
+    Set<Long> productSkuIds;
 }

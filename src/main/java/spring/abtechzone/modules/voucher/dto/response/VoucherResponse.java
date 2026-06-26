@@ -2,13 +2,13 @@ package spring.abtechzone.modules.voucher.dto.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
-import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 
 @Data
 @Builder
@@ -29,5 +29,5 @@ public class VoucherResponse {
     BigDecimal minOrderValue;
     boolean isActive;
     VoucherApplyScope applyScope;
-    List<ProductSkuResponse> productSkus;
+    Set<ProductSkuResponse> productSkus;
 }

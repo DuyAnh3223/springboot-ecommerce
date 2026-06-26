@@ -12,12 +12,11 @@ import spring.abtechzone.modules.voucher.entity.Voucher;
 @Mapper(componentModel = "spring")
 public interface VoucherMapper {
 
-    @Mapping(target = "productSkuIds", ignore = true)
+    @Mapping(target = "productSkus", ignore = true)
     Voucher toVoucher(VoucherCreateRequest request);
 
-    @Mapping(source = "productSkuIds", target = "productSkus")
     VoucherResponse toVoucherResponse(Voucher voucher);
 
-    @Mapping(target = "productSkuIds", ignore = true)
+    @Mapping(target = "productSkus", ignore = true)
     void updateVoucher(@MappingTarget Voucher voucher, VoucherUpdateRequest request);
 }

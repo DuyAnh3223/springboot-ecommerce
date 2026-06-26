@@ -14,15 +14,15 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.constant.PredefinedRole;
+import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.auth.entity.Role;
+import spring.abtechzone.modules.auth.repository.RoleRepository;
 import spring.abtechzone.modules.user.dto.request.UserCreationRequest;
 import spring.abtechzone.modules.user.dto.request.UserUpdateRequest;
 import spring.abtechzone.modules.user.dto.response.UserResponse;
-import spring.abtechzone.modules.auth.entity.Role;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.common.exception.AppException;
-import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.user.mapper.UserMapper;
-import spring.abtechzone.modules.auth.repository.RoleRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Service
