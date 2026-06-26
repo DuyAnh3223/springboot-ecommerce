@@ -1,0 +1,45 @@
+package spring.abtechzone.common.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+
+import lombok.Getter;
+
+@Getter
+public enum ErrorCode {
+    UNCATEGORIZED_EXCEPTION(9999, "Uncategorized Exception", HttpStatus.INTERNAL_SERVER_ERROR),
+    INVALID_KEY(9998, "Invalid Message Key", HttpStatus.BAD_REQUEST),
+    USER_EXISTS(1001, "User already exists", HttpStatus.BAD_REQUEST),
+    USER_NOT_FOUND(1002, "User not found", HttpStatus.NOT_FOUND),
+    USERNAME_INVALID(1003, "Username must be at least 3 characters", HttpStatus.BAD_REQUEST),
+    PASSWORD_INVALID(1004, "Password must be at least 3 characters", HttpStatus.BAD_REQUEST),
+    USER_NOT_EXISTED(1005, "User not existed", HttpStatus.NOT_FOUND),
+    UNAUTHENTICATED(1006, "Unauthenticated", HttpStatus.UNAUTHORIZED),
+    UNAUTHORIZED(1007, "Unauthorized", HttpStatus.FORBIDDEN),
+    PRODUCT_NOT_FOUND(1008, "Product not found", HttpStatus.NOT_FOUND),
+    PRODUCT_SKU_EXISTS(1009, "Product SKU already exists", HttpStatus.BAD_REQUEST),
+    SKU_NOT_FOUND(1010, "SKU not found", HttpStatus.NOT_FOUND),
+    PRODUCT_ATTRIBUTES_INVALID(1011, "Product attributes do not match existing SKUs", HttpStatus.BAD_REQUEST),
+    PRODUCT_NAME_INVALID(1012, "Product name is required", HttpStatus.BAD_REQUEST),
+    PRODUCT_SKU_INVALID(1013, "Product SKU is required", HttpStatus.BAD_REQUEST),
+    PRODUCT_PRICE_INVALID(1014, "Product price must be zero or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_STOCK_INVALID(1015, "Product stock must be zero or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_PAGE_INVALID(1016, "Product page must be one or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_SIZE_INVALID(1017, "Product size must be one or greater", HttpStatus.BAD_REQUEST),
+    PRODUCT_SLUG_EXISTS(1018, "Product slug already exists", HttpStatus.BAD_REQUEST),
+    PRODUCT_SLUG_INVALID(1019, "Product slug is invalid", HttpStatus.BAD_REQUEST),
+    VOUCHER_DATE_INVALID(1020, "Voucher date is invalid", HttpStatus.BAD_REQUEST),
+    VOUCHER_VALUE_INVALID(1021, "Voucher value is invalid", HttpStatus.BAD_REQUEST),
+    VOUCHER_SCOPE_INVALID(1021, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
+    ;
+
+    ErrorCode(int code, String message, HttpStatusCode statusCode) {
+        this.code = code;
+        this.message = message;
+        this.statusCode = statusCode;
+    }
+
+    private final int code;
+    private final String message;
+    private final HttpStatusCode statusCode;
+}
