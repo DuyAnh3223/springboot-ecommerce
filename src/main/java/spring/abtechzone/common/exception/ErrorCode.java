@@ -36,6 +36,9 @@ public enum ErrorCode {
     VOUCHER_EXPIRED(1024, "Voucher expired", HttpStatus.BAD_REQUEST),
     VOUCHER_ARE_OUT(1025, "Voucher are out", HttpStatus.BAD_REQUEST),
     VOUCHER_MIN_ORDER_VALUE_INVALID(1026, "Voucher minimum order value is invalid", HttpStatus.BAD_REQUEST),
+    CART_EXISTS(1027, "Cart already exists", HttpStatus.BAD_REQUEST),
+    CART_ITEM_NOT_FOUND(1028, "Cart item not found", HttpStatus.NOT_FOUND),
+    CART_ITEM_QUANTITY_INVALID(1029, "Cart item quantity must be at least 1", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
