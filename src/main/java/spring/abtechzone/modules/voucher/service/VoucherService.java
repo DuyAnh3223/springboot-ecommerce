@@ -1,8 +1,12 @@
 package spring.abtechzone.modules.voucher.service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +21,17 @@ import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.mapper.ProductSkuMapper;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
+import spring.abtechzone.modules.voucher.dto.request.VoucherDiscountRequest;
+import spring.abtechzone.modules.voucher.dto.request.VoucherSearchRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
+import spring.abtechzone.modules.voucher.dto.response.VoucherDiscountResponse;
 import spring.abtechzone.modules.voucher.dto.response.VoucherResponse;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.mapper.VoucherMapper;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.repository.specification.VoucherSpecifications;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 @Slf4j
@@ -30,16 +39,6 @@ import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VoucherService {
-
-    /*
-     *  1 - Generate Voucher Code
-     *  2 - Get voucher amount for User
-     *  3 - Get all voucher codes for User/Admin
-     *  4 - Verify voucher code for User
-     *  5 - Delete voucher code for User/Admin
-     *  6 - Cancel voucher code for User
-     **/
-
     VoucherRepository voucherRepository;
     ProductSkuRepository productSkuRepository;
     VoucherMapper voucherMapper;
@@ -74,12 +73,14 @@ public class VoucherService {
         return voucherRepository.findByCode(code).orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
     }
 
-    public List<Voucher> getVouchers() {
-        return voucherRepository.findAll();
-    }
+    public Page<VoucherResponse> getVouchers(VoucherSearchRequest request) {
+        Specification<Voucher> spec = Specification.where(VoucherSpecifications.hasActive(request.getActive()))
+                .and(VoucherSpecifications.hasStatus(request.getStatus()))
+                .and(VoucherSpecifications.fetchProductSkus());
 
-    public List<Voucher> getAvailableVouchers() {
-        return voucherRepository.findAllByIsActiveTrue();
+        Page<Voucher> vouchersPage = voucherRepository.findAll(spec, request.toPageable());
+
+        return vouchersPage.map(voucherMapper::toVoucherResponse);
     }
 
     public VoucherResponse getVoucher(String code) {
@@ -128,5 +129,38 @@ public class VoucherService {
         }
 
         return skus.stream().map(productSkuMapper::toProductSkuResponse).toList();
+    }
+
+    public VoucherDiscountResponse calculateDiscount(VoucherDiscountRequest request) {
+        Voucher voucher = findVoucherByCode(request.getCode());
+
+        voucherValidator.validateVoucher(voucher, request.getTotalOrder());
+
+        BigDecimal totalOrder = request.getTotalOrder() != null ? request.getTotalOrder() : BigDecimal.ZERO;
+
+        BigDecimal discountAmount = getDiscount(voucher, totalOrder);
+
+        BigDecimal totalPrice = totalOrder.subtract(discountAmount);
+
+        return VoucherDiscountResponse.builder()
+                .discountAmount(discountAmount)
+                .totalOrder(totalOrder)
+                .totalPrice(totalPrice)
+                .build();
+    }
+
+    private static BigDecimal getDiscount(Voucher voucher, BigDecimal totalOrder) {
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        if (voucher.getType() == VoucherType.FIXED_AMOUNT) {
+            discountAmount = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
+        } else if (voucher.getType() == VoucherType.PERCENTAGE) {
+            BigDecimal percentage = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
+            discountAmount = totalOrder.multiply(percentage).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        }
+
+        if (discountAmount.compareTo(totalOrder) > 0) {
+            discountAmount = totalOrder;
+        }
+        return discountAmount;
     }
 }

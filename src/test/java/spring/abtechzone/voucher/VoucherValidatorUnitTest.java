@@ -1,6 +1,7 @@
 package spring.abtechzone.voucher;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
+import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 class VoucherValidatorUnitTest {
@@ -24,7 +26,8 @@ class VoucherValidatorUnitTest {
 
     @BeforeEach
     void setUp() {
-        voucherValidator = new VoucherValidator();
+        VoucherRepository voucherRepository = mock(VoucherRepository.class);
+        voucherValidator = new VoucherValidator(voucherRepository);
     }
 
     @Test

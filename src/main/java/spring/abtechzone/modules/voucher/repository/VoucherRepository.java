@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import spring.abtechzone.modules.voucher.entity.Voucher;
 
-public interface VoucherRepository extends JpaRepository<Voucher, Long> {
+public interface VoucherRepository
+        extends JpaRepository<Voucher, Long>,
+                org.springframework.data.jpa.repository.JpaSpecificationExecutor<Voucher> {
     boolean existsByCode(@NotBlank String code);
 
     List<Voucher> findAllByIsActiveTrue();

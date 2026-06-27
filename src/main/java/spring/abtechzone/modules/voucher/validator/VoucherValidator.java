@@ -12,16 +12,66 @@ import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
+import spring.abtechzone.modules.voucher.entity.Voucher;
+import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 
 @Component
 public class VoucherValidator {
 
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
+    private final VoucherRepository voucherRepository;
+
+    public VoucherValidator(VoucherRepository voucherRepository) {
+        this.voucherRepository = voucherRepository;
+    }
 
     public void validateCreate(VoucherCreateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
         validateValue(request.getType(), request.getValue());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
+    }
+
+    public void validateUpdate(VoucherUpdateRequest request) {
+        validateDates(request.getStartDate(), request.getEndDate());
+        validateValue(request.getType(), request.getValue());
+        validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
+    }
+
+    public void validateVoucher(Voucher voucher, BigDecimal totalOrder) {
+        validateActive(voucher);
+        validateExpiry(voucher);
+        validateUsageLimit(voucher);
+        validateMinOrderValue(voucher, totalOrder);
+    }
+
+    private void validateActive(Voucher voucher) {
+        if (!voucher.isActive()) {
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        }
+    }
+
+    private void validateExpiry(Voucher voucher) {
+        LocalDateTime now = LocalDateTime.now();
+        if (voucher.getStartDate() != null && now.isBefore(voucher.getStartDate())) {
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        }
+        if (voucher.getEndDate() != null && now.isAfter(voucher.getEndDate())) {
+            throw new AppException(ErrorCode.VOUCHER_EXPIRED);
+        }
+    }
+
+    private void validateUsageLimit(Voucher voucher) {
+        int used = voucher.getUsedCount() != null ? voucher.getUsedCount() : 0;
+        if (voucher.getMaxUses() != null && used >= voucher.getMaxUses()) {
+            throw new AppException(ErrorCode.VOUCHER_ARE_OUT);
+        }
+    }
+
+    private void validateMinOrderValue(Voucher voucher, BigDecimal totalOrder) {
+        BigDecimal orderVal = totalOrder != null ? totalOrder : BigDecimal.ZERO;
+        if (voucher.getMinOrderValue() != null && orderVal.compareTo(voucher.getMinOrderValue()) < 0) {
+            throw new AppException(ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID);
+        }
     }
 
     private void validateDates(LocalDateTime startDate, LocalDateTime endDate) {
@@ -62,11 +112,5 @@ public class VoucherValidator {
         if (applyScope == VoucherApplyScope.SPECIFIC && !hasProductSkus) {
             throw new AppException(ErrorCode.VOUCHER_SCOPE_INVALID);
         }
-    }
-
-    public void validateUpdate(VoucherUpdateRequest request) {
-        validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
-        validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
     }
 }

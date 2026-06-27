@@ -35,8 +35,12 @@ import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
+import spring.abtechzone.modules.voucher.dto.request.VoucherDiscountRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
+import spring.abtechzone.modules.voucher.dto.response.VoucherDiscountResponse;
+import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.service.VoucherService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -66,6 +70,9 @@ class VoucherIntegrationTest {
 
     @Autowired
     private ProductSkuRepository productSkuRepository;
+
+    @Autowired
+    private VoucherService voucherService;
 
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
@@ -243,7 +250,52 @@ class VoucherIntegrationTest {
         mockMvc.perform(get("/vouchers")
                         .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.length()").value(2));
+                .andExpect(jsonPath("$.result.content.length()").value(2));
+    }
+
+    @Test
+    void getVouchers_withFilters_success() throws Exception {
+        Voucher activeVoucher = Voucher.builder()
+                .name("Active Promo")
+                .type(VoucherType.PERCENTAGE)
+                .value(BigDecimal.valueOf(10))
+                .code("ACTIVEPROMO")
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .applyScope(VoucherApplyScope.ALL)
+                .isActive(true)
+                .build();
+        voucherRepository.save(activeVoucher);
+
+        Voucher expiredVoucher = Voucher.builder()
+                .name("Expired Promo")
+                .type(VoucherType.PERCENTAGE)
+                .value(BigDecimal.valueOf(10))
+                .code("EXPIREDPROMO")
+                .startDate(LocalDateTime.now().minusDays(5))
+                .endDate(LocalDateTime.now().minusDays(1))
+                .applyScope(VoucherApplyScope.ALL)
+                .isActive(true)
+                .build();
+        voucherRepository.save(expiredVoucher);
+
+        // Filter: active=true, status=expired
+        mockMvc.perform(get("/vouchers")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .param("active", "true")
+                        .param("status", "expired"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.content[0].code").value("EXPIREDPROMO"));
+
+        // Filter: active=true, status=active
+        mockMvc.perform(get("/vouchers")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .param("active", "true")
+                        .param("status", "active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.content[0].code").value("ACTIVEPROMO"));
     }
 
     @Test
@@ -282,11 +334,11 @@ class VoucherIntegrationTest {
                         .content(objectMapper.writeValueAsString(inactive)))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/vouchers/activated")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
+        mockMvc.perform(get("/vouchers").param("active", "true").with(jwt().jwt(jwt -> jwt.subject("admin")
+                        .claim("scope", "ADMIN"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.length()").value(1))
-                .andExpect(jsonPath("$.result[0].code").value("ACTIVE"));
+                .andExpect(jsonPath("$.result.content.length()").value(1))
+                .andExpect(jsonPath("$.result.content[0].code").value("ACTIVE"));
     }
 
     @Test
@@ -505,5 +557,209 @@ class VoucherIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.length()").value(1))
                 .andExpect(jsonPath("$.result[0].sku").value("IPHONE15-128"));
+    }
+
+    @Test
+    void calculateDiscount_voucherInactive_throwsException() {
+        Voucher voucher = Voucher.builder()
+                .name("Inactive")
+                .code("INACTIVE")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(50.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(false)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("INACTIVE")
+                .totalOrder(BigDecimal.valueOf(200.0))
+                .build();
+
+        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                spring.abtechzone.common.exception.ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
+    }
+
+    @Test
+    void calculateDiscount_voucherExpired_throwsException() {
+        Voucher voucher = Voucher.builder()
+                .name("Expired")
+                .code("EXPIRED")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(50.0))
+                .startDate(LocalDateTime.now().minusDays(5))
+                .endDate(LocalDateTime.now().minusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("EXPIRED")
+                .totalOrder(BigDecimal.valueOf(200.0))
+                .build();
+
+        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                spring.abtechzone.common.exception.ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
+    }
+
+    @Test
+    void calculateDiscount_voucherOutOflimit_throwsException() {
+        Voucher voucher = Voucher.builder()
+                .name("Out")
+                .code("OUT")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(50.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(10)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("OUT")
+                .totalOrder(BigDecimal.valueOf(200.0))
+                .build();
+
+        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                spring.abtechzone.common.exception.ErrorCode.VOUCHER_ARE_OUT, exception.getErrorCode());
+    }
+
+    @Test
+    void calculateDiscount_minOrderValueNotMet_throwsException() {
+        Voucher voucher = Voucher.builder()
+                .name("MinOrder")
+                .code("MINORDER")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(50.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("MINORDER")
+                .totalOrder(BigDecimal.valueOf(80.0))
+                .build();
+
+        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                spring.abtechzone.common.exception.ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void calculateDiscount_fixedAmount_success() {
+        Voucher voucher = Voucher.builder()
+                .name("Fixed")
+                .code("FIXED")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(50.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("FIXED")
+                .totalOrder(BigDecimal.valueOf(150.0))
+                .build();
+
+        VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(50.0).compareTo(resp.getDiscountAmount()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(150.0).compareTo(resp.getTotalOrder()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalPrice()));
+    }
+
+    @Test
+    void calculateDiscount_percentage_success() {
+        Voucher voucher = Voucher.builder()
+                .name("Percentage")
+                .code("PERCENT")
+                .type(VoucherType.PERCENTAGE)
+                .value(BigDecimal.valueOf(15.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(100.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("PERCENT")
+                .totalOrder(BigDecimal.valueOf(200.0))
+                .build();
+
+        VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(30.0).compareTo(resp.getDiscountAmount()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(200.0).compareTo(resp.getTotalOrder()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(170.0).compareTo(resp.getTotalPrice()));
+    }
+
+    @Test
+    void calculateDiscount_exceedsTotalOrder_success() {
+        Voucher voucher = Voucher.builder()
+                .name("Big Discount")
+                .code("BIGDISCOUNT")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(150.0))
+                .startDate(LocalDateTime.now().minusDays(1))
+                .endDate(LocalDateTime.now().plusDays(1))
+                .maxUses(10)
+                .usedCount(0)
+                .minOrderValue(BigDecimal.valueOf(50.0))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .build();
+        voucherRepository.save(voucher);
+
+        VoucherDiscountRequest req = VoucherDiscountRequest.builder()
+                .code("BIGDISCOUNT")
+                .totalOrder(BigDecimal.valueOf(100.0))
+                .build();
+
+        VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(100.0).compareTo(resp.getDiscountAmount()));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalOrder()));
+        org.junit.jupiter.api.Assertions.assertEquals(0, BigDecimal.valueOf(0.0).compareTo(resp.getTotalPrice()));
     }
 }

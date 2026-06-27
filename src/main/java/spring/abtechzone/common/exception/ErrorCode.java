@@ -33,6 +33,9 @@ public enum ErrorCode {
     VOUCHER_SCOPE_INVALID(1021, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_NOT_FOUND(1022, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_EXISTED(1023, "Voucher already exists", HttpStatus.BAD_REQUEST),
+    VOUCHER_EXPIRED(1024, "Voucher expired", HttpStatus.BAD_REQUEST),
+    VOUCHER_ARE_OUT(1025, "Voucher are out", HttpStatus.BAD_REQUEST),
+    VOUCHER_MIN_ORDER_VALUE_INVALID(1026, "Voucher minimum order value is invalid", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
