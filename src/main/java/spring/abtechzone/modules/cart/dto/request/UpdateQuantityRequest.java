@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.cart.dto.request;
 
-import java.util.List;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -10,6 +11,8 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class CartRequest {
-    List<CartItemRequest> items;
+public class UpdateQuantityRequest {
+    @NotNull
+    @Min(1)
+    Integer quantity;
 }

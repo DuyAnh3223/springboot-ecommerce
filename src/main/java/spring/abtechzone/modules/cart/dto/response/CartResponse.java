@@ -1,11 +1,10 @@
 package spring.abtechzone.modules.cart.dto.response;
 
+import java.util.List;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.cart.constant.CartStatus;
-import spring.abtechzone.modules.cart.entity.CartItem;
-
-import java.util.List;
 
 @Data
 @Builder
@@ -13,7 +12,8 @@ import java.util.List;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CartResponse {
-    CartStatus cartStatus;
-    List<CartItemRespone> items;
+    Long cartId;
+    CartStatus status;
+    List<CartItemResponse> items;
     String userId;
 }
