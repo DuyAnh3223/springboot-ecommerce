@@ -1,0 +1,104 @@
+### Login to get token
+# @name login
+POST http://localhost:8080/abtechzone/auth/log-in
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+###
+
+@token = {{login.response.body.result.token}}
+
+### 1. Add item to cart (new item)
+# @name addToCart
+POST http://localhost:8080/abtechzone/cart/add
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productSkuId": 1,
+  "quantity": 2
+}
+
+### 2. Add same item again (should accumulate quantity)
+POST http://localhost:8080/abtechzone/cart/add
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productSkuId": 1,
+  "quantity": 3
+}
+
+### 3. Add a different SKU to cart
+POST http://localhost:8080/abtechzone/cart/add
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productSkuId": 2,
+  "quantity": 1
+}
+
+### 4. Get cart
+GET http://localhost:8080/abtechzone/cart
+Authorization: Bearer {{token}}
+
+### 5. Update cart item quantity
+PATCH http://localhost:8080/abtechzone/cart/items/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "quantity": 10
+}
+
+### 6. Update cart item quantity (exceed stock → should fail)
+PATCH http://localhost:8080/abtechzone/cart/items/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "quantity": 99999
+}
+
+### 7. Update cart item quantity (invalid → should fail validation)
+PATCH http://localhost:8080/abtechzone/cart/items/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "quantity": 0
+}
+
+### 8. Remove a single item from cart
+DELETE http://localhost:8080/abtechzone/cart/items/1
+Authorization: Bearer {{token}}
+
+### 9. Remove non-existent item (should fail)
+DELETE http://localhost:8080/abtechzone/cart/items/999999
+Authorization: Bearer {{token}}
+
+### 10. Clear entire cart
+DELETE http://localhost:8080/abtechzone/cart
+Authorization: Bearer {{token}}
+
+### 11. Get cart after clear (should be empty or not found)
+GET http://localhost:8080/abtechzone/cart
+Authorization: Bearer {{token}}
+
+### 12. Add item with non-existent SKU (should fail)
+POST http://localhost:8080/abtechzone/cart/add
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "productSkuId": 999999,
+  "quantity": 1
+}
+
+### 13. Access cart without token (should 401)
+GET http://localhost:8080/abtechzone/cart
