@@ -1,5 +1,7 @@
 package spring.abtechzone.modules.user.entity;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import jakarta.persistence.*;
@@ -32,4 +34,8 @@ public class User {
 
     @ManyToMany
     Set<Role> roles; // Các phần tử trong Set là unique
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    List<Address> addresses = new ArrayList<>();
 }
