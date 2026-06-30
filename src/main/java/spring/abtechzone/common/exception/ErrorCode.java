@@ -40,6 +40,14 @@ public enum ErrorCode {
     CART_ITEM_NOT_FOUND(1028, "Cart item not found", HttpStatus.NOT_FOUND),
     CART_ITEM_QUANTITY_INVALID(1029, "Cart item quantity must be at least 1", HttpStatus.BAD_REQUEST),
     CART_NOT_FOUND(1030, "Cart not found", HttpStatus.NOT_FOUND),
+    CART_IS_EMPTY(1031, "Cart is empty", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_STOCK(1032, "Insufficient stock for product", HttpStatus.BAD_REQUEST),
+    PRODUCT_NOT_AVAILABLE(1033, "Product is not available for sale", HttpStatus.BAD_REQUEST),
+    ORDER_NOT_FOUND(1034, "Order not found", HttpStatus.NOT_FOUND),
+    ADDRESS_NOT_FOUND(1035, "Address not found", HttpStatus.NOT_FOUND),
+    ADDRESS_NOT_BELONG_TO_USER(1036, "Address does not belong to user", HttpStatus.FORBIDDEN),
+    ADDRESS_REQUIRED(1037, "Address is required", HttpStatus.BAD_REQUEST),
+    VOUCHER_PER_USER_LIMIT_REACHED(1038, "Voucher per-user usage limit reached", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
