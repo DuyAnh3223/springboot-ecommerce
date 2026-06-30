@@ -1,0 +1,73 @@
+### Login to get token
+# @name login
+POST http://localhost:8080/abtechzone/auth/log-in
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+###
+
+@token = {{login.response.body.result.token}}
+
+### 1. Checkout Review (No Voucher)
+# @name checkoutReviewNoVoucher
+POST http://localhost:8080/abtechzone/orders/checkout-review
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+}
+
+### 2. Checkout Review (With Voucher)
+# @name checkoutReviewWithVoucher
+POST http://localhost:8080/abtechzone/orders/checkout-review
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "voucherCode": "NEWYEAR10"
+}
+
+### 3. Create Order with New Address
+# @name createOrderNewAddress
+POST http://localhost:8080/abtechzone/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "newAddress": {
+    "recipientName": "Nguyen Van A",
+    "phone": "0987654321",
+    "province": "Ha Noi",
+    "district": "Cau Giay",
+    "ward": "Dich Vong",
+    "streetAddress": "123 Xuan Thuy",
+    "saveAddress": true
+  },
+  "paymentMethod": "COD"
+}
+
+### 4. Create Order with Saved Address ID (Requires addressId)
+# @name createOrderSavedAddress
+POST http://localhost:8080/abtechzone/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "addressId": 1,
+  "voucherCode": "NEWYEAR10",
+  "paymentMethod": "BANK_TRANSFER"
+}
+
+### 5. Create Order with invalid inputs (No address)
+# @name createOrderInvalidAddress
+POST http://localhost:8080/abtechzone/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "paymentMethod": "COD"
+}

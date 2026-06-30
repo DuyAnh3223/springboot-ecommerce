@@ -1,0 +1,319 @@
+package spring.abtechzone.order;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.cart.constant.CartStatus;
+import spring.abtechzone.modules.cart.entity.Cart;
+import spring.abtechzone.modules.cart.entity.CartItem;
+import spring.abtechzone.modules.cart.repository.CartRepository;
+import spring.abtechzone.modules.order.dto.request.AddressRequest;
+import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
+import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
+import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
+import spring.abtechzone.modules.order.dto.response.OrderResponse;
+import spring.abtechzone.modules.order.entity.Order;
+import spring.abtechzone.modules.order.repository.OrderRepository;
+import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.user.entity.Address;
+import spring.abtechzone.modules.user.entity.User;
+import spring.abtechzone.modules.user.repository.AddressRepository;
+import spring.abtechzone.modules.user.repository.UserRepository;
+import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.constant.VoucherType;
+import spring.abtechzone.modules.voucher.entity.Voucher;
+import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.validator.VoucherValidator;
+
+@ExtendWith(MockitoExtension.class)
+class OrderServiceTest {
+
+    @Mock
+    UserRepository userRepository;
+
+    @Mock
+    CartRepository cartRepository;
+
+    @Mock
+    VoucherRepository voucherRepository;
+
+    @Mock
+    ProductSkuRepository productSkuRepository;
+
+    @Mock
+    OrderRepository orderRepository;
+
+    @Mock
+    AddressRepository addressRepository;
+
+    @Mock
+    VoucherValidator voucherValidator;
+
+    @InjectMocks
+    OrderService orderService;
+
+    private User user;
+    private ProductSku sku;
+    private Cart cart;
+    private CartItem cartItem;
+
+    @BeforeEach
+    void setUp() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
+
+        user = User.builder().id("user-1").username("testuser").isActive(true).build();
+
+        Product product = Product.builder()
+                .id(1L)
+                .name("iPhone 15 Pro Max")
+                .isPublished(true)
+                .build();
+
+        sku = ProductSku.builder()
+                .id(100L)
+                .sku("IPHONE-15-256GB")
+                .price(BigDecimal.valueOf(1000000.00))
+                .stock(10)
+                .product(product)
+                .build();
+
+        cartItem = CartItem.builder()
+                .id(10L)
+                .productSku(sku)
+                .quantity(2)
+                .unitPrice(BigDecimal.valueOf(1000000.00))
+                .build();
+
+        cart = Cart.builder()
+                .id(1L)
+                .user(user)
+                .status(CartStatus.ACTIVE)
+                .items(new ArrayList<>(List.of(cartItem)))
+                .build();
+    }
+
+    @Nested
+    @DisplayName("checkoutReview tests")
+    class CheckoutReviewTests {
+
+        @Test
+        @DisplayName("checkoutReview success without voucher")
+        void reviewSuccess_noVoucher() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            CheckoutRequest request = CheckoutRequest.builder().build();
+            CheckoutResponse response = orderService.checkoutReview(request);
+
+            assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
+            assertThat(response.getShippingFee()).isEqualByComparingTo(BigDecimal.valueOf(30000));
+            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
+            assertThat(response.getItems()).hasSize(1);
+            assertThat(response.getItems().get(0).getProductName()).isEqualTo("iPhone 15 Pro Max");
+
+            verify(voucherValidator, never()).validateVoucher(any(), any());
+        }
+
+        @Test
+        @DisplayName("checkoutReview success with PERCENTAGE voucher")
+        void reviewSuccess_withPercentageVoucher() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            Voucher voucher = Voucher.builder()
+                    .code("SALE10")
+                    .type(VoucherType.PERCENTAGE)
+                    .value(BigDecimal.valueOf(10.0))
+                    .isActive(true)
+                    .applyScope(VoucherApplyScope.ALL)
+                    .build();
+
+            when(voucherRepository.findByCode("SALE10")).thenReturn(Optional.of(voucher));
+
+            CheckoutRequest request =
+                    CheckoutRequest.builder().voucherCode("SALE10").build();
+            CheckoutResponse response = orderService.checkoutReview(request);
+
+            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
+            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 200000));
+
+            verify(voucherValidator).validateVoucher(voucher, BigDecimal.valueOf(2000000.00));
+        }
+
+        @Test
+        @DisplayName("checkoutReview throws CART_IS_EMPTY when cart has no items")
+        void reviewThrowsCartIsEmpty() {
+            cart.setItems(new ArrayList<>());
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            CheckoutRequest request = CheckoutRequest.builder().build();
+
+            assertThatThrownBy(() -> orderService.checkoutReview(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.CART_IS_EMPTY.getMessage());
+        }
+
+        @Test
+        @DisplayName("checkoutReview throws INSUFFICIENT_STOCK when quantity exceeds stock")
+        void reviewThrowsInsufficientStock() {
+            cartItem.setQuantity(15); // stock is only 10
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            CheckoutRequest request = CheckoutRequest.builder().build();
+
+            assertThatThrownBy(() -> orderService.checkoutReview(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.INSUFFICIENT_STOCK.getMessage());
+        }
+    }
+
+    @Nested
+    @DisplayName("createOrder tests")
+    class CreateOrderTests {
+
+        @Test
+        @DisplayName("createOrder success with Saved Address ID")
+        void createOrderSuccess_savedAddress() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            Address address = Address.builder()
+                    .id(50L)
+                    .recipientName("Van A")
+                    .phone("0909090909")
+                    .province("HCM")
+                    .district("Dist 1")
+                    .ward("Ben Nghe")
+                    .streetAddress("1 Le Loi")
+                    .user(user)
+                    .build();
+
+            when(addressRepository.findById(50L)).thenReturn(Optional.of(address));
+
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+                Order orderToSave = invocation.getArgument(0);
+                orderToSave.setId(999L);
+                return orderToSave;
+            });
+
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .addressId(50L)
+                    .paymentMethod("COD")
+                    .build();
+
+            OrderResponse response = orderService.createOrder(request);
+
+            assertThat(response.getOrderId()).isEqualTo(999L);
+            assertThat(response.getOrderStatus()).isEqualTo("PENDING");
+            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
+
+            assertThat(sku.getStock()).isEqualTo(8);
+
+            assertThat(cart.getStatus()).isEqualTo(CartStatus.COMPLETED);
+
+            verify(orderRepository).save(any(Order.class));
+            verify(productSkuRepository).save(sku);
+        }
+
+        @Test
+        @DisplayName("createOrder success with New Address and saveAddress = true")
+        void createOrderSuccess_newAddressAndSave() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            AddressRequest addressReq = AddressRequest.builder()
+                    .recipientName("Van B")
+                    .phone("0808080808")
+                    .province("Da Nang")
+                    .district("Hai Chau")
+                    .ward("Thach Thang")
+                    .streetAddress("50 Nguyen Chi Thanh")
+                    .saveAddress(true)
+                    .build();
+
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .newAddress(addressReq)
+                    .paymentMethod("BANK_TRANSFER")
+                    .build();
+
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+                Order orderToSave = invocation.getArgument(0);
+                orderToSave.setId(888L);
+                return orderToSave;
+            });
+
+            OrderResponse response = orderService.createOrder(request);
+
+            assertThat(response.getOrderId()).isEqualTo(888L);
+
+            ArgumentCaptor<Address> addressCaptor = ArgumentCaptor.forClass(Address.class);
+            verify(addressRepository).save(addressCaptor.capture());
+            Address savedAddress = addressCaptor.getValue();
+            assertThat(savedAddress.getRecipientName()).isEqualTo("Van B");
+            assertThat(savedAddress.getUser().getId()).isEqualTo("user-1");
+        }
+
+        @Test
+        @DisplayName("createOrder throws ADDRESS_REQUIRED when neither addressId nor newAddress is provided")
+        void createOrderThrowsAddressRequired() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            CreateOrderRequest request =
+                    CreateOrderRequest.builder().paymentMethod("COD").build();
+
+            assertThatThrownBy(() -> orderService.createOrder(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.ADDRESS_REQUIRED.getMessage());
+        }
+
+        @Test
+        @DisplayName("createOrder throws ADDRESS_NOT_BELONG_TO_USER when user attempts to use other user's address")
+        void createOrderThrowsAddressNotBelongToUser() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+
+            User otherUser = User.builder().id("other-user").build();
+            Address address = Address.builder().id(50L).user(otherUser).build();
+
+            when(addressRepository.findById(50L)).thenReturn(Optional.of(address));
+
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .addressId(50L)
+                    .paymentMethod("COD")
+                    .build();
+
+            assertThatThrownBy(() -> orderService.createOrder(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.ADDRESS_NOT_BELONG_TO_USER.getMessage());
+        }
+    }
+}

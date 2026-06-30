@@ -47,7 +47,7 @@ import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public class CheckoutService {
+public class OrderService {
 
     UserRepository userRepository;
     CartRepository cartRepository;

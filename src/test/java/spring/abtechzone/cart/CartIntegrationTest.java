@@ -151,7 +151,7 @@ class CartIntegrationTest {
 
             // Verify DB — Cart thực sự được lưu
             Cart savedCart = cartRepository.findByUserId(user.getId()).orElseThrow();
-            assertThat(savedCart.getItems()).hasSize(1);
+            assertThat(cartItemRepository.findAll()).hasSize(1);
             assertThat(savedCart.getStatus()).isEqualTo(CartStatus.ACTIVE);
         }
 
@@ -388,7 +388,7 @@ class CartIntegrationTest {
 
             // Verify DB — cart vẫn tồn tại nhưng items rỗng
             Cart savedCart = cartRepository.findByUserId(user.getId()).orElseThrow();
-            assertThat(savedCart.getItems()).isEmpty();
+            assertThat(cartItemRepository.findAll()).isEmpty();
         }
     }
 }
