@@ -27,12 +27,12 @@ import org.testcontainers.mysql.MySQLContainer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.modules.product.dto.request.ProductCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
-import spring.abtechzone.modules.product.entity.ProductAttribute;
-import spring.abtechzone.modules.product.repository.ProductRepository;
+import spring.abtechzone.modules.catalog.dto.request.ProductCreateRequest;
+import spring.abtechzone.modules.catalog.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.modules.catalog.dto.request.ProductSkuUpdateRequest;
+import spring.abtechzone.modules.catalog.dto.request.ProductUpdateRequest;
+import spring.abtechzone.modules.catalog.entity.ProductAttribute;
+import spring.abtechzone.modules.catalog.repository.ProductRepository;
 
 @Slf4j
 @SpringBootTest

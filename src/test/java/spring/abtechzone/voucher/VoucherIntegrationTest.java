@@ -28,10 +28,10 @@ import org.testcontainers.mysql.MySQLContainer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-import spring.abtechzone.modules.product.entity.Product;
-import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.product.repository.ProductRepository;
-import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.catalog.entity.Product;
+import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.catalog.repository.ProductRepository;
+import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;

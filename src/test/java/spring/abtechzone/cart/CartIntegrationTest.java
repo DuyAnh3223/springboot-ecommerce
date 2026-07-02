@@ -28,10 +28,10 @@ import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
-import spring.abtechzone.modules.product.entity.Product;
-import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.product.repository.ProductRepository;
-import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.catalog.entity.Product;
+import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.catalog.repository.ProductRepository;
+import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
