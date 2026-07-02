@@ -1,0 +1,27 @@
+package spring.abtechzone.modules.catalog.dto.request;
+
+import java.util.List;
+
+import jakarta.validation.Valid;
+
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+import spring.abtechzone.modules.catalog.entity.ProductAttribute;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ProductUpdateRequest {
+
+    String name;
+    String thumbnail;
+    String description;
+
+    Boolean isDraft;
+    Boolean isPublished;
+
+    @Valid
+    List<ProductAttribute> attributes;
+}
