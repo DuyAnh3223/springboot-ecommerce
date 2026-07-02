@@ -12,10 +12,10 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CreateOrderRequest {
-    Long addressId;
+    java.util.UUID addressId;
 
     @Valid
-    AddressRequest newAddress;
+    AddressRequest newUserAddress;
 
     String voucherCode;
 

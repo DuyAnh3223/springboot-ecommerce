@@ -1,5 +1,7 @@
 package spring.abtechzone.modules.user.entity;
 
+import java.util.UUID;
+
 import jakarta.persistence.*;
 
 import lombok.*;
@@ -12,10 +14,11 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Address {
+@Table(name = "user_address")
+public class UserAddress {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    @GeneratedValue
+    UUID id;
 
     @Column(nullable = false)
     String recipientName;
@@ -32,8 +35,14 @@ public class Address {
     @Column(nullable = false)
     String ward;
 
-    @Column(nullable = false)
+    @Column(name = "line1", nullable = false)
     String streetAddress;
+
+    String line2;
+
+    @Builder.Default
+    @Column(nullable = false)
+    String country = "VN";
 
     @Builder.Default
     boolean isDefault = false;

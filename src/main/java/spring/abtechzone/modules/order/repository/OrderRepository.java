@@ -10,7 +10,7 @@ import spring.abtechzone.modules.order.entity.Order;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
-    List<Order> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<Order> findByUserIdOrderByCreatedAtDesc(java.util.UUID userId);
 
     Optional<Order> findByOrderCode(String orderCode);
 }

@@ -67,6 +67,7 @@ class CartServiceTest {
     CartService cartService;
 
     // ── Shared test fixtures ──
+    private final java.util.UUID userId = java.util.UUID.fromString("11111111-1111-1111-1111-111111111111");
     private User user;
     private ProductSku productSku;
     private Cart cart;
@@ -79,7 +80,7 @@ class CartServiceTest {
                 .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
 
         // Shared fixtures
-        user = User.builder().id("user-1").username("testuser").build();
+        user = User.builder().id(userId).username("testuser").build();
 
         Product product = Product.builder().id(1L).name("iPhone 15").build();
 
@@ -101,7 +102,7 @@ class CartServiceTest {
 
         cartResponse = CartResponse.builder()
                 .cartId(1L)
-                .userId("user-1")
+                .userId(userId.toString())
                 .status(CartStatus.ACTIVE)
                 .items(List.of())
                 .build();
@@ -132,7 +133,7 @@ class CartServiceTest {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
             when(cartRepository.save(any(Cart.class))).thenReturn(cart);
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(cartMapper.toCartResponse(any(Cart.class))).thenReturn(cartResponse);
@@ -166,7 +167,7 @@ class CartServiceTest {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(cartMapper.toCartResponse(any(Cart.class))).thenReturn(cartResponse);
 
@@ -202,7 +203,7 @@ class CartServiceTest {
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(cartMapper.toCartResponse(any(Cart.class))).thenReturn(cartResponse);
 
@@ -276,7 +277,7 @@ class CartServiceTest {
             cart.getItems().add(item);
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartMapper.toCartResponse(cart)).thenReturn(cartResponse);
 
             // When
@@ -292,7 +293,7 @@ class CartServiceTest {
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
             // When & Then
             assertThatThrownBy(() -> cartService.getCart())
@@ -324,7 +325,7 @@ class CartServiceTest {
                     .build();
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
 
             // When
@@ -339,7 +340,7 @@ class CartServiceTest {
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
             // When & Then
             assertThatThrownBy(() -> cartService.removeCartItem(100L))
@@ -357,7 +358,7 @@ class CartServiceTest {
         void shouldThrowCartItemNotFound_whenItemDoesNotExist() {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 999L)).thenReturn(Optional.empty());
 
             // When & Then
@@ -400,7 +401,7 @@ class CartServiceTest {
             request = UpdateQuantityRequest.builder().quantity(10).build();
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -434,7 +435,7 @@ class CartServiceTest {
             request = UpdateQuantityRequest.builder().quantity(100).build();
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
 
             // When & Then
@@ -456,7 +457,7 @@ class CartServiceTest {
             request = UpdateQuantityRequest.builder().quantity(5).build();
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
             // When & Then
             assertThatThrownBy(() -> cartService.updateCartItemQuantity(100L, request))
@@ -474,7 +475,7 @@ class CartServiceTest {
             request = UpdateQuantityRequest.builder().quantity(5).build();
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 999L)).thenReturn(Optional.empty());
 
             // When & Then
@@ -502,7 +503,7 @@ class CartServiceTest {
             cart.getItems().add(CartItem.builder().id(2L).quantity(3).build());
 
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             // When
             cartService.clearCart();
@@ -517,7 +518,7 @@ class CartServiceTest {
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.empty());
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
             // When & Then
             assertThatThrownBy(() -> cartService.clearCart())

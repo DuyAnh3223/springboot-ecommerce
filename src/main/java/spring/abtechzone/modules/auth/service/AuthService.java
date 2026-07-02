@@ -79,7 +79,7 @@ public class AuthService {
                 .findByUsername(request.getUsername())
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
 
-        boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPassword());
+        boolean authenticated = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
         if (!authenticated) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
@@ -177,10 +177,13 @@ public class AuthService {
     private String buildScope(User user) {
         StringJoiner stringJoiner = new StringJoiner(" ");
         if (!CollectionUtils.isEmpty(user.getRoles())) {
-            user.getRoles().forEach(role -> {
-                stringJoiner.add("ROLE_" + role.getName());
-                if (!CollectionUtils.isEmpty(role.getPermissions())) {
-                    role.getPermissions().forEach(permission -> stringJoiner.add(permission.getName()));
+            user.getRoles().forEach(userRole -> {
+                var role = userRole.getRole();
+                if (role != null) {
+                    stringJoiner.add("ROLE_" + role.getName());
+                    if (!CollectionUtils.isEmpty(role.getPermissions())) {
+                        role.getPermissions().forEach(permission -> stringJoiner.add(permission.getName()));
+                    }
                 }
             });
         }

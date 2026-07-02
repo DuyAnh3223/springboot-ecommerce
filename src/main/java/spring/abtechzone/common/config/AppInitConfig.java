@@ -1,9 +1,8 @@
 package spring.abtechzone.common.config;
 
-import java.util.HashSet;
+import java.util.UUID;
 
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,7 +14,10 @@ import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.constant.PredefinedRole;
 import spring.abtechzone.modules.auth.entity.Role;
+import spring.abtechzone.modules.auth.entity.UserRole;
+import spring.abtechzone.modules.auth.entity.UserRoleId;
 import spring.abtechzone.modules.auth.repository.RoleRepository;
+import spring.abtechzone.modules.auth.repository.UserRoleRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
@@ -34,11 +36,8 @@ public class AppInitConfig {
     static final String ADMIN_PASSWORD = "admin";
 
     @Bean
-    @ConditionalOnProperty(
-            prefix = "spring",
-            value = "datasource.driver-class-name",
-            havingValue = "com.mysql.cj.jdbc.Driver")
-    ApplicationRunner applicationRunner(UserRepository userRepository, RoleRepository roleRepository) {
+    ApplicationRunner applicationRunner(
+            UserRepository userRepository, RoleRepository roleRepository, UserRoleRepository userRoleRepository) {
         log.info("Init ApplicationRunner");
         return args -> {
             if (userRepository.findByUsername(ADMIN_USER_NAME).isEmpty()) {
@@ -53,16 +52,21 @@ public class AppInitConfig {
                         .description("Admin role")
                         .build());
 
-                var roles = new HashSet<Role>();
-                roles.add(adminRole);
-
                 User user = User.builder()
                         .username(ADMIN_USER_NAME)
-                        .password(passwordEncoder.encode(ADMIN_PASSWORD))
-                        .roles(roles)
+                        .passwordHash(passwordEncoder.encode(ADMIN_PASSWORD))
                         .build();
 
-                userRepository.save(user);
+                user = userRepository.save(user);
+
+                UUID globalScopeId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+                UserRole userRole = UserRole.builder()
+                        .id(new UserRoleId(user.getId(), adminRole.getId(), globalScopeId))
+                        .user(user)
+                        .role(adminRole)
+                        .build();
+                userRoleRepository.save(userRole);
+
                 log.warn("admin user has been created with default password: admin");
             }
         };

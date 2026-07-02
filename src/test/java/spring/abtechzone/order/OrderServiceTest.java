@@ -39,9 +39,9 @@ import spring.abtechzone.modules.order.service.OrderService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
-import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.repository.AddressRepository;
+import spring.abtechzone.modules.user.entity.UserAddress;
+import spring.abtechzone.modules.user.repository.UserAddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
@@ -68,7 +68,7 @@ class OrderServiceTest {
     OrderRepository orderRepository;
 
     @Mock
-    AddressRepository addressRepository;
+    UserAddressRepository userAddressRepository;
 
     @Mock
     VoucherValidator voucherValidator;
@@ -76,6 +76,8 @@ class OrderServiceTest {
     @InjectMocks
     OrderService orderService;
 
+    private final java.util.UUID userId = java.util.UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private final java.util.UUID addressId = java.util.UUID.fromString("33333333-3333-3333-3333-333333333333");
     private User user;
     private ProductSku sku;
     private Cart cart;
@@ -86,7 +88,7 @@ class OrderServiceTest {
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
 
-        user = User.builder().id("user-1").username("testuser").isActive(true).build();
+        user = User.builder().id(userId).username("testuser").isActive(true).build();
 
         Product product = Product.builder()
                 .id(1L)
@@ -125,7 +127,7 @@ class OrderServiceTest {
         @DisplayName("checkoutReview success without voucher")
         void reviewSuccess_noVoucher() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             CheckoutRequest request = CheckoutRequest.builder().build();
             CheckoutResponse response = orderService.checkoutReview(request);
@@ -144,7 +146,7 @@ class OrderServiceTest {
         @DisplayName("checkoutReview success with PERCENTAGE voucher")
         void reviewSuccess_withPercentageVoucher() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             Voucher voucher = Voucher.builder()
                     .code("SALE10")
@@ -171,7 +173,7 @@ class OrderServiceTest {
         void reviewThrowsCartIsEmpty() {
             cart.setItems(new ArrayList<>());
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             CheckoutRequest request = CheckoutRequest.builder().build();
 
@@ -185,7 +187,7 @@ class OrderServiceTest {
         void reviewThrowsInsufficientStock() {
             cartItem.setQuantity(15); // stock is only 10
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             CheckoutRequest request = CheckoutRequest.builder().build();
 
@@ -203,10 +205,10 @@ class OrderServiceTest {
         @DisplayName("createOrder success with Saved Address ID")
         void createOrderSuccess_savedAddress() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
-            Address address = Address.builder()
-                    .id(50L)
+            UserAddress userAddress = UserAddress.builder()
+                    .id(addressId)
                     .recipientName("Van A")
                     .phone("0909090909")
                     .province("HCM")
@@ -216,7 +218,7 @@ class OrderServiceTest {
                     .user(user)
                     .build();
 
-            when(addressRepository.findById(50L)).thenReturn(Optional.of(address));
+            when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(userAddress));
 
             when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
                 Order orderToSave = invocation.getArgument(0);
@@ -225,7 +227,7 @@ class OrderServiceTest {
             });
 
             CreateOrderRequest request = CreateOrderRequest.builder()
-                    .addressId(50L)
+                    .addressId(addressId)
                     .paymentMethod("COD")
                     .build();
 
@@ -247,7 +249,7 @@ class OrderServiceTest {
         @DisplayName("createOrder success with New Address and saveAddress = true")
         void createOrderSuccess_newAddressAndSave() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             AddressRequest addressReq = AddressRequest.builder()
                     .recipientName("Van B")
@@ -260,7 +262,7 @@ class OrderServiceTest {
                     .build();
 
             CreateOrderRequest request = CreateOrderRequest.builder()
-                    .newAddress(addressReq)
+                    .newUserAddress(addressReq)
                     .paymentMethod("BANK_TRANSFER")
                     .build();
 
@@ -274,18 +276,18 @@ class OrderServiceTest {
 
             assertThat(response.getOrderId()).isEqualTo(888L);
 
-            ArgumentCaptor<Address> addressCaptor = ArgumentCaptor.forClass(Address.class);
-            verify(addressRepository).save(addressCaptor.capture());
-            Address savedAddress = addressCaptor.getValue();
-            assertThat(savedAddress.getRecipientName()).isEqualTo("Van B");
-            assertThat(savedAddress.getUser().getId()).isEqualTo("user-1");
+            ArgumentCaptor<UserAddress> addressCaptor = ArgumentCaptor.forClass(UserAddress.class);
+            verify(userAddressRepository).save(addressCaptor.capture());
+            UserAddress savedUserAddress = addressCaptor.getValue();
+            assertThat(savedUserAddress.getRecipientName()).isEqualTo("Van B");
+            assertThat(savedUserAddress.getUser().getId()).isEqualTo(userId);
         }
 
         @Test
         @DisplayName("createOrder throws ADDRESS_REQUIRED when neither addressId nor newAddress is provided")
         void createOrderThrowsAddressRequired() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
             CreateOrderRequest request =
                     CreateOrderRequest.builder().paymentMethod("COD").build();
@@ -299,15 +301,18 @@ class OrderServiceTest {
         @DisplayName("createOrder throws ADDRESS_NOT_BELONG_TO_USER when user attempts to use other user's address")
         void createOrderThrowsAddressNotBelongToUser() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserId("user-1")).thenReturn(Optional.of(cart));
+            when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
 
-            User otherUser = User.builder().id("other-user").build();
-            Address address = Address.builder().id(50L).user(otherUser).build();
+            User otherUser = User.builder()
+                    .id(java.util.UUID.fromString("22222222-2222-2222-2222-222222222222"))
+                    .build();
+            UserAddress userAddress =
+                    UserAddress.builder().id(addressId).user(otherUser).build();
 
-            when(addressRepository.findById(50L)).thenReturn(Optional.of(address));
+            when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(userAddress));
 
             CreateOrderRequest request = CreateOrderRequest.builder()
-                    .addressId(50L)
+                    .addressId(addressId)
                     .paymentMethod("COD")
                     .build();
 

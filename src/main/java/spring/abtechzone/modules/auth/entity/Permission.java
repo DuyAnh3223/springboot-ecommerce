@@ -1,7 +1,6 @@
 package spring.abtechzone.modules.auth.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -16,6 +15,10 @@ import lombok.experimental.FieldDefaults;
 public class Permission {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    Long id;
+
+    @Column(unique = true)
     String name;
 
     String description;

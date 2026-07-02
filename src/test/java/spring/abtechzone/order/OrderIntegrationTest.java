@@ -37,9 +37,9 @@ import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
-import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.repository.AddressRepository;
+import spring.abtechzone.modules.user.entity.UserAddress;
+import spring.abtechzone.modules.user.repository.UserAddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
@@ -82,7 +82,7 @@ class OrderIntegrationTest {
     CartItemRepository cartItemRepository;
 
     @Autowired
-    AddressRepository addressRepository;
+    UserAddressRepository userAddressRepository;
 
     @Autowired
     OrderRepository orderRepository;
@@ -104,7 +104,7 @@ class OrderIntegrationTest {
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
-        addressRepository.deleteAll();
+        userAddressRepository.deleteAll();
         voucherRepository.deleteAll();
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
@@ -113,7 +113,7 @@ class OrderIntegrationTest {
         // Create user
         user = userRepository.save(User.builder()
                 .username("testuser")
-                .password("password123")
+                .passwordHash("password123")
                 .email("test@example.com")
                 .firstName("Test")
                 .lastName("User")
@@ -221,7 +221,7 @@ class OrderIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
 									{
-									"newAddress": {
+									"newUserAddress": {
 										"recipientName": "Tran Thi B",
 										"phone": "0123456789",
 										"province": "Da Nang",
@@ -248,9 +248,9 @@ class OrderIntegrationTest {
             assertThat(orderItemRepository.findAll()).hasSize(1);
 
             // Verify address was saved
-            List<Address> savedAddresses = addressRepository.findByUserId(user.getId());
-            assertThat(savedAddresses).hasSize(1);
-            assertThat(savedAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
+            List<UserAddress> savedUserAddresses = userAddressRepository.findByUserId(user.getId());
+            assertThat(savedUserAddresses).hasSize(1);
+            assertThat(savedUserAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
 
             // Verify stock reduced
             ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
@@ -271,7 +271,7 @@ class OrderIntegrationTest {
                     CartItem.builder().cart(cart).productSku(sku).quantity(1).build());
 
             // Setup address
-            Address address = addressRepository.save(Address.builder()
+            UserAddress userAddress = userAddressRepository.save(UserAddress.builder()
                     .recipientName("Le Van C")
                     .phone("0988888888")
                     .province("HCM")
@@ -286,10 +286,10 @@ class OrderIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
 									{
-									"addressId": %d,
+									"addressId": "%s",
 									"paymentMethod": "BANK_TRANSFER"
 									}
-									""".formatted(address.getId())))
+									""".formatted(userAddress.getId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists());
 

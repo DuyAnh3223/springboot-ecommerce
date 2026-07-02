@@ -97,7 +97,7 @@ class CartIntegrationTest {
         // Tạo User thật trong MySQL
         user = userRepository.save(User.builder()
                 .username("testuser")
-                .password("password123")
+                .passwordHash("password123")
                 .email("test@example.com")
                 .firstName("Test")
                 .lastName("User")
@@ -141,7 +141,7 @@ class CartIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(1000))
                     .andExpect(jsonPath("$.result.cartId").exists())
-                    .andExpect(jsonPath("$.result.userId").value(user.getId()))
+                    .andExpect(jsonPath("$.result.userId").value(user.getId().toString()))
                     .andExpect(jsonPath("$.result.status").value("ACTIVE"))
                     .andExpect(jsonPath("$.result.items").isArray())
                     .andExpect(jsonPath("$.result.items.length()").value(1))

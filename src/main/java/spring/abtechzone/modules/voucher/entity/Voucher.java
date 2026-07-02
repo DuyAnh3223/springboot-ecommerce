@@ -64,7 +64,7 @@ public class Voucher {
 
     @ManyToMany
     @JoinTable(
-            name = "voucher_users",
+            name = "voucher_user",
             joinColumns = @JoinColumn(name = "voucher_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id"))
     @Builder.Default
@@ -77,9 +77,9 @@ public class Voucher {
 
     @ManyToMany
     @JoinTable(
-            name = "voucher_product_skus",
+            name = "voucher_product_sku",
             joinColumns = @JoinColumn(name = "voucher_id"),
-            inverseJoinColumns = @JoinColumn(name = "product_sku_id"))
+            inverseJoinColumns = @JoinColumn(name = "sku_id"))
     @Builder.Default
     Set<ProductSku> productSkus = new HashSet<>();
 }

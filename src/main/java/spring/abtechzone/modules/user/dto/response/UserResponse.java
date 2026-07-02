@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.user.dto.response;
 
 import java.util.Set;
+import java.util.UUID;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -12,7 +13,7 @@ import spring.abtechzone.modules.auth.dto.response.RoleResponse;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserResponse {
-    String id;
+    UUID id;
     String username;
     String firstName;
     String lastName;

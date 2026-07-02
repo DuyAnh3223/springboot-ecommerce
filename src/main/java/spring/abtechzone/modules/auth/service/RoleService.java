@@ -27,7 +27,7 @@ public class RoleService {
     public RoleResponse create(RoleRequest request) {
         var role = roleMapper.toRole(request);
 
-        var permissions = permissionRepository.findAllById(request.getPermissions());
+        var permissions = permissionRepository.findByNameIn(request.getPermissions());
         role.setPermissions(new HashSet<>(permissions));
 
         role = roleRepository.save(role);
@@ -39,6 +39,6 @@ public class RoleService {
     }
 
     public void delete(String role) {
-        roleRepository.deleteById(role);
+        roleRepository.findByName(role).ifPresent(r -> roleRepository.deleteById(r.getId()));
     }
 }

@@ -34,9 +34,9 @@ import spring.abtechzone.modules.order.entity.OrderItem;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
-import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.repository.AddressRepository;
+import spring.abtechzone.modules.user.entity.UserAddress;
+import spring.abtechzone.modules.user.repository.UserAddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.entity.Voucher;
@@ -54,7 +54,7 @@ public class OrderService {
     VoucherRepository voucherRepository;
     ProductSkuRepository productSkuRepository;
     OrderRepository orderRepository;
-    AddressRepository addressRepository;
+    UserAddressRepository userAddressRepository;
     VoucherValidator voucherValidator;
 
     static BigDecimal FLAT_SHIPPING_FEE = BigDecimal.valueOf(30000);
@@ -335,26 +335,30 @@ public class OrderService {
     private AddressInfo resolveAddress(CreateOrderRequest request, User user) {
         if (request.getAddressId() != null) {
             // User cũ: chọn địa chỉ đã lưu
-            Address address = addressRepository
+            UserAddress userAddress = userAddressRepository
                     .findById(request.getAddressId())
                     .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
 
-            if (!address.getUser().getId().equals(user.getId())) {
+            if (!userAddress.getUser().getId().equals(user.getId())) {
                 throw new AppException(ErrorCode.ADDRESS_NOT_BELONG_TO_USER);
             }
 
             String fullAddress = String.join(
-                    ", ", address.getStreetAddress(), address.getWard(), address.getDistrict(), address.getProvince());
+                    ", ",
+                    userAddress.getStreetAddress(),
+                    userAddress.getWard(),
+                    userAddress.getDistrict(),
+                    userAddress.getProvince());
 
-            return new AddressInfo(address.getRecipientName(), address.getPhone(), fullAddress);
+            return new AddressInfo(userAddress.getRecipientName(), userAddress.getPhone(), fullAddress);
 
-        } else if (request.getNewAddress() != null) {
+        } else if (request.getNewUserAddress() != null) {
             // User mới: nhận địa chỉ từ request
-            AddressRequest addr = request.getNewAddress();
+            AddressRequest addr = request.getNewUserAddress();
 
             // Tùy chọn lưu địa chỉ mới
             if (addr.isSaveAddress()) {
-                Address newAddress = Address.builder()
+                UserAddress newUserAddress = UserAddress.builder()
                         .recipientName(addr.getRecipientName())
                         .phone(addr.getPhone())
                         .province(addr.getProvince())
@@ -364,7 +368,7 @@ public class OrderService {
                         .isDefault(false)
                         .user(user)
                         .build();
-                addressRepository.save(newAddress);
+                userAddressRepository.save(newUserAddress);
             }
 
             String fullAddress =

@@ -32,6 +32,6 @@ public class PermissionService {
     }
 
     public void delete(String permission) {
-        permissionRepository.deleteById(permission);
+        permissionRepository.findByName(permission).ifPresent(p -> permissionRepository.deleteById(p.getId()));
     }
 }

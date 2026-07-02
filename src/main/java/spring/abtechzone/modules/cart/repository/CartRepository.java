@@ -9,5 +9,5 @@ import spring.abtechzone.modules.cart.entity.Cart;
 
 @Repository
 public interface CartRepository extends JpaRepository<Cart, Long> {
-    Optional<Cart> findByUserId(String userId);
+    Optional<Cart> findByUserId(java.util.UUID userId);
 }
