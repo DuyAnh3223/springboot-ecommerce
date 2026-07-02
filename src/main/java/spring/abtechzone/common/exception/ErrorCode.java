@@ -48,6 +48,11 @@ public enum ErrorCode {
     ADDRESS_NOT_BELONG_TO_USER(1036, "Address does not belong to user", HttpStatus.FORBIDDEN),
     ADDRESS_REQUIRED(1037, "Address is required", HttpStatus.BAD_REQUEST),
     VOUCHER_PER_USER_LIMIT_REACHED(1038, "Voucher per-user usage limit reached", HttpStatus.BAD_REQUEST),
+    CATEGORY_EXISTED(1039, "Category already exists", HttpStatus.BAD_REQUEST),
+    CATEGORY_NOT_FOUND(1040, "Category not found", HttpStatus.NOT_FOUND),
+    BRAND_EXISTED(1041, "Brand already exists", HttpStatus.BAD_REQUEST),
+    BRAND_NOT_FOUND(1042, "Brand not found", HttpStatus.NOT_FOUND),
+    RESERVATION_NOT_FOUND(1043, "Reservation not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

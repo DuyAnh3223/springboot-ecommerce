@@ -1,15 +1,17 @@
 package spring.abtechzone.modules.inventory.entity;
 
+import java.time.OffsetDateTime;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
 import spring.abtechzone.modules.user.entity.User;
-
-import java.time.OffsetDateTime;
 
 @Getter
 @Setter
@@ -44,9 +46,7 @@ public class StockMovement {
     private User createdBy;
 
     @NotNull
-    @ColumnDefault("now()")
+    @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
-
-
 }

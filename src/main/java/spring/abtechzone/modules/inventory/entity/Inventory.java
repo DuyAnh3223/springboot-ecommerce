@@ -1,7 +1,5 @@
 package spring.abtechzone.modules.inventory.entity;
 
-import java.util.List;
-
 import jakarta.persistence.*;
 
 import lombok.*;
@@ -22,7 +20,6 @@ public class Inventory {
     Long id;
 
     Integer stock;
-    List<Long> reservation;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_sku_id", nullable = false, unique = true)

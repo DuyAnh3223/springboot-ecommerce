@@ -1,14 +1,16 @@
 package spring.abtechzone.modules.inventory.entity;
 
+import java.time.OffsetDateTime;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
-
-import java.time.OffsetDateTime;
 
 @Getter
 @Setter
@@ -40,9 +42,11 @@ public class InventoryReservation {
     private OffsetDateTime expiresAt;
 
     @NotNull
-    @ColumnDefault("now()")
+    @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    private spring.abtechzone.modules.order.entity.Order order;
 }
