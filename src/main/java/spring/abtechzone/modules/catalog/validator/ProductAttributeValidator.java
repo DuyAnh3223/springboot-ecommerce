@@ -1,60 +1,104 @@
 package spring.abtechzone.modules.catalog.validator;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.springframework.stereotype.Component;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.catalog.entity.AttributeDefinition;
 import spring.abtechzone.modules.catalog.entity.Product;
-import spring.abtechzone.modules.catalog.entity.ProductAttribute;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.catalog.repository.AttributeDefinitionRepository;
 
 @Component
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductAttributeValidator {
 
-    public void validateProductAttributes(List<ProductAttribute> attributes) {
-        if (attributes == null) {
+    AttributeDefinitionRepository attributeDefinitionRepository;
+
+    public void validateProductAttributes(Product product) {
+        validateAttributesMap(product.getCategory().getId(), product.getAttributes());
+    }
+
+    public void validateAttributesMap(Long categoryId, Map<String, Object> attributes) {
+        if (attributes == null || attributes.isEmpty()) {
             return;
         }
 
-        Set<String> attributeNames = new HashSet<>();
-        for (ProductAttribute attribute : attributes) {
-            validateSingleAttribute(attribute, attributeNames);
-        }
-    }
+        toAllowedAttributes(attributes);
 
-    private void validateSingleAttribute(ProductAttribute attribute, Set<String> attributeNames) {
-        if (attribute == null || isBlank(attribute.getName())) {
-            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        List<AttributeDefinition> definitions = attributeDefinitionRepository.findByCategoryId(categoryId);
+        Map<String, AttributeDefinition> defMap = new HashMap<>();
+        for (AttributeDefinition def : definitions) {
+            defMap.put(def.getCode(), def);
         }
 
-        if (attribute.getValues() == null || attribute.getValues().isEmpty()) {
-            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-        }
+        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
 
-        if (!attributeNames.add(attribute.getName())) {
-            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-        }
-
-        validateAttributeValues(attribute.getValues());
-    }
-
-    private void validateAttributeValues(List<String> values) {
-        Set<String> uniqueValues = new HashSet<>();
-        for (String value : values) {
-            if (isBlank(value) || !uniqueValues.add(value)) {
+            AttributeDefinition def = defMap.get(key);
+            if (def == null) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+
+            validateType(def, value);
+        }
+    }
+
+    private void validateType(AttributeDefinition def, Object value) {
+        if (value == null) {
+            return;
+        }
+
+        String dataType = def.getDataType();
+        if ("STRING".equalsIgnoreCase(dataType)) {
+            if (!(value instanceof String || value instanceof Collection)) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+        } else if ("NUMBER".equalsIgnoreCase(dataType)) {
+            if (!(value instanceof Number || value instanceof Collection)) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+        } else if ("BOOLEAN".equalsIgnoreCase(dataType)) {
+            if (!(value instanceof Boolean || value instanceof Collection)) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+        } else if ("ENUM".equalsIgnoreCase(dataType)) {
+            Object enumValuesObj = def.getEnumValues();
+            Collection<?> allowedValues = null;
+            if (enumValuesObj instanceof Collection) {
+                allowedValues = (Collection<?>) enumValuesObj;
+            } else if (enumValuesObj instanceof Map) {
+                allowedValues = ((Map<?, ?>) enumValuesObj).keySet();
+            }
+
+            if (allowedValues == null) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+
+            if (value instanceof Collection) {
+                for (Object item : (Collection<?>) value) {
+                    if (!allowedValues.contains(item)) {
+                        throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                    }
+                }
+            } else {
+                if (!allowedValues.contains(value)) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
             }
         }
     }
 
-    private boolean isBlank(String str) {
-        return str == null || str.isBlank();
+    public void validateSkuAttributes(Product product, Map<String, Object> skuAttributes) {
+        validateProductAttributes(product);
+        validateSkuAttributes(toAllowedAttributes(product.getAttributes()), skuAttributes);
     }
 
     public void validateProductSkus(Product product) {
@@ -62,36 +106,26 @@ public class ProductAttributeValidator {
             return;
         }
 
-        Map<String, Set<String>> allowedAttributes = toAllowedAttributes(product.getAttributes());
+        Map<String, Set<Object>> allowedAttributes = toAllowedAttributes(product.getAttributes());
         for (ProductSku sku : product.getSkus()) {
             validateSkuAttributes(allowedAttributes, sku.getAttributes());
         }
     }
 
-    public void validateSkuAttributes(Product product, Map<String, String> skuAttributes) {
-        validateProductAttributes(product.getAttributes());
-        validateSkuAttributes(toAllowedAttributes(product.getAttributes()), skuAttributes);
-    }
-
-    public void validateExistingSkusAgainstUpdatedAttributes(
-            Product product, List<ProductAttribute> updatedAttributes) {
-        if (updatedAttributes == null) {
-            return;
-        }
-
-        validateProductAttributes(updatedAttributes);
+    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object> updatedAttributes) {
+        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
 
         if (product.getSkus() == null) {
             return;
         }
 
-        Map<String, Set<String>> allowedAttributes = toAllowedAttributes(updatedAttributes);
+        Map<String, Set<Object>> allowedAttributes = toAllowedAttributes(updatedAttributes);
         for (ProductSku sku : product.getSkus()) {
             validateSkuAttributes(allowedAttributes, sku.getAttributes());
         }
     }
 
-    private void validateSkuAttributes(Map<String, Set<String>> allowedAttributes, Map<String, String> skuAttributes) {
+    private void validateSkuAttributes(Map<String, Set<Object>> allowedAttributes, Map<String, Object> skuAttributes) {
         if (allowedAttributes.isEmpty()) {
             if (skuAttributes != null && !skuAttributes.isEmpty()) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
@@ -103,22 +137,45 @@ public class ProductAttributeValidator {
             throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
         }
 
-        for (Map.Entry<String, Set<String>> allowedAttribute : allowedAttributes.entrySet()) {
-            String skuValue = skuAttributes.get(allowedAttribute.getKey());
+        for (Map.Entry<String, Set<Object>> allowedAttribute : allowedAttributes.entrySet()) {
+            Object skuValue = skuAttributes.get(allowedAttribute.getKey());
             if (skuValue == null || !allowedAttribute.getValue().contains(skuValue)) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
         }
     }
 
-    private Map<String, Set<String>> toAllowedAttributes(List<ProductAttribute> attributes) {
-        Map<String, Set<String>> allowedAttributes = new HashMap<>();
+    private Map<String, Set<Object>> toAllowedAttributes(Map<String, Object> attributes) {
+        Map<String, Set<Object>> allowedAttributes = new HashMap<>();
         if (attributes == null) {
             return allowedAttributes;
         }
 
-        for (ProductAttribute attribute : attributes) {
-            allowedAttributes.put(attribute.getName(), new HashSet<>(attribute.getValues()));
+        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+            String key = entry.getKey();
+            if (key == null || key.isBlank()) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+
+            Object val = entry.getValue();
+            Set<Object> set = new HashSet<>();
+            if (val instanceof Collection) {
+                Collection<?> col = (Collection<?>) val;
+                for (Object item : col) {
+                    if (item == null || (item instanceof String && ((String) item).isBlank())) {
+                        throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                    }
+                    if (!set.add(item)) {
+                        throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                    }
+                }
+            } else if (val != null) {
+                if (val instanceof String && ((String) val).isBlank()) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
+                set.add(val);
+            }
+            allowedAttributes.put(key, set);
         }
 
         return allowedAttributes;

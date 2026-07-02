@@ -38,6 +38,10 @@ public class ProductSkuSearchRequest {
     @Builder.Default
     String order = "desc";
 
+    String currency;
+
+    Integer weightGram;
+
     public Pageable toPageable() {
         int pageNumber = page == null ? 1 : page;
         int pageSize = size == null ? 20 : size;

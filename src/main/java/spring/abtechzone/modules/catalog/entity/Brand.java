@@ -3,6 +3,7 @@ package spring.abtechzone.modules.catalog.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -29,6 +30,4 @@ public class Brand {
     @Size(max = 500)
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
-
-
 }

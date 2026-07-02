@@ -20,5 +20,5 @@ public class ProductSkuResponse {
     BigDecimal price;
     Integer stock;
     String imageUrl;
-    Map<String, String> attributes;
+    Map<String, Object> attributes;
 }

@@ -3,9 +3,11 @@ package spring.abtechzone.modules.catalog.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 
 @Getter
 @Setter
@@ -40,6 +42,4 @@ public class Category {
     @ColumnDefault("true")
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
-
-
 }

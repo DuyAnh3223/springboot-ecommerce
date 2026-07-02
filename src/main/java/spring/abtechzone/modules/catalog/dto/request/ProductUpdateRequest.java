@@ -1,12 +1,11 @@
 package spring.abtechzone.modules.catalog.dto.request;
 
-import java.util.List;
+import java.util.Map;
 
 import jakarta.validation.Valid;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.catalog.entity.ProductAttribute;
 
 @Data
 @NoArgsConstructor
@@ -22,6 +21,9 @@ public class ProductUpdateRequest {
     Boolean isDraft;
     Boolean isPublished;
 
+    Long categoryId;
+    Long brandId;
+
     @Valid
-    List<ProductAttribute> attributes;
+    Map<String, Object> attributes;
 }

@@ -20,6 +20,8 @@ import spring.abtechzone.modules.catalog.dto.request.ProductSearchRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductUpdateRequest;
 import spring.abtechzone.modules.catalog.dto.response.ProductResponse;
+import spring.abtechzone.modules.catalog.entity.Brand;
+import spring.abtechzone.modules.catalog.entity.Category;
 import spring.abtechzone.modules.catalog.entity.Product;
 import spring.abtechzone.modules.catalog.mapper.ProductMapper;
 import spring.abtechzone.modules.catalog.repository.ProductRepository;
@@ -36,13 +38,28 @@ public class ProductService {
     ProductSkuRepository productSkuRepository;
     ProductMapper productMapper;
     ProductAttributeValidator productAttributeValidator;
+    spring.abtechzone.modules.catalog.repository.CategoryRepository categoryRepository;
+    spring.abtechzone.modules.catalog.repository.BrandRepository brandRepository;
 
     @Transactional
     public ProductResponse create(ProductCreateRequest request) {
         validateSkusForCreate(request);
 
         Product product = productMapper.toProduct(request);
-        productAttributeValidator.validateProductAttributes(product.getAttributes());
+
+        if (request.getCategoryId() != null) {
+           Category category = categoryRepository
+                    .findById(request.getCategoryId())
+                    .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
+            product.setCategory(category);
+        }
+        if (request.getBrandId() != null) {
+            Brand brand =
+                    brandRepository.findById(request.getBrandId()).orElse(null);
+            product.setBrand(brand);
+        }
+
+        productAttributeValidator.validateProductAttributes(product);
         productAttributeValidator.validateProductSkus(product);
 
         try {
@@ -81,6 +98,18 @@ public class ProductService {
         productAttributeValidator.validateExistingSkusAgainstUpdatedAttributes(product, request.getAttributes());
 
         productMapper.updateProduct(product, request);
+
+        if (request.getCategoryId() != null) {
+            Category category = categoryRepository
+                    .findById(request.getCategoryId())
+                    .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
+            product.setCategory(category);
+        }
+        if (request.getBrandId() != null) {
+            Brand brand =
+                    brandRepository.findById(request.getBrandId()).orElse(null);
+            product.setBrand(brand);
+        }
 
         try {
             product = productRepository.save(product);

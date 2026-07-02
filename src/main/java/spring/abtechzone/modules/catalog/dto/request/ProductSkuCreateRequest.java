@@ -28,6 +28,10 @@ public class ProductSkuCreateRequest {
     @PositiveOrZero(message = "PRODUCT_STOCK_INVALID")
     Integer stock;
 
+    String currency;
+
+    Integer weightGram;
+
     String imageUrl;
-    Map<String, String> attributes;
+    Map<String, Object> attributes;
 }

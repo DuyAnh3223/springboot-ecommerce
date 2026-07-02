@@ -19,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 public class ProductSearchRequest {
     String search;
     Long categoryId;
+    Long brandId;
     BigDecimal minPrice;
     BigDecimal maxPrice;
 

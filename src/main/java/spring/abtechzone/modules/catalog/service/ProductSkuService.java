@@ -82,7 +82,7 @@ public class ProductSkuService {
         // Cập nhật các trường cụ thể
         validateSkuForUpdate(skuId, request.getSku());
 
-        Map<String, String> updatedAttributes =
+        Map<String, Object> updatedAttributes =
                 request.getAttributes() == null ? sku.getAttributes() : request.getAttributes();
         productAttributeValidator.validateSkuAttributes(sku.getProduct(), updatedAttributes);
 

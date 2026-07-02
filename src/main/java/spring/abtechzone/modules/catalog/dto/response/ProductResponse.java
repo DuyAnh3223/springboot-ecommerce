@@ -1,10 +1,10 @@
 package spring.abtechzone.modules.catalog.dto.response;
 
 import java.util.List;
+import java.util.Map;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.catalog.entity.ProductAttribute;
 
 @Data
 @NoArgsConstructor
@@ -23,6 +23,9 @@ public class ProductResponse {
     boolean isDraft;
     boolean isPublished;
 
-    List<ProductAttribute> attributes;
+    List<CategoryResponse> categories;
+    List<BrandResponse> brands;
+
+    Map<String, Object> attributes;
     List<ProductSkuResponse> productSkus;
 }

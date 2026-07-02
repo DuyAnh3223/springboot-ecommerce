@@ -1,17 +1,19 @@
 package spring.abtechzone.modules.catalog.entity;
 
+import java.util.Map;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
+
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 
-import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -71,6 +73,4 @@ public class AttributeDefinition {
     @ColumnDefault("0")
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
-
-
 }
