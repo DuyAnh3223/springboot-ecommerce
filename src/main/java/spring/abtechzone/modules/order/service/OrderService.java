@@ -3,6 +3,7 @@ package spring.abtechzone.modules.order.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +23,8 @@ import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
+import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
@@ -31,9 +34,9 @@ import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
+import spring.abtechzone.modules.order.entity.OrderStatusHistory;
 import spring.abtechzone.modules.order.repository.OrderRepository;
-import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.entity.UserAddress;
 import spring.abtechzone.modules.user.repository.UserAddressRepository;
@@ -56,8 +59,28 @@ public class OrderService {
     OrderRepository orderRepository;
     UserAddressRepository userAddressRepository;
     VoucherValidator voucherValidator;
+    spring.abtechzone.modules.inventory.service.InventoryService inventoryService;
+    OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     static BigDecimal FLAT_SHIPPING_FEE = BigDecimal.valueOf(30000);
+
+    // ────────────────────────────────────────────────────────
+    // 0. Get Orders by User ID
+    // ────────────────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersByUserId(UUID userId) {
+        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .map(order -> OrderResponse.builder()
+                        .orderId(order.getId())
+                        .orderCode(order.getOrderCode())
+                        .orderStatus(order.getStatus().name())
+                        .subtotal(order.getSubtotalAmount())
+                        .shippingFee(order.getShippingFee())
+                        .totalDiscount(order.getDiscountAmount())
+                        .totalCheckout(order.getTotalAmount())
+                        .build())
+                .toList();
+    }
 
     // ────────────────────────────────────────────────────────
     // 1. Checkout Review — READ-ONLY, không tạo order
@@ -166,11 +189,10 @@ public class OrderService {
             orderItems.add(OrderItem.builder()
                     .quantity(cartItem.getQuantity())
                     .unitPrice(unitPrice)
-                    .totalPrice(totalPrice)
-                    .productName(sku.getProduct().getName())
-                    .skuCode(sku.getSku())
+                    .productNameSnapshot(sku.getProduct().getName())
+                    .skuSnapshot(sku.getSku())
                     .imageUrl(sku.getImageUrl())
-                    .productSku(sku)
+                    .sku(sku)
                     .build());
 
             subtotal = subtotal.add(totalPrice);
@@ -201,16 +223,17 @@ public class OrderService {
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
-                .paymentMethod(request.getPaymentMethod())
-                .subtotal(subtotal)
+                .paymentReference(request.getPaymentMethod())
+                .subtotalAmount(subtotal)
                 .shippingFee(shippingFee)
-                .totalDiscount(totalDiscount)
-                .totalCheckout(totalCheckout)
+                .discountAmount(totalDiscount)
+                .totalAmount(totalCheckout)
                 .recipientName(addressInfo.recipientName)
                 .phone(addressInfo.phone)
                 .fullAddress(addressInfo.fullAddress)
-                .user(user)
-                .voucher(appliedVoucher)
+                .userId(user.getId())
+                .shippingAddressId(addressInfo.addressId)
+                .voucherCode(request.getVoucherCode())
                 .items(new ArrayList<>())
                 .build();
 
@@ -220,12 +243,9 @@ public class OrderService {
             order.getItems().add(orderItem);
         }
 
-        // Step 16: Trừ tồn kho
-        for (CartItem cartItem : cart.getItems()) {
-            ProductSku sku = cartItem.getProductSku();
-            sku.setStock(sku.getStock() - cartItem.getQuantity());
-            productSkuRepository.save(sku);
-        }
+        // Step 18: Đánh dấu Cart COMPLETED
+        cart.setStatus(CartStatus.COMPLETED);
+        cartRepository.save(cart);
 
         // Step 17: Cập nhật Voucher đã sử dụng
         if (appliedVoucher != null) {
@@ -235,22 +255,32 @@ public class OrderService {
             voucherRepository.save(appliedVoucher);
         }
 
-        // Step 18: Đánh dấu Cart COMPLETED
-        cart.setStatus(CartStatus.COMPLETED);
-        cartRepository.save(cart);
-
         // Step 19: Lưu Order (cascade saves OrderItems)
         Order savedOrder = orderRepository.save(order);
+
+        // Save status history audit
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrder(savedOrder);
+        history.setStatus(OrderStatus.PENDING.name());
+        history.setNote("Order created");
+        history.setCreatedBy(user);
+        history.setCreatedAt(OffsetDateTime.now());
+        orderStatusHistoryRepository.save(history);
+
+        // Step 16: Trừ tồn kho & Tạo reservation
+        for (CartItem cartItem : cart.getItems()) {
+            inventoryService.reserveStock(cartItem.getProductSku(), cartItem.getQuantity(), savedOrder);
+        }
 
         // Step 20: Return OrderResponse
         return OrderResponse.builder()
                 .orderId(savedOrder.getId())
                 .orderCode(savedOrder.getOrderCode())
                 .orderStatus(savedOrder.getStatus().name())
-                .subtotal(savedOrder.getSubtotal())
+                .subtotal(savedOrder.getSubtotalAmount())
                 .shippingFee(savedOrder.getShippingFee())
-                .totalDiscount(savedOrder.getTotalDiscount())
-                .totalCheckout(savedOrder.getTotalCheckout())
+                .totalDiscount(savedOrder.getDiscountAmount())
+                .totalCheckout(savedOrder.getTotalAmount())
                 .build();
     }
 
@@ -350,12 +380,14 @@ public class OrderService {
                     userAddress.getDistrict(),
                     userAddress.getProvince());
 
-            return new AddressInfo(userAddress.getRecipientName(), userAddress.getPhone(), fullAddress);
+            return new AddressInfo(
+                    userAddress.getId(), userAddress.getRecipientName(), userAddress.getPhone(), fullAddress);
 
         } else if (request.getNewUserAddress() != null) {
             // User mới: nhận địa chỉ từ request
             AddressRequest addr = request.getNewUserAddress();
 
+            UUID savedAddressId = null;
             // Tùy chọn lưu địa chỉ mới
             if (addr.isSaveAddress()) {
                 UserAddress newUserAddress = UserAddress.builder()
@@ -368,13 +400,14 @@ public class OrderService {
                         .isDefault(false)
                         .user(user)
                         .build();
-                userAddressRepository.save(newUserAddress);
+                UserAddress saved = userAddressRepository.save(newUserAddress);
+                savedAddressId = saved.getId();
             }
 
             String fullAddress =
                     String.join(", ", addr.getStreetAddress(), addr.getWard(), addr.getDistrict(), addr.getProvince());
 
-            return new AddressInfo(addr.getRecipientName(), addr.getPhone(), fullAddress);
+            return new AddressInfo(savedAddressId, addr.getRecipientName(), addr.getPhone(), fullAddress);
 
         } else {
             throw new AppException(ErrorCode.ADDRESS_REQUIRED);
@@ -393,5 +426,5 @@ public class OrderService {
     /**
      * Record nội bộ chứa thông tin địa chỉ đã resolve
      */
-    private record AddressInfo(String recipientName, String phone, String fullAddress) {}
+    private record AddressInfo(UUID addressId, String recipientName, String phone, String fullAddress) {}
 }

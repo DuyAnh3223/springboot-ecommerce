@@ -1,5 +1,8 @@
 package spring.abtechzone.modules.order.controller;
 
+import java.util.List;
+import java.util.UUID;
+
 import jakarta.validation.Valid;
 
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +36,13 @@ public class OrderController {
     ApiResponse<OrderResponse> createOrder(@RequestBody @Valid CreateOrderRequest request) {
         return ApiResponse.<OrderResponse>builder()
                 .result(orderService.createOrder(request))
+                .build();
+    }
+
+    @GetMapping("/user/{userId}")
+    ApiResponse<List<OrderResponse>> getOrdersByUserId(@PathVariable("userId") UUID userId) {
+        return ApiResponse.<List<OrderResponse>>builder()
+                .result(orderService.getOrdersByUserId(userId))
                 .build();
     }
 }
