@@ -48,14 +48,13 @@ public class ProductService {
         Product product = productMapper.toProduct(request);
 
         if (request.getCategoryId() != null) {
-           Category category = categoryRepository
+            Category category = categoryRepository
                     .findById(request.getCategoryId())
                     .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
             product.setCategory(category);
         }
         if (request.getBrandId() != null) {
-            Brand brand =
-                    brandRepository.findById(request.getBrandId()).orElse(null);
+            Brand brand = brandRepository.findById(request.getBrandId()).orElse(null);
             product.setBrand(brand);
         }
 
@@ -106,8 +105,7 @@ public class ProductService {
             product.setCategory(category);
         }
         if (request.getBrandId() != null) {
-            Brand brand =
-                    brandRepository.findById(request.getBrandId()).orElse(null);
+            Brand brand = brandRepository.findById(request.getBrandId()).orElse(null);
             product.setBrand(brand);
         }
 

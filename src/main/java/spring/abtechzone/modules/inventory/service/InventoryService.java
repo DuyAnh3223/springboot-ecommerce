@@ -20,6 +20,7 @@ import spring.abtechzone.modules.inventory.entity.StockMovement;
 import spring.abtechzone.modules.inventory.repository.InventoryReservationRepository;
 import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.order.entity.Order;
+import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Service
 @Slf4j
@@ -30,15 +31,15 @@ public class InventoryService {
     InventoryReservationRepository inventoryReservationRepository;
     StockMovementRepository stockMovementRepository;
     ProductSkuRepository productSkuRepository;
+    UserRepository userRepository;
 
     @Transactional
     public void reserveStock(ProductSku sku, int quantity, Order order) {
-        if (sku.getStock() == null || sku.getStock() < quantity) {
+        int rowsUpdated = productSkuRepository.decreaseStock(sku.getId(), quantity);
+
+        if (rowsUpdated == 0) {
             throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
         }
-
-        sku.setStock(sku.getStock() - quantity);
-        productSkuRepository.save(sku);
 
         StockMovement movement = new StockMovement();
         movement.setSku(sku);
@@ -46,8 +47,8 @@ public class InventoryService {
         movement.setReason("SALE_OUT");
         if (order != null) {
             movement.setReferenceId(String.valueOf(order.getId()));
-            if (order.getUser() != null) {
-                movement.setCreatedBy(order.getUser());
+            if (order.getUserId() != null) {
+                movement.setCreatedBy(userRepository.findById(order.getUserId()).orElse(null));
             }
         }
         movement.setCreatedAt(OffsetDateTime.now());
@@ -86,8 +87,10 @@ public class InventoryService {
         movement.setReason("RETURN_IN");
         if (reservation.getOrder() != null) {
             movement.setReferenceId(String.valueOf(reservation.getOrder().getId()));
-            if (reservation.getOrder().getUser() != null) {
-                movement.setCreatedBy(reservation.getOrder().getUser());
+            if (reservation.getOrder().getUserId() != null) {
+                movement.setCreatedBy(userRepository
+                        .findById(reservation.getOrder().getUserId())
+                        .orElse(null));
             }
         }
         movement.setCreatedAt(OffsetDateTime.now());
@@ -116,8 +119,9 @@ public class InventoryService {
             movement.setReason("RETURN_IN");
             if (res.getOrder() != null) {
                 movement.setReferenceId(String.valueOf(res.getOrder().getId()));
-                if (res.getOrder().getUser() != null) {
-                    movement.setCreatedBy(res.getOrder().getUser());
+                if (res.getOrder().getUserId() != null) {
+                    movement.setCreatedBy(
+                            userRepository.findById(res.getOrder().getUserId()).orElse(null));
                 }
             }
             movement.setCreatedAt(OffsetDateTime.now());

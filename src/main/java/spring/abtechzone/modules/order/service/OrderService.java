@@ -6,12 +6,17 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +29,7 @@ import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
@@ -55,12 +60,14 @@ public class OrderService {
     UserRepository userRepository;
     CartRepository cartRepository;
     VoucherRepository voucherRepository;
-    ProductSkuRepository productSkuRepository;
     OrderRepository orderRepository;
     UserAddressRepository userAddressRepository;
     VoucherValidator voucherValidator;
-    spring.abtechzone.modules.inventory.service.InventoryService inventoryService;
+    InventoryService inventoryService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
+
+    RedissonClient redissonClient;
+    TransactionTemplate transactionTemplate;
 
     static BigDecimal FLAT_SHIPPING_FEE = BigDecimal.valueOf(30000);
 
@@ -83,18 +90,18 @@ public class OrderService {
     }
 
     // ────────────────────────────────────────────────────────
-    // 1. Checkout Review — READ-ONLY, không tạo order
+    // 1. Checkout Review — READ-ONLY
     // ────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public CheckoutResponse checkoutReview(CheckoutRequest request) {
-        // Step 1-2: Xác định User đang đăng nhập
+        // Step 1: Xác định User đang đăng nhập
         User user = getAuthenticatedUser();
 
-        // Step 3-5: Lấy Cart ACTIVE, validate tồn tại & không rỗng
+        // Step 2: Lấy Cart ACTIVE, validate tồn tại & không rỗng
         Cart cart = getActiveCart(user);
         validateCartNotEmpty(cart);
 
-        // Step 9: Duyệt từng CartItem — validate & build response items
+        // Step 3: Duyệt từng CartItem — validate & build response items
         List<CheckoutItemResponse> items = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -124,7 +131,7 @@ public class OrderService {
             subtotal = subtotal.add(totalPrice);
         }
 
-        // Step 8: Validate & tính discount từ voucher (nếu có)
+        // Step 4: Validate & tính discount từ voucher (nếu có)
         BigDecimal totalDiscount = BigDecimal.ZERO;
         String appliedVoucherCode = null;
 
@@ -138,16 +145,16 @@ public class OrderService {
             appliedVoucherCode = voucher.getCode();
         }
 
-        // Step 12: Tính shipping fee
+        // Step 5: Tính shipping fee
         BigDecimal shippingFee = FLAT_SHIPPING_FEE;
 
-        // Step 13: Tính total
+        // Step 6: Tính total
         BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(totalDiscount);
         if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
             totalCheckout = BigDecimal.ZERO;
         }
 
-        // Step 20: Return CheckoutResponse
+        // Step 7: Return CheckoutResponse
         return CheckoutResponse.builder()
                 .items(items)
                 .subtotal(subtotal)
@@ -159,21 +166,59 @@ public class OrderService {
     }
 
     // ────────────────────────────────────────────────────────
-    // 2. Create Order — TẠO ĐƠN HÀNG
+    // 2. Create Order
     // ────────────────────────────────────────────────────────
-    @Transactional
     public OrderResponse createOrder(CreateOrderRequest request) {
-        // Step 1-2: Xác định User
+        // Step 1: Xác định User
         User user = getAuthenticatedUser();
 
-        // Step 3-5: Lấy Cart ACTIVE, validate
+        // Step 2: Lấy Cart ACTIVE, validate
         Cart cart = getActiveCart(user);
         validateCartNotEmpty(cart);
 
-        // Step 6-7: Resolve địa chỉ giao hàng
+        // Step 3: Gom các lock cho các Sku có trong cart và sắp xếp theo ID để tránh deadlock
+        List<CartItem> sortedItems = cart.getItems().stream()
+                .sorted(Comparator.comparing(item -> item.getProductSku().getId()))
+                .toList();
+
+        List<RLock> locks = new ArrayList<>();
+        for (CartItem item : sortedItems) {
+            String lockKey = "lock:product-sku:" + item.getProductSku().getId();
+            locks.add(redissonClient.getLock(lockKey));
+        }
+
+        try {
+            // Step 4: Thử acquire Locks
+            for (RLock lock : locks) {
+                // Chờ max 5s để get lock, tự giải phóng sau 10s nếu crash
+                boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+                if (!acquired) {
+                    throw new AppException(ErrorCode.SYSTEM_BUSY);
+                }
+            }
+
+            // Step 5: Gọi logic tạo đơn hàng chạy trong Transaction thông qua TransactionTemplate
+            // Đảm bảo commit thành công trước khi giải phóng lock ở khối finally
+            return transactionTemplate.execute(status -> doCreateOrder(request, user, cart));
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        } finally {
+            // Step 6: Giải phóng tất cả lock
+            for (RLock lock : locks) {
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
+            }
+        }
+    }
+
+    private OrderResponse doCreateOrder(CreateOrderRequest request, User user, Cart cart) {
+        // Step 1: Resolve địa chỉ giao hàng
         AddressInfo addressInfo = resolveAddress(request, user);
 
-        // Step 9: Validate lại từng CartItem + tính subtotal
+        // Step 2: Validate lại từng CartItem + tính subtotal
         BigDecimal subtotal = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
 
@@ -198,7 +243,7 @@ public class OrderService {
             subtotal = subtotal.add(totalPrice);
         }
 
-        // Step 8: Validate & áp dụng Voucher
+        // Step 3: Validate & áp dụng Voucher
         Voucher appliedVoucher = null;
         BigDecimal totalDiscount = BigDecimal.ZERO;
 
@@ -212,14 +257,14 @@ public class OrderService {
             totalDiscount = calculateDiscount(appliedVoucher, subtotal);
         }
 
-        // Step 12-13: Tính shipping & total
+        // Step 4: Tính shipping & total
         BigDecimal shippingFee = FLAT_SHIPPING_FEE;
         BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(totalDiscount);
         if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
             totalCheckout = BigDecimal.ZERO;
         }
 
-        // Step 14: Tạo Order
+        // Step 5: Tạo Order
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
@@ -237,17 +282,17 @@ public class OrderService {
                 .items(new ArrayList<>())
                 .build();
 
-        // Step 15: Tạo OrderItem + set quan hệ 2 chiều
+        // Step 6: Tạo OrderItem + set quan hệ 2 chiều
         for (OrderItem orderItem : orderItems) {
             orderItem.setOrder(order);
             order.getItems().add(orderItem);
         }
 
-        // Step 18: Đánh dấu Cart COMPLETED
+        // Step 7: Đánh dấu Cart COMPLETED
         cart.setStatus(CartStatus.COMPLETED);
         cartRepository.save(cart);
 
-        // Step 17: Cập nhật Voucher đã sử dụng
+        // Step 8: Cập nhật Voucher đã sử dụng
         if (appliedVoucher != null) {
             int usedCount = appliedVoucher.getUsedCount() != null ? appliedVoucher.getUsedCount() : 0;
             appliedVoucher.setUsedCount(usedCount + 1);
@@ -255,10 +300,10 @@ public class OrderService {
             voucherRepository.save(appliedVoucher);
         }
 
-        // Step 19: Lưu Order (cascade saves OrderItems)
+        // Step 9: Lưu Order (cascade saves OrderItems)
         Order savedOrder = orderRepository.save(order);
 
-        // Save status history audit
+        // Step 10: Lưu OrderStatusHistory
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrder(savedOrder);
         history.setStatus(OrderStatus.PENDING.name());
@@ -267,12 +312,12 @@ public class OrderService {
         history.setCreatedAt(OffsetDateTime.now());
         orderStatusHistoryRepository.save(history);
 
-        // Step 16: Trừ tồn kho & Tạo reservation
+        // Step 11: Trừ tồn kho & Tạo reservation
         for (CartItem cartItem : cart.getItems()) {
             inventoryService.reserveStock(cartItem.getProductSku(), cartItem.getQuantity(), savedOrder);
         }
 
-        // Step 20: Return OrderResponse
+        // Step 12: Return OrderResponse
         return OrderResponse.builder()
                 .orderId(savedOrder.getId())
                 .orderCode(savedOrder.getOrderCode())

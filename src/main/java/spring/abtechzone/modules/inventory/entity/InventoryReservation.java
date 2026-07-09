@@ -11,6 +11,7 @@ import org.hibernate.annotations.ColumnDefault;
 import lombok.Getter;
 import lombok.Setter;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.order.entity.Order;
 
 @Getter
 @Setter
@@ -48,5 +49,5 @@ public class InventoryReservation {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
-    private spring.abtechzone.modules.order.entity.Order order;
+    private Order order;
 }

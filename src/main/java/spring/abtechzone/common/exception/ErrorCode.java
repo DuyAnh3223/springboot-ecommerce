@@ -53,6 +53,8 @@ public enum ErrorCode {
     BRAND_EXISTED(1041, "Brand already exists", HttpStatus.BAD_REQUEST),
     BRAND_NOT_FOUND(1042, "Brand not found", HttpStatus.NOT_FOUND),
     RESERVATION_NOT_FOUND(1043, "Reservation not found", HttpStatus.NOT_FOUND),
+    SYSTEM_BUSY(1044, "System busy, try again later", HttpStatus.BAD_REQUEST),
+    SYSTEM_ERROR(1045, "System error, try again later", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
