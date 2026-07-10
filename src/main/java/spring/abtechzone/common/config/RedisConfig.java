@@ -12,7 +12,11 @@ public class RedisConfig {
     public RedissonClient redissonClient() {
         Config config = new Config();
         // kết nối tới redis server
-        config.useSingleServer().setAddress("redis://127.0.0.1:6379");
+        config.useSingleServer()
+                .setAddress("redis://127.0.0.1:3308")
+                .setConnectionPoolSize(10)
+                .setConnectionMinimumIdleSize(5)
+                .setConnectTimeout(30000);
         return Redisson.create(config);
     }
 }

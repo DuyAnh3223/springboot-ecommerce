@@ -6,10 +6,12 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -29,6 +31,7 @@ import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
@@ -40,6 +43,7 @@ import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
 import spring.abtechzone.modules.order.entity.OrderStatusHistory;
+import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.user.entity.User;
@@ -65,6 +69,8 @@ public class OrderService {
     VoucherValidator voucherValidator;
     InventoryService inventoryService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
+    ProductSkuRepository productSkuRepository;
+    OrderMapper orderMapper;
 
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
@@ -77,15 +83,7 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByUserId(UUID userId) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(order -> OrderResponse.builder()
-                        .orderId(order.getId())
-                        .orderCode(order.getOrderCode())
-                        .orderStatus(order.getStatus().name())
-                        .subtotal(order.getSubtotalAmount())
-                        .shippingFee(order.getShippingFee())
-                        .totalDiscount(order.getDiscountAmount())
-                        .totalCheckout(order.getTotalAmount())
-                        .build())
+                .map(orderMapper::toOrderResponse)
                 .toList();
     }
 
@@ -94,44 +92,33 @@ public class OrderService {
     // ────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public CheckoutResponse checkoutReview(CheckoutRequest request) {
-        // Step 1: Xác định User đang đăng nhập
+        // Step 1: Auth User
         User user = getAuthenticatedUser();
 
-        // Step 2: Lấy Cart ACTIVE, validate tồn tại & không rỗng
+        // Step 2: Get Actice Cart, existed and not null
         Cart cart = getActiveCart(user);
         validateCartNotEmpty(cart);
 
-        // Step 3: Duyệt từng CartItem — validate & build response items
+        // Step 3: Validate each CartItem
         List<CheckoutItemResponse> items = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (CartItem cartItem : cart.getItems()) {
             ProductSku sku = cartItem.getProductSku();
 
-            // Product còn tồn tại & còn bán?
+            // Product existed & is selling?
             validateProductAvailable(sku);
 
-            // Đủ tồn kho?
+            // stock?
             validateStock(sku, cartItem.getQuantity());
 
-            // Sync lại giá mới nhất từ ProductSku
-            BigDecimal unitPrice = sku.getPrice();
-            BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+            items.add(orderMapper.toCheckoutItemResponse(cartItem));
 
-            items.add(CheckoutItemResponse.builder()
-                    .productSkuId(sku.getId())
-                    .productName(sku.getProduct().getName())
-                    .skuCode(sku.getSku())
-                    .imageUrl(sku.getImageUrl())
-                    .quantity(cartItem.getQuantity())
-                    .unitPrice(unitPrice)
-                    .totalPrice(totalPrice)
-                    .build());
-
+            BigDecimal totalPrice = sku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
             subtotal = subtotal.add(totalPrice);
         }
 
-        // Step 4: Validate & tính discount từ voucher (nếu có)
+        // Step 4: Validate & calc discount from voucher
         BigDecimal totalDiscount = BigDecimal.ZERO;
         String appliedVoucherCode = null;
 
@@ -145,10 +132,10 @@ public class OrderService {
             appliedVoucherCode = voucher.getCode();
         }
 
-        // Step 5: Tính shipping fee
+        // Step 5: Calc shipping fee
         BigDecimal shippingFee = FLAT_SHIPPING_FEE;
 
-        // Step 6: Tính total
+        // Step 6: Calc total
         BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(totalDiscount);
         if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
             totalCheckout = BigDecimal.ZERO;
@@ -169,43 +156,57 @@ public class OrderService {
     // 2. Create Order
     // ────────────────────────────────────────────────────────
     public OrderResponse createOrder(CreateOrderRequest request) {
-        // Step 1: Xác định User
+        // Step 1: Auth User
         User user = getAuthenticatedUser();
 
-        // Step 2: Lấy Cart ACTIVE, validate
-        Cart cart = getActiveCart(user);
-        validateCartNotEmpty(cart);
+        // Step 2: Get Cart ACTIVE and skus for locking
+        Cart initialCart = getActiveCart(user);
+        validateCartNotEmpty(initialCart);
 
-        // Step 3: Gom các lock cho các Sku có trong cart và sắp xếp theo ID để tránh deadlock
-        List<CartItem> sortedItems = cart.getItems().stream()
-                .sorted(Comparator.comparing(item -> item.getProductSku().getId()))
-                .toList();
+        // Collect all lock keys reliable to this transaction
+        List<String> lockKeys = new ArrayList<>();
 
-        List<RLock> locks = new ArrayList<>();
-        for (CartItem item : sortedItems) {
-            String lockKey = "lock:product-sku:" + item.getProductSku().getId();
-            locks.add(redissonClient.getLock(lockKey));
+        // Lock 1: User Order Lock (Prohibit double-click / double-submit from same user)
+        lockKeys.add("lock:user-order:" + user.getId());
+
+        // Lock 2: SKU Locks (Race condition stock)
+        for (CartItem item : initialCart.getItems()) {
+            lockKeys.add("lock:product-sku:" + item.getProductSku().getId());
         }
 
+        // Lock 3: Voucher Lock (Race condition oversell voucher / over max uses)
+        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
+            lockKeys.add("lock:voucher:" + request.getVoucherCode());
+        }
+
+        // Deduplicate and sort to alphabet for no deadlock
+        List<String> sortedLockKeys = lockKeys.stream().distinct().sorted().toList();
+
+        List<RLock> locks = sortedLockKeys.stream().map(redissonClient::getLock).toList();
+
+        // Save SKU và default stock for comparetion after locking
+        Map<Long, Integer> initialSkuQtyMap = initialCart.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProductSku().getId(), CartItem::getQuantity, Integer::sum));
+
         try {
-            // Step 4: Thử acquire Locks
+            // Step 4: try to acquire Locks
             for (RLock lock : locks) {
-                // Chờ max 5s để get lock, tự giải phóng sau 10s nếu crash
+                // Wait max 5s to get lock, free after 10s if crash
                 boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
                 if (!acquired) {
                     throw new AppException(ErrorCode.SYSTEM_BUSY);
                 }
             }
 
-            // Step 5: Gọi logic tạo đơn hàng chạy trong Transaction thông qua TransactionTemplate
-            // Đảm bảo commit thành công trước khi giải phóng lock ở khối finally
-            return transactionTemplate.execute(status -> doCreateOrder(request, user, cart));
+            // Step 5: Call createOrder in Transaction through TransactionTemplate
+
+            return transactionTemplate.execute(status -> doCreateOrder(request, user, initialSkuQtyMap));
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         } finally {
-            // Step 6: Giải phóng tất cả lock
+            // Step 6: Free all lock
             for (RLock lock : locks) {
                 if (lock.isHeldByCurrentThread()) {
                     lock.unlock();
@@ -214,64 +215,116 @@ public class OrderService {
         }
     }
 
-    private OrderResponse doCreateOrder(CreateOrderRequest request, User user, Cart cart) {
-        // Step 1: Resolve địa chỉ giao hàng
+    private OrderResponse doCreateOrder(CreateOrderRequest request, User user, Map<Long, Integer> initialSkuQtyMap) {
+        // Step 1: Reload Cart & Validate Cart State
+        Cart freshCart = getActiveCart(user);
+        validateCartState(freshCart, initialSkuQtyMap);
+
+        // Step 2: Resolve Shipping Address
         AddressInfo addressInfo = resolveAddress(request, user);
 
-        // Step 2: Validate lại từng CartItem + tính subtotal
+        // Step 3: Process Cart Items (validate stock & price, calculate subtotal)
+        ProcessedItems processed = processCartItems(freshCart);
+
+        // Step 4: Validate & Apply Voucher
+        AppliedVoucherInfo voucherInfo = applyVoucher(request, user, processed.subtotal());
+
+        // Step 5: Build Order & Link Order Items
+        Order order = buildOrder(
+                request, user, addressInfo, processed.subtotal(), voucherInfo.discountAmount(), processed.orderItems());
+
+        // Step 6: Clear Cart items
+        freshCart.getItems().clear();
+        cartRepository.save(freshCart);
+
+        // Step 7: Update Voucher usage
+        updateVoucherUsage(voucherInfo.voucher(), user);
+
+        // Step 8: Save Order (cascade saves OrderItems)
+        Order savedOrder = orderRepository.save(order);
+
+        // Step 9: Save Order Status History
+        createOrderStatusHistory(savedOrder, user);
+
+        // Step 10: Reserve Inventory (uses processed.orderItems instead of empty cart)
+        reserveInventory(processed.orderItems(), processed.skuMap(), savedOrder);
+
+        // Step 11: Return Response
+        return orderMapper.toOrderResponse(savedOrder);
+    }
+
+    private void validateCartState(Cart freshCart, Map<Long, Integer> initialSkuQtyMap) {
+        validateCartNotEmpty(freshCart);
+
+        Map<Long, Integer> freshSkuQtyMap = freshCart.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProductSku().getId(), CartItem::getQuantity, Integer::sum));
+
+        if (!initialSkuQtyMap.equals(freshSkuQtyMap)) {
+            throw new AppException(ErrorCode.SYSTEM_BUSY);
+        }
+    }
+
+    private ProcessedItems processCartItems(Cart freshCart) {
         BigDecimal subtotal = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
+        Map<Long, ProductSku> skuMap = new HashMap<>();
 
-        for (CartItem cartItem : cart.getItems()) {
-            ProductSku sku = cartItem.getProductSku();
+        for (CartItem cartItem : freshCart.getItems()) {
+            // Re-fetch ProductSku from DB for newest  Price & Stock
+            ProductSku sku = productSkuRepository
+                    .findById(cartItem.getProductSku().getId())
+                    .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+            skuMap.put(sku.getId(), sku);
 
             validateProductAvailable(sku);
             validateStock(sku, cartItem.getQuantity());
 
-            BigDecimal unitPrice = sku.getPrice();
-            BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+            orderItems.add(orderMapper.toOrderItem(cartItem, sku));
 
-            orderItems.add(OrderItem.builder()
-                    .quantity(cartItem.getQuantity())
-                    .unitPrice(unitPrice)
-                    .productNameSnapshot(sku.getProduct().getName())
-                    .skuSnapshot(sku.getSku())
-                    .imageUrl(sku.getImageUrl())
-                    .sku(sku)
-                    .build());
-
+            BigDecimal totalPrice = sku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
             subtotal = subtotal.add(totalPrice);
         }
 
-        // Step 3: Validate & áp dụng Voucher
-        Voucher appliedVoucher = null;
-        BigDecimal totalDiscount = BigDecimal.ZERO;
+        return new ProcessedItems(orderItems, subtotal, skuMap);
+    }
 
-        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
-            appliedVoucher = voucherRepository
-                    .findByCode(request.getVoucherCode())
-                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
-            voucherValidator.validateVoucher(appliedVoucher, subtotal);
-            validateVoucherPerUser(appliedVoucher, user);
-            totalDiscount = calculateDiscount(appliedVoucher, subtotal);
+    private AppliedVoucherInfo applyVoucher(CreateOrderRequest request, User user, BigDecimal subtotal) {
+        if (request.getVoucherCode() == null || request.getVoucherCode().isBlank()) {
+            return new AppliedVoucherInfo(null, BigDecimal.ZERO);
         }
 
-        // Step 4: Tính shipping & total
+        Voucher appliedVoucher = voucherRepository
+                .findByCode(request.getVoucherCode())
+                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+        voucherValidator.validateVoucher(appliedVoucher, subtotal);
+        validateVoucherPerUser(appliedVoucher, user);
+        BigDecimal discountAmount = calculateDiscount(appliedVoucher, subtotal);
+
+        return new AppliedVoucherInfo(appliedVoucher, discountAmount);
+    }
+
+    private Order buildOrder(
+            CreateOrderRequest request,
+            User user,
+            AddressInfo addressInfo,
+            BigDecimal subtotal,
+            BigDecimal discountAmount,
+            List<OrderItem> orderItems) {
+
         BigDecimal shippingFee = FLAT_SHIPPING_FEE;
-        BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(totalDiscount);
+        BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(discountAmount);
         if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
             totalCheckout = BigDecimal.ZERO;
         }
 
-        // Step 5: Tạo Order
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
                 .paymentReference(request.getPaymentMethod())
                 .subtotalAmount(subtotal)
                 .shippingFee(shippingFee)
-                .discountAmount(totalDiscount)
+                .discountAmount(discountAmount)
                 .totalAmount(totalCheckout)
                 .recipientName(addressInfo.recipientName)
                 .phone(addressInfo.phone)
@@ -282,52 +335,52 @@ public class OrderService {
                 .items(new ArrayList<>())
                 .build();
 
-        // Step 6: Tạo OrderItem + set quan hệ 2 chiều
         for (OrderItem orderItem : orderItems) {
             orderItem.setOrder(order);
             order.getItems().add(orderItem);
         }
 
-        // Step 7: Đánh dấu Cart COMPLETED
-        cart.setStatus(CartStatus.COMPLETED);
-        cartRepository.save(cart);
+        return order;
+    }
 
-        // Step 8: Cập nhật Voucher đã sử dụng
-        if (appliedVoucher != null) {
-            int usedCount = appliedVoucher.getUsedCount() != null ? appliedVoucher.getUsedCount() : 0;
-            appliedVoucher.setUsedCount(usedCount + 1);
-            appliedVoucher.getUserIds().add(user);
-            voucherRepository.save(appliedVoucher);
+    private void updateVoucherUsage(Voucher appliedVoucher, User user) {
+        if (appliedVoucher == null) return;
+
+        int updated = voucherRepository.increaseUsedCount(appliedVoucher.getId(), user.getId());
+        if (updated == 0) {
+            throw new AppException(ErrorCode.VOUCHER_ARE_OUT);
         }
+        voucherRepository.insertVoucherUser(appliedVoucher.getId(), user.getId());
+    }
 
-        // Step 9: Lưu Order (cascade saves OrderItems)
-        Order savedOrder = orderRepository.save(order);
-
-        // Step 10: Lưu OrderStatusHistory
+    private void createOrderStatusHistory(Order order, User user) {
         OrderStatusHistory history = new OrderStatusHistory();
-        history.setOrder(savedOrder);
+        history.setOrder(order);
         history.setStatus(OrderStatus.PENDING.name());
         history.setNote("Order created");
         history.setCreatedBy(user);
         history.setCreatedAt(OffsetDateTime.now());
         orderStatusHistoryRepository.save(history);
-
-        // Step 11: Trừ tồn kho & Tạo reservation
-        for (CartItem cartItem : cart.getItems()) {
-            inventoryService.reserveStock(cartItem.getProductSku(), cartItem.getQuantity(), savedOrder);
-        }
-
-        // Step 12: Return OrderResponse
-        return OrderResponse.builder()
-                .orderId(savedOrder.getId())
-                .orderCode(savedOrder.getOrderCode())
-                .orderStatus(savedOrder.getStatus().name())
-                .subtotal(savedOrder.getSubtotalAmount())
-                .shippingFee(savedOrder.getShippingFee())
-                .totalDiscount(savedOrder.getDiscountAmount())
-                .totalCheckout(savedOrder.getTotalAmount())
-                .build();
     }
+
+    private void reserveInventory(List<OrderItem> orderItems, Map<Long, ProductSku> skuMap, Order order) {
+        for (OrderItem orderItem : orderItems) {
+            ProductSku sku = skuMap.get(orderItem.getSku().getId());
+            inventoryService.reserveStock(sku, orderItem.getQuantity(), order);
+        }
+    }
+
+    private record ProcessedItems(List<OrderItem> orderItems, BigDecimal subtotal, Map<Long, ProductSku> skuMap) {}
+
+    private record AppliedVoucherInfo(Voucher voucher, BigDecimal discountAmount) {}
+
+    // ────────────────────────────────────────────────────────
+    // 3. Cancel Order by User
+    // ────────────────────────────────────────────────────────
+
+    // ────────────────────────────────────────────────────────
+    // 4. Update Order Status by Admin
+    // ────────────────────────────────────────────────────────
 
     // ════════════════════════════════════════════════════════
     // PRIVATE HELPERS
