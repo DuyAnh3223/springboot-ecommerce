@@ -16,7 +16,7 @@ This project is being developed as a personal portfolio to practice backend deve
 ###  ERD
 
 <div align="center">
-  <img src="docs/erd.png" alt="Database Entity-Relationship Diagram (ERD)" width="90%" />
+  <img src="server/docs/erd.png" alt="Database Entity-Relationship Diagram (ERD)" width="90%" />
   <p><i>ERD</i></p>
 </div>
 
