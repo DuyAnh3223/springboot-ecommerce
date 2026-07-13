@@ -29,7 +29,7 @@ public class AuthController {
 
     AuthService authService;
 
-    @PostMapping("/log-in")
+    @PostMapping("/sign-in")
     ApiResponse<AuthResponse> authenticate(@RequestBody AuthRequest request) {
         var result = authService.authenticate(request);
 
@@ -44,7 +44,7 @@ public class AuthController {
         return ApiResponse.<IntrospectResponse>builder().result(result).build();
     }
 
-    @PostMapping("/log-out")
+    @PostMapping("/sign-out")
     ApiResponse<Void> logout(@RequestBody LogoutRequest request) throws ParseException, JOSEException {
         authService.logout(request);
 

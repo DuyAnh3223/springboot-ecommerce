@@ -1,5 +1,5 @@
 ### Log in
-POST http://localhost:8080/abtechzone/auth/log-in
+POST http://localhost:8080/abtechzone/auth/sign-in
 Content-Type: application/json
 
 {
