@@ -1,9 +1,9 @@
 'use client'
 
 import { useForm } from 'react-hook-form'
-import { SignUpInput, signUpSchema } from '@/schemas/auth'
+import { SignUpInput, signUpSchema } from '@/features/auth/schemas/auth.schema'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { signUpAction } from '@/app/actions/auth'
+import { signUpAction } from '@/features/auth/actions'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'

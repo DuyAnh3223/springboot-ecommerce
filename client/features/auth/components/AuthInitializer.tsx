@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
 
 interface User {
   username: string

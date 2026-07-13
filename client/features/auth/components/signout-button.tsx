@@ -1,7 +1,7 @@
 'use client'
 
-import { signoutAction } from '@/app/actions/auth'
-import { useAuthStore } from '@/stores/auth-store'
+import { signoutAction } from '@/features/auth/actions'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { LogOut, Loader2 } from 'lucide-react'
@@ -23,7 +23,7 @@ export function LogoutButton() {
         try {
           await signoutAction()
           clear()
-          router.push('/auth')
+          router.push('/sign-in')
           router.refresh()
         } catch (error) {
           console.error(error)

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { LogoutButton } from '@/features/auth/components/signout-button'
 import { UserCheck } from 'lucide-react'
 
@@ -17,7 +17,7 @@ const SignIn = () => {
 
   if (!mounted) {
     return (
-      <Link href="/auth" className="text-sm font-semibold hover:text-shop_orange hover:cursor-pointer hoverEffect">
+      <Link href="/sign-in" className="text-sm font-semibold hover:text-shop_orange hover:cursor-pointer hoverEffect">
         Sign In
       </Link>
     )
@@ -40,7 +40,7 @@ const SignIn = () => {
   }
 
   return (
-    <Link href="/auth" className="text-sm font-semibold hover:text-shop_orange hover:cursor-pointer hoverEffect">
+    <Link href="/sign-in" className="text-sm font-semibold hover:text-shop_orange hover:cursor-pointer hoverEffect">
       Sign In
     </Link>
   )

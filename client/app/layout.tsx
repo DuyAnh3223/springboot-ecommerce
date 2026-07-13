@@ -3,7 +3,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AuthInitializer from "@/features/auth/components/AuthInitializer";
-import { getSession } from "@/app/actions/auth";
+import { getSession } from "@/features/auth/actions";
 
 export const metadata: Metadata = {
   title:{

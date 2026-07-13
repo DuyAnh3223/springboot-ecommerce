@@ -1,11 +1,11 @@
 'use client'
 
 import { useForm } from 'react-hook-form'
-import { useAuthStore } from "@/stores/auth-store"
+import { useAuthStore } from "@/features/auth/stores/auth.store"
 import { useRouter } from "next/navigation"
-import { SignInInput, signInSchema } from '@/schemas/auth'
+import { SignInInput, signInSchema } from '@/features/auth/schemas/auth.schema'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { signInAction } from '@/app/actions/auth'
+import { signInAction } from '@/features/auth/actions'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
