@@ -2,6 +2,7 @@ package spring.abtechzone.modules.catalog.service;
 
 import java.util.List;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import lombok.AccessLevel;
@@ -16,13 +17,16 @@ import spring.abtechzone.modules.catalog.entity.Category;
 import spring.abtechzone.modules.catalog.mapper.CategoryMapper;
 import spring.abtechzone.modules.catalog.repository.CategoryRepository;
 
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CategoryService {
     CategoryRepository categoryRepository;
-    private final CategoryMapper categoryMapper;
+    CategoryMapper categoryMapper;
+
 
     public CategoryResponse create(CategoryRequest request) {
         Boolean existedCategory = categoryRepository.existsByName(categoryMapper.toCategory(request));
@@ -35,10 +39,12 @@ public class CategoryService {
         return categoryMapper.toCategoryResponse(category);
     }
 
+    @PreAuthorize("permitAll()")
     public List<Category> getCategories() {
         return categoryRepository.findAll();
     }
 
+    @PreAuthorize("permitAll()")
     public CategoryResponse getCategory(Long id) {
         return categoryMapper.toCategoryResponse(
                 categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND)));
