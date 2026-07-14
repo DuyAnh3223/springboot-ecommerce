@@ -7,11 +7,12 @@ import java.util.Set;
 import java.util.UUID;
 
 import jakarta.persistence.*;
-
 import jakarta.validation.constraints.NotNull;
+
+import org.hibernate.annotations.ColumnDefault;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.hibernate.annotations.ColumnDefault;
 import spring.abtechzone.modules.auth.entity.UserRole;
 
 @Entity
@@ -53,12 +54,25 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<UserAddress> userAddresses = new ArrayList<>();
+
     @NotNull
     @ColumnDefault("now()")
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
+
     @NotNull
     @ColumnDefault("now()")
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = OffsetDateTime.now();
+        updatedAt = OffsetDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = OffsetDateTime.now();
+    }
 }

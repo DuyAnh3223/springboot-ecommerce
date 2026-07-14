@@ -13,11 +13,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.transaction.annotation.Transactional;
 import spring.abtechzone.common.constant.PredefinedRole;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
@@ -48,6 +48,7 @@ public class UserService {
 
         User user = userMapper.toUser(request);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setActive(true);
 
         try {
             user = userRepository.save(user);
@@ -86,9 +87,8 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN')") // Ktra quyền trước khi chạy ~~ @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(UserSearchRequest request) {
-        Specification<User> spec =
-                Specification.where(UserSpecifications.hasKeyword(request.getSearch()))
-                        .and(UserSpecifications.isActive(request.getIsActive()));
+        Specification<User> spec = Specification.where(UserSpecifications.hasKeyword(request.getSearch()))
+                .and(UserSpecifications.isActive(request.getIsActive()));
         return userRepository.findAll(spec, request.toPageable()).map(userMapper::toUserResponse);
     }
 
@@ -101,12 +101,15 @@ public class UserService {
         return userMapper.toUserResponse(findUserById(userId));
     }
 
-    @PostAuthorize("returnObject.username == authentication.name") // Chạy xong rồi mới ktra quyền => Đúng thì return
+    @PostAuthorize("returnObject.username == authentication.name or hasRole('ADMIN')")
+    // Chạy xong rồi mới ktra quyền => Đúng thì return hoặc là ADMIN
     public UserResponse updateUser(UUID userId, UserUpdateRequest request) {
         User user = findUserById(userId);
 
         userMapper.updateUser(user, request);
-        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        }
 
         var roles = roleRepository.findByNameIn(request.getRoles());
         UUID globalScopeId = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -130,6 +133,8 @@ public class UserService {
 
     @PreAuthorize("hasRole('ADMIN')")
     public void deleteUser(UUID userId) {
-        userRepository.deleteById(userId);
+        User user = findUserById(userId);
+        user.setActive(false);
+        userRepository.save(user);
     }
 }

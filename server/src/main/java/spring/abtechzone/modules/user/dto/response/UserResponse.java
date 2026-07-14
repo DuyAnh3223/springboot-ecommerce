@@ -1,5 +1,6 @@
 package spring.abtechzone.modules.user.dto.response;
 
+import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -19,6 +20,8 @@ public class UserResponse {
     String lastName;
     Boolean active;
     String email;
+    String phone;
+    OffsetDateTime createdAt;
 
     Set<RoleResponse> roles;
 }

@@ -15,7 +15,8 @@ public class UserUpdateRequest {
     String password;
     String firstName;
     String lastName;
-    //     boolean delFlag;
-    //     boolean status;
+    String email;
+    String phone;
+
     List<String> roles;
 }

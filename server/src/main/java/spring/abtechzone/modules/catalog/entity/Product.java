@@ -58,35 +58,35 @@ public class Product {
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
-     Category category;
+    Category category;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "brand_id")
-     Brand brand;
+    Brand brand;
 
     @NotNull
     @ColumnDefault("0")
     @Column(name = "review_count", nullable = false)
     @Builder.Default
-     Integer reviewCount = 0;
+    Integer reviewCount = 0;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-     OffsetDateTime createdAt = OffsetDateTime.now();
+    OffsetDateTime createdAt = OffsetDateTime.now();
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
-     OffsetDateTime updatedAt = OffsetDateTime.now();
+    OffsetDateTime updatedAt = OffsetDateTime.now();
 
     @Column(name = "deleted_at")
-     OffsetDateTime deletedAt;
+    OffsetDateTime deletedAt;
 
     @Column(name = "seller_id")
-     UUID sellerId;
+    UUID sellerId;
 
     @PrePersist
     @PreUpdate
@@ -94,7 +94,7 @@ public class Product {
         this.slug = generateSlug(this.name);
     }
 
-     String generateSlug(String input) {
+    String generateSlug(String input) {
         if (input == null || input.trim().isEmpty()) {
             return "";
         }

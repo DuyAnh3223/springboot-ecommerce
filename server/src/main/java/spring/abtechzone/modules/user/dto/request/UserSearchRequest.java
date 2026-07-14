@@ -1,13 +1,15 @@
 package spring.abtechzone.modules.user.dto.request;
 
+import java.util.Set;
+
 import jakarta.validation.constraints.Min;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
-import java.util.Set;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @NoArgsConstructor
@@ -27,7 +29,7 @@ public class UserSearchRequest {
     Integer size = 20;
 
     @Builder.Default
-    String sortBy = "username" ;
+    String sortBy = "username";
 
     @Builder.Default
     String order = "desc";
@@ -36,27 +38,15 @@ public class UserSearchRequest {
         int pageNumber = page == null || page < 1 ? 1 : page;
         int pageSize = size == null || size < 1 ? 20 : Math.min(size, 100);
 
-        Sort.Direction direction =
-                "asc".equalsIgnoreCase(order)
-                        ? Sort.Direction.ASC
-                        : Sort.Direction.DESC;
+        Sort.Direction direction = "asc".equalsIgnoreCase(order) ? Sort.Direction.ASC : Sort.Direction.DESC;
 
-        return PageRequest.of(
-                pageNumber - 1,
-                pageSize,
-                Sort.by(direction, normalizeSortProperty(sortBy))
-        );
+        return PageRequest.of(pageNumber - 1, pageSize, Sort.by(direction, normalizeSortProperty(sortBy)));
     }
 
-    private static final Set<String> SORT_FIELDS = Set.of(
-            "username",
-            "email",
-            "createdAt"
-    );
+    private static final Set<String> SORT_FIELDS =
+            Set.of("username", "email", "phone", "lastName", "firstName", "createdAt");
 
     private String normalizeSortProperty(String sortBy) {
-        return SORT_FIELDS.contains(sortBy)
-                ? sortBy
-                : "createdAt";
+        return SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
     }
 }

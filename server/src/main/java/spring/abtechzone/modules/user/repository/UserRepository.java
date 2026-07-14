@@ -12,5 +12,4 @@ import spring.abtechzone.modules.user.entity.User;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
     Optional<User> findByUsername(String username);
-
 }

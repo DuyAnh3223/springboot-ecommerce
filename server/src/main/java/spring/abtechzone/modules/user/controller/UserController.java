@@ -1,6 +1,5 @@
 package spring.abtechzone.modules.user.controller;
 
-import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -17,7 +16,6 @@ import spring.abtechzone.modules.user.dto.request.UserCreationRequest;
 import spring.abtechzone.modules.user.dto.request.UserSearchRequest;
 import spring.abtechzone.modules.user.dto.request.UserUpdateRequest;
 import spring.abtechzone.modules.user.dto.response.UserResponse;
-import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.service.UserService;
 
 @Slf4j
@@ -40,7 +38,8 @@ public class UserController {
     ApiResponse<Page<UserResponse>> getUsers(@Valid UserSearchRequest request) {
 
         return ApiResponse.<Page<UserResponse>>builder()
-                .result(userService.getUsers(request)).build();
+                .result(userService.getUsers(request))
+                .build();
     }
 
     @GetMapping("/{userId}")
@@ -57,7 +56,7 @@ public class UserController {
                 .build();
     }
 
-    @PutMapping("/{userId}")
+    @PatchMapping("/{userId}")
     ApiResponse<UserResponse> updateUser(@PathVariable("userId") UUID userId, @RequestBody UserUpdateRequest request) {
         return ApiResponse.<UserResponse>builder()
                 .result(userService.updateUser(userId, request))
@@ -65,8 +64,8 @@ public class UserController {
     }
 
     @DeleteMapping("/{userId}")
-    ApiResponse<String> deleteUser(@PathVariable("userId") UUID userId) {
+    ApiResponse<Void> deleteUser(@PathVariable("userId") UUID userId) {
         userService.deleteUser(userId);
-        return ApiResponse.<String>builder().result("User has been deleted").build();
+        return ApiResponse.<Void>builder().build();
     }
 }
