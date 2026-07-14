@@ -11,5 +11,5 @@ import lombok.experimental.FieldDefaults;
 public class CategoryRequest {
     String name;
     String slug;
-    Boolean isActive;
+    String thumbnail;
 }

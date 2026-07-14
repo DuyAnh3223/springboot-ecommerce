@@ -12,5 +12,6 @@ public class CategoryResponse {
     Long id;
     String name;
     String slug;
-    Integer sortOrder;
+    String thumbnail;
+    Boolean active;
 }

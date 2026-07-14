@@ -1,9 +1,10 @@
 package spring.abtechzone.modules.catalog.service;
 
-import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -12,11 +13,12 @@ import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.catalog.dto.request.CategoryRequest;
+import spring.abtechzone.modules.catalog.dto.request.CategorySearchRequest;
 import spring.abtechzone.modules.catalog.dto.response.CategoryResponse;
 import spring.abtechzone.modules.catalog.entity.Category;
 import spring.abtechzone.modules.catalog.mapper.CategoryMapper;
 import spring.abtechzone.modules.catalog.repository.CategoryRepository;
-
+import spring.abtechzone.modules.catalog.repository.specification.CategorySpecifications;
 
 @Service
 @Slf4j
@@ -24,9 +26,9 @@ import spring.abtechzone.modules.catalog.repository.CategoryRepository;
 @PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CategoryService {
+
     CategoryRepository categoryRepository;
     CategoryMapper categoryMapper;
-
 
     public CategoryResponse create(CategoryRequest request) {
         Boolean existedCategory = categoryRepository.existsByName(categoryMapper.toCategory(request));
@@ -40,8 +42,16 @@ public class CategoryService {
     }
 
     @PreAuthorize("permitAll()")
-    public List<Category> getCategories() {
-        return categoryRepository.findAll();
+    @Transactional(readOnly = true)
+    public Page<CategoryResponse> getCategories(CategorySearchRequest request) {
+        Specification<Category> spec = Specification
+                .where(CategorySpecifications.hasKeyword(request.getKeyword()))
+                .and(CategorySpecifications.isActive(request.getIsActive()))
+                .and(CategorySpecifications.hasParent(request.getParentId()));
+
+        return categoryRepository
+                .findAll(spec, request.toPageable())
+                .map(categoryMapper::toCategoryResponse);
     }
 
     @PreAuthorize("permitAll()")
@@ -55,6 +65,7 @@ public class CategoryService {
                 categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
         category.setName(request.getName());
         category.setSlug(request.getSlug());
+        category.setThumbnail(request.getThumbnail());
         categoryRepository.save(category);
         return categoryMapper.toCategoryResponse(category);
     }
