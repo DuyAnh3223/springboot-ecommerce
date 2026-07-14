@@ -11,8 +11,7 @@ public class CategorySpecifications {
             if (keyword == null || keyword.isBlank()) return null;
             String likeValue = "%" + keyword.toLowerCase() + "%";
             return cb.or(
-                    cb.like(cb.lower(root.get("name")), likeValue),
-                    cb.like(cb.lower(root.get("slug")), likeValue));
+                    cb.like(cb.lower(root.get("name")), likeValue), cb.like(cb.lower(root.get("slug")), likeValue));
         };
     }
 

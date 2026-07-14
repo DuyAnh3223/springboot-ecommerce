@@ -31,7 +31,7 @@ public class CategoryService {
     CategoryMapper categoryMapper;
 
     public CategoryResponse create(CategoryRequest request) {
-        Boolean existedCategory = categoryRepository.existsByName(categoryMapper.toCategory(request));
+        Boolean existedCategory = categoryRepository.existsByName(request.getName());
         if (Boolean.TRUE.equals(existedCategory)) {
             throw new AppException(ErrorCode.CATEGORY_EXISTED);
         }
@@ -44,14 +44,11 @@ public class CategoryService {
     @PreAuthorize("permitAll()")
     @Transactional(readOnly = true)
     public Page<CategoryResponse> getCategories(CategorySearchRequest request) {
-        Specification<Category> spec = Specification
-                .where(CategorySpecifications.hasKeyword(request.getKeyword()))
+        Specification<Category> spec = Specification.where(CategorySpecifications.hasKeyword(request.getKeyword()))
                 .and(CategorySpecifications.isActive(request.getIsActive()))
                 .and(CategorySpecifications.hasParent(request.getParentId()));
 
-        return categoryRepository
-                .findAll(spec, request.toPageable())
-                .map(categoryMapper::toCategoryResponse);
+        return categoryRepository.findAll(spec, request.toPageable()).map(categoryMapper::toCategoryResponse);
     }
 
     @PreAuthorize("permitAll()")

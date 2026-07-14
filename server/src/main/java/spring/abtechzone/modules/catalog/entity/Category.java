@@ -35,13 +35,13 @@ public class Category {
 
     @NotNull
     @ColumnDefault("0")
-    @Column(name = "sort_order", nullable = false)
-    private Integer sortOrder;
+    @Column(name = "sort_order", nullable = true)
+    private Integer sortOrder = 0;
 
     @NotNull
     @ColumnDefault("true")
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive;
+    private Boolean isActive = true;
 
     private String thumbnail;
 }
