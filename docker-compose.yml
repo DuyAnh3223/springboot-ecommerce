@@ -35,6 +35,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: ecommerce-springboot-server
     volumes:
+      - ./server/src:/app/src
       - maven_cache:/root/.m2
     ports:
       - "8080:8080"
