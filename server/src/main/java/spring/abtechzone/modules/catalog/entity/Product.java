@@ -2,10 +2,7 @@ package spring.abtechzone.modules.catalog.entity;
 
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Pattern;
 
 import jakarta.persistence.*;
@@ -61,35 +58,35 @@ public class Product {
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
+     Category category;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "brand_id")
-    private Brand brand;
+     Brand brand;
 
     @NotNull
     @ColumnDefault("0")
     @Column(name = "review_count", nullable = false)
     @Builder.Default
-    private Integer reviewCount = 0;
+     Integer reviewCount = 0;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+     OffsetDateTime createdAt = OffsetDateTime.now();
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
-    private OffsetDateTime updatedAt = OffsetDateTime.now();
+     OffsetDateTime updatedAt = OffsetDateTime.now();
 
     @Column(name = "deleted_at")
-    private OffsetDateTime deletedAt;
+     OffsetDateTime deletedAt;
 
     @Column(name = "seller_id")
-    private java.util.UUID sellerId;
+     UUID sellerId;
 
     @PrePersist
     @PreUpdate
@@ -97,7 +94,7 @@ public class Product {
         this.slug = generateSlug(this.name);
     }
 
-    private String generateSlug(String input) {
+     String generateSlug(String input) {
         if (input == null || input.trim().isEmpty()) {
             return "";
         }

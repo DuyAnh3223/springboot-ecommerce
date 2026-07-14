@@ -1,12 +1,13 @@
 package spring.abtechzone.modules.user.service;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.transaction.annotation.Transactional;
 import spring.abtechzone.common.constant.PredefinedRole;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
@@ -24,11 +26,13 @@ import spring.abtechzone.modules.auth.entity.UserRole;
 import spring.abtechzone.modules.auth.entity.UserRoleId;
 import spring.abtechzone.modules.auth.repository.RoleRepository;
 import spring.abtechzone.modules.user.dto.request.UserCreationRequest;
+import spring.abtechzone.modules.user.dto.request.UserSearchRequest;
 import spring.abtechzone.modules.user.dto.request.UserUpdateRequest;
 import spring.abtechzone.modules.user.dto.response.UserResponse;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.mapper.UserMapper;
 import spring.abtechzone.modules.user.repository.UserRepository;
+import spring.abtechzone.modules.user.repository.specification.UserSpecifications;
 
 @Service
 @RequiredArgsConstructor // Auto generate constructor but required "final"
@@ -80,8 +84,12 @@ public class UserService {
     }
 
     @PreAuthorize("hasRole('ADMIN')") // Ktra quyền trước khi chạy ~~ @PreAuthorize("hasAuthority('ROLE_ADMIN')")
-    public List<User> getUsers() {
-        return userRepository.findAll();
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getUsers(UserSearchRequest request) {
+        Specification<User> spec =
+                Specification.where(UserSpecifications.hasKeyword(request.getSearch()))
+                        .and(UserSpecifications.isActive(request.getIsActive()));
+        return userRepository.findAll(spec, request.toPageable()).map(userMapper::toUserResponse);
     }
 
     private User findUserById(UUID userId) {

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import jakarta.validation.Valid;
 
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;
@@ -13,6 +14,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.dto.ApiResponse;
 import spring.abtechzone.modules.user.dto.request.UserCreationRequest;
+import spring.abtechzone.modules.user.dto.request.UserSearchRequest;
 import spring.abtechzone.modules.user.dto.request.UserUpdateRequest;
 import spring.abtechzone.modules.user.dto.response.UserResponse;
 import spring.abtechzone.modules.user.entity.User;
@@ -35,9 +37,10 @@ public class UserController {
     }
 
     @GetMapping
-    ApiResponse<List<User>> getUsers() {
+    ApiResponse<Page<UserResponse>> getUsers(@Valid UserSearchRequest request) {
 
-        return ApiResponse.<List<User>>builder().result(userService.getUsers()).build();
+        return ApiResponse.<Page<UserResponse>>builder()
+                .result(userService.getUsers(request)).build();
     }
 
     @GetMapping("/{userId}")

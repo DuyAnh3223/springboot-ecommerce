@@ -8,8 +8,10 @@ import java.util.UUID;
 
 import jakarta.persistence.*;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import org.hibernate.annotations.ColumnDefault;
 import spring.abtechzone.modules.auth.entity.UserRole;
 
 @Entity
@@ -36,7 +38,7 @@ public class User {
 
     String firstName;
     String lastName;
-    boolean isActive;
+    boolean isActive = true;
     String phone;
 
     @Column(name = "email_verified_at")
@@ -51,4 +53,12 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<UserAddress> userAddresses = new ArrayList<>();
+    @NotNull
+    @ColumnDefault("now()")
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
+    @NotNull
+    @ColumnDefault("now()")
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }

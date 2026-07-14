@@ -17,7 +17,8 @@ public class UserResponse {
     String username;
     String firstName;
     String lastName;
-    //     boolean delFlag;
-    //     boolean status;
+    Boolean active;
+    String email;
+
     Set<RoleResponse> roles;
 }
