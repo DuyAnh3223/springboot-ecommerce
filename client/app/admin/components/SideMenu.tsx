@@ -1,6 +1,5 @@
 'use client'
 
-import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -8,6 +7,7 @@ import {
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
+  LayoutGrid,
   Users, 
   Settings, 
   ArrowLeft 
@@ -29,6 +29,11 @@ const menuItems = [
     title: 'Đơn hàng',
     href: '/admin/orders',
     icon: ShoppingCart,
+  },
+  {
+    title: 'Danh mục',
+    href: '/admin/categories',
+    icon: LayoutGrid,
   },
   {
     title: 'Sản phẩm',
