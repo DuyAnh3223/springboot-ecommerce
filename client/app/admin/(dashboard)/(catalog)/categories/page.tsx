@@ -30,7 +30,7 @@ export default async function CategoriesPage({ searchParams }: PageProps) {
         : undefined;
   const parentId = params.parentId ? parseInt(params.parentId) : undefined;
   const page = params.page ? parseInt(params.page) : 1;
-  const size = params.size ? parseInt(params.size) : 20;
+  const size = params.size ? parseInt(params.size) : 10;
   const sortBy = params.sortBy || "name";
   const order = (params.order as "asc" | "desc") || "asc";
 
