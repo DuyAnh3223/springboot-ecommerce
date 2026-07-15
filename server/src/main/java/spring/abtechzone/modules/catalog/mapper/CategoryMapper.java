@@ -1,7 +1,6 @@
 package spring.abtechzone.modules.catalog.mapper;
 
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
 
 import spring.abtechzone.modules.catalog.dto.request.CategoryRequest;
 import spring.abtechzone.modules.catalog.dto.response.CategoryResponse;
@@ -12,6 +11,5 @@ public interface CategoryMapper {
 
     Category toCategory(CategoryRequest request);
 
-    @Mapping(source = "isActive", target = "active")
     CategoryResponse toCategoryResponse(Category category);
 }

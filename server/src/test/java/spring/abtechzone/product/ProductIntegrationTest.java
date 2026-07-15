@@ -31,6 +31,8 @@ import spring.abtechzone.modules.catalog.dto.request.ProductCreateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductUpdateRequest;
+import spring.abtechzone.modules.catalog.entity.Attribute;
+import spring.abtechzone.modules.catalog.repository.AttributeRepository;
 import spring.abtechzone.modules.catalog.repository.ProductRepository;
 
 @Slf4j
@@ -66,7 +68,7 @@ class ProductIntegrationTest {
     private spring.abtechzone.modules.catalog.repository.BrandRepository brandRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.AttributeDefinitionRepository attributeDefinitionRepository;
+    private AttributeRepository attributeRepository;
 
     private ProductCreateRequest request;
     private spring.abtechzone.modules.catalog.entity.Category seededCategory;
@@ -75,7 +77,7 @@ class ProductIntegrationTest {
     @BeforeEach
     void initData() {
         productRepository.deleteAll();
-        attributeDefinitionRepository.deleteAll();
+        attributeRepository.deleteAll();
         categoryRepository.deleteAll();
         brandRepository.deleteAll();
 
@@ -91,8 +93,7 @@ class ProductIntegrationTest {
         seededBrand.setSlug("test-brand");
         seededBrand = brandRepository.save(seededBrand);
 
-        spring.abtechzone.modules.catalog.entity.AttributeDefinition colorDef =
-                new spring.abtechzone.modules.catalog.entity.AttributeDefinition();
+        Attribute colorDef = new Attribute();
         colorDef.setCategory(seededCategory);
         colorDef.setCode("Color");
         colorDef.setName("Color");
@@ -101,7 +102,7 @@ class ProductIntegrationTest {
         colorDef.setIsVariantDefining(true);
         colorDef.setIsCompatibilityKey(false);
         colorDef.setSortOrder(1);
-        attributeDefinitionRepository.save(colorDef);
+        attributeRepository.save(colorDef);
 
         request = ProductCreateRequest.builder()
                 .name("Test Product NAME")

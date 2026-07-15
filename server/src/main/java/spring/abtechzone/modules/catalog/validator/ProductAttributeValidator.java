@@ -9,17 +9,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.catalog.entity.AttributeDefinition;
+import spring.abtechzone.modules.catalog.entity.Attribute;
 import spring.abtechzone.modules.catalog.entity.Product;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.AttributeDefinitionRepository;
+import spring.abtechzone.modules.catalog.repository.AttributeRepository;
 
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductAttributeValidator {
 
-    AttributeDefinitionRepository attributeDefinitionRepository;
+    AttributeRepository attributeRepository;
 
     public void validateProductAttributes(Product product) {
         validateAttributesMap(product.getCategory().getId(), product.getAttributes());
@@ -32,9 +32,9 @@ public class ProductAttributeValidator {
 
         toAllowedAttributes(attributes);
 
-        List<AttributeDefinition> definitions = attributeDefinitionRepository.findByCategoryId(categoryId);
-        Map<String, AttributeDefinition> defMap = new HashMap<>();
-        for (AttributeDefinition def : definitions) {
+        List<Attribute> definitions = attributeRepository.findByCategoryId(categoryId);
+        Map<String, Attribute> defMap = new HashMap<>();
+        for (Attribute def : definitions) {
             defMap.put(def.getCode(), def);
         }
 
@@ -42,7 +42,7 @@ public class ProductAttributeValidator {
             String key = entry.getKey();
             Object value = entry.getValue();
 
-            AttributeDefinition def = defMap.get(key);
+            Attribute def = defMap.get(key);
             if (def == null) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
@@ -51,7 +51,7 @@ public class ProductAttributeValidator {
         }
     }
 
-    private void validateType(AttributeDefinition def, Object value) {
+    private void validateType(Attribute def, Object value) {
         if (value == null) {
             return;
         }

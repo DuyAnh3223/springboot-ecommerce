@@ -55,6 +55,8 @@ public enum ErrorCode {
     RESERVATION_NOT_FOUND(1043, "Reservation not found", HttpStatus.NOT_FOUND),
     SYSTEM_BUSY(1044, "System busy, try again later", HttpStatus.BAD_REQUEST),
     SYSTEM_ERROR(1045, "System error, try again later", HttpStatus.BAD_REQUEST),
+    ATTRIBUTE_EXISTS(1046, "Attribute already exists", HttpStatus.BAD_REQUEST),
+    ATTRIBUTE_NOT_FOUND(1047, "Attribute not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

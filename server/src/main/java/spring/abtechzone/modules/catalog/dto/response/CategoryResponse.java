@@ -13,5 +13,5 @@ public class CategoryResponse {
     String name;
     String slug;
     String thumbnail;
-    Boolean active;
+    Boolean isActive;
 }
