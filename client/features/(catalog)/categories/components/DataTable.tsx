@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Loader2,
   Image as ImageIcon,
+  Sliders,
 } from "lucide-react";
 
 interface DataTableProps {
@@ -30,6 +31,7 @@ interface DataTableProps {
   onSort: (field: string) => void;
   onEdit: (category: CategoryResponse) => void;
   onDelete: (category: CategoryResponse) => void;
+  onManageAttributes?: (category: CategoryResponse) => void;
 }
 
 const DataTable = ({
@@ -40,6 +42,7 @@ const DataTable = ({
   onSort,
   onEdit,
   onDelete,
+  onManageAttributes,
 }: DataTableProps) => {
   const SortIcon = ({ field }: { field: string }) => {
     if (currentSortBy !== field)
@@ -181,6 +184,15 @@ const DataTable = ({
                         onClick={() => onEdit(cat)}
                       >
                         <Edit2 className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer size-8"
+                        title="Quản lý thuộc tính"
+                        onClick={() => onManageAttributes?.(cat)}
+                      >
+                        <Sliders className="size-3.5" />
                       </Button>
                       <Button
                         variant="ghost"

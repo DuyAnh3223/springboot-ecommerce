@@ -2,15 +2,16 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { CategoryResponse } from "../category.type";
+import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
 import { PageResponse } from "@/types/page.type";
-import { deleteCategoryAction } from "../actions";
-import { CategoryFormDialog } from "./CategoryFormDialog";
-import Header from "./Header";
-import TabsFilter from "./TabsFilter";
-import Toolbar from "./Toolbar";
-import DataTable from "./DataTable";
-import PaginationBar from "./PaginationBar";
+import { deleteCategoryAction } from "@/features/(catalog)/categories/actions";
+import { CategoryFormDialog } from "@/features/(catalog)/categories/components/CategoryFormDialog";
+import Header from "@/features/(catalog)/categories/components/Header";
+import AttributeDrawer from "@/features/(catalog)/attributes/components/AttributeDrawer";
+import TabsFilter from "@/features/(catalog)/categories/components/TabsFilter";
+import Toolbar from "@/features/(catalog)/categories/components/Toolbar";
+import DataTable from "@/features/(catalog)/categories/components/DataTable";
+import PaginationBar from "@/features/(catalog)/categories/components/PaginationBar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ export function CategoriesClient({ initialData }: CategoriesClientProps) {
     null
   );
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [attributeCategory, setAttributeCategory] = useState<CategoryResponse | null>(null);
 
   // Current query state from URL (default size: 10)
   const currentPage = parseInt(searchParams.get("page") || "1");
@@ -112,47 +114,66 @@ export function CategoriesClient({ initialData }: CategoriesClientProps) {
     router.refresh();
   };
 
+  const isDrawerOpen = !!attributeCategory;
+
   return (
-    <div className="space-y-2">
-      {/* Page Header */}
-      <Header onAdd={handleCreate} />
+    <div className="flex gap-4 items-start w-full relative">
+      {/* Left side: Category page (60% width if drawer open, 100% otherwise) */}
+      <div className={`transition-all duration-300 space-y-2 ${isDrawerOpen ? "w-[60%] shrink-0" : "w-full"}`}>
+        {/* Page Header */}
+        <Header onAdd={handleCreate} />
 
-      {/* Tabs Filter */}
-      <TabsFilter
-        currentIsActive={currentIsActive}
-        onChange={(val) => updateQueryParams({ isActive: val, page: 1 })}
-      />
-
-      {/* Search & Action Toolbar */}
-      <Toolbar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-      />
-
-      {/* Main Table Card */}
-      <Card className="border border-slate-100 shadow-xs bg-white overflow-hidden">
-        <DataTable
-          data={initialData.content}
-          isPending={isPending}
-          currentSortBy={currentSortBy}
-          currentOrder={currentOrder}
-          onSort={handleSort}
-          onEdit={handleEdit}
-          onDelete={(cat) => {
-            setDeleteTarget(cat);
-            setIsDeleteOpen(true);
-          }}
+        {/* Tabs Filter */}
+        <TabsFilter
+          currentIsActive={currentIsActive}
+          onChange={(val) => updateQueryParams({ isActive: val, page: 1 })}
         />
-      </Card>
 
-      <PaginationBar
-        initialData={initialData}
-        currentPage={currentPage}
-        currentSize={currentSize}
-        isPending={isPending}
-        onPageChange={(p) => updateQueryParams({ page: p })}
-        onSizeChange={(val) => updateQueryParams({ size: val, page: 1 })}
-      />
+        {/* Search & Action Toolbar */}
+        <Toolbar
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
+
+        {/* Main Table Card */}
+        <Card className="border border-slate-100 shadow-xs bg-white overflow-hidden">
+          <DataTable
+            data={initialData.content}
+            isPending={isPending}
+            currentSortBy={currentSortBy}
+            currentOrder={currentOrder}
+            onSort={handleSort}
+            onEdit={handleEdit}
+            onDelete={(cat) => {
+              setDeleteTarget(cat);
+              setIsDeleteOpen(true);
+            }}
+            onManageAttributes={(cat) => setAttributeCategory(cat)}
+          />
+        </Card>
+
+        <PaginationBar
+          initialData={initialData}
+          currentPage={currentPage}
+          currentSize={currentSize}
+          isPending={isPending}
+          onPageChange={(p) => updateQueryParams({ page: p })}
+          onSizeChange={(val) => updateQueryParams({ size: val, page: 1 })}
+        />
+      </div>
+
+      {/* Right side: Attribute Drawer panel (40% width) */}
+      <div className={`transition-all duration-300 sticky top-4 ${isDrawerOpen ? "w-[40%] shrink-0 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}>
+        {attributeCategory && (
+          <AttributeDrawer
+            category={attributeCategory}
+            open={isDrawerOpen}
+            onOpenChange={(open) => {
+              if (!open) setAttributeCategory(null);
+            }}
+          />
+        )}
+      </div>
 
       {/* Create / Edit Dialog */}
       <CategoryFormDialog
