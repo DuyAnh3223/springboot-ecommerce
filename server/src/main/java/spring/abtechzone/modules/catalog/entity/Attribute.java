@@ -1,5 +1,6 @@
 package spring.abtechzone.modules.catalog.entity;
 
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 import jakarta.persistence.*;
@@ -8,8 +9,6 @@ import jakarta.validation.constraints.Size;
 
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.OnDelete;
-import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 
 import lombok.Getter;
@@ -18,18 +17,12 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "attribute_definition")
+@Table(name = "attribute")
 public class Attribute {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     private Long id;
-
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
 
     @Size(max = 100)
     @NotNull
@@ -55,22 +48,12 @@ public class Attribute {
     private Map<String, Object> enumValues;
 
     @NotNull
-    @ColumnDefault("true")
-    @Column(name = "is_filterable", nullable = false)
-    private Boolean isFilterable;
+    @ColumnDefault("now()")
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
 
     @NotNull
-    @ColumnDefault("false")
-    @Column(name = "is_variant_defining", nullable = false)
-    private Boolean isVariantDefining;
-
-    @NotNull
-    @ColumnDefault("false")
-    @Column(name = "is_compatibility_key", nullable = false)
-    private Boolean isCompatibilityKey;
-
-    @NotNull
-    @ColumnDefault("0")
-    @Column(name = "sort_order", nullable = false)
-    private Integer sortOrder = 0;
+    @ColumnDefault("now()")
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
 }

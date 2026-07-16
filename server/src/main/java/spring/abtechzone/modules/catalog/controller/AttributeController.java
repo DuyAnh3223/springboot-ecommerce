@@ -29,11 +29,10 @@ public class AttributeController {
                 .build();
     }
 
-    @GetMapping("/category/{categoryId}")
-    ApiResponse<Page<AttributeResponse>> getAttributesByCategoryId(
-            @PathVariable("categoryId") Long categoryId, @Valid @ModelAttribute AttributeSearchRequest request) {
+    @GetMapping
+    ApiResponse<Page<AttributeResponse>> getGlobalAttributes(@Valid @ModelAttribute AttributeSearchRequest request) {
         return ApiResponse.<Page<AttributeResponse>>builder()
-                .result(attributeService.getAttributesByCategoryId(categoryId, request))
+                .result(attributeService.getGlobalAttributes(request))
                 .build();
     }
 

@@ -10,11 +10,20 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class AttributeResponse {
+public class CategoryAttributeResponse {
+
     Long id;
+
+    Long attributeId;
     String code;
     String name;
     String dataType;
     String unit;
     Map<String, Object> enumValues;
+
+    Boolean isFilterable;
+    Boolean isVariantDefining;
+    Boolean isCompatibilityKey;
+    Boolean isRequired;
+    Integer sortOrder;
 }

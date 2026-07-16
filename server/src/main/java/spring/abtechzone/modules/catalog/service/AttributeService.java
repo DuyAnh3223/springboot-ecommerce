@@ -1,7 +1,6 @@
 package spring.abtechzone.modules.catalog.service;
 
-import java.text.Normalizer;
-import java.util.Locale;
+import java.time.OffsetDateTime;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,10 +18,8 @@ import spring.abtechzone.modules.catalog.dto.request.AttributeRequest;
 import spring.abtechzone.modules.catalog.dto.request.AttributeSearchRequest;
 import spring.abtechzone.modules.catalog.dto.response.AttributeResponse;
 import spring.abtechzone.modules.catalog.entity.Attribute;
-import spring.abtechzone.modules.catalog.entity.Category;
 import spring.abtechzone.modules.catalog.mapper.AttributeMapper;
 import spring.abtechzone.modules.catalog.repository.AttributeRepository;
-import spring.abtechzone.modules.catalog.repository.CategoryRepository;
 import spring.abtechzone.modules.catalog.repository.specification.AttributeSpecifications;
 
 @Service
@@ -34,84 +31,58 @@ public class AttributeService {
 
     AttributeRepository attributeRepository;
     AttributeMapper attributeMapper;
-    CategoryRepository categoryRepository;
 
-    @Transactional
-    public AttributeResponse createAttributeDefinition(AttributeRequest attributeRequest) {
-        String code = convertNametoCode(attributeRequest.getName());
-        boolean existed = attributeRepository.existsByCode(code);
-        if (existed) {
+    public AttributeResponse createAttributeDefinition(AttributeRequest request) {
+        if (attributeRepository.existsByCode(request.getCode())) {
             throw new AppException(ErrorCode.ATTRIBUTE_EXISTS);
         }
 
-        Category category = categoryRepository
-                .findById(attributeRequest.getCategoryId())
-                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-
-        Attribute attribute = attributeMapper.toAttribute(attributeRequest);
-        attribute.setCode(code);
-        attribute.setCategory(category);
-
+        Attribute attribute = attributeMapper.toAttribute(request);
+        attribute.setCreatedAt(OffsetDateTime.now());
+        attribute.setUpdatedAt(OffsetDateTime.now());
         attributeRepository.save(attribute);
-        return attributeMapper.toAttributeResponse(attribute);
-    }
 
-    private String convertNametoCode(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            return "";
-        }
-        String target = name.trim().toLowerCase(Locale.ROOT);
-        target = target.replace('đ', 'd');
-        target = Normalizer.normalize(target, Normalizer.Form.NFD);
-        target = target.replaceAll("\\p{M}", "");
-        target = target.replaceAll("[\\s\\-\\.]+", "_");
-        target = target.replaceAll("[^a-z0-9_]", "");
-        target = target.replaceAll("_+", "_");
-        target = target.replaceAll("^_+|_+$", "");
-        return target;
+        return attributeMapper.toAttributeResponse(attribute);
     }
 
     @PreAuthorize("permitAll()")
     @Transactional(readOnly = true)
-    public Page<AttributeResponse> getAttributesByCategoryId(Long categoryId, AttributeSearchRequest request) {
-        Specification<Attribute> spec = Specification.where(AttributeSpecifications.hasCategoryId(categoryId))
-                .and(AttributeSpecifications.hasKeyword(request.getKeyword()))
-                .and(AttributeSpecifications.isVariantDefining(request.getIsVariantDefining()))
-                .and(AttributeSpecifications.isCompatibilityKey(request.getIsCompatibilityKey()))
-                .and(AttributeSpecifications.isFilterable(request.getIsFilterable()));
+    public Page<AttributeResponse> getGlobalAttributes(AttributeSearchRequest request) {
+        Specification<Attribute> spec = Specification.where(AttributeSpecifications.hasKeyword(request.getKeyword()));
 
         return attributeRepository.findAll(spec, request.toPageable()).map(attributeMapper::toAttributeResponse);
     }
 
     @PreAuthorize("permitAll()")
-    @Transactional(readOnly = true)
-    public AttributeResponse getAttribute(Long id) {
-        return attributeMapper.toAttributeResponse(
-                attributeRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND)));
-    }
-
-    @Transactional
-    public AttributeResponse updateAttribute(Long id, AttributeRequest request) {
-        Attribute attribute =
-                attributeRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND));
-
-        attributeMapper.updateAttribute(attribute, request);
-
-        if (request.getCategoryId() != null) {
-            Category category = categoryRepository
-                    .findById(request.getCategoryId())
-                    .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-            attribute.setCategory(category);
-        }
-
-        attributeRepository.save(attribute);
+    public AttributeResponse getAttribute(Long attributeId) {
+        Attribute attribute = attributeRepository
+                .findById(attributeId)
+                .orElseThrow(() -> new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND));
         return attributeMapper.toAttributeResponse(attribute);
     }
 
-    @Transactional
-    public void deleteAttribute(Long id) {
-        Attribute attribute =
-                attributeRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND));
-        attributeRepository.delete(attribute);
+    public AttributeResponse updateAttribute(Long attributeId, AttributeRequest request) {
+        Attribute attribute = attributeRepository
+                .findById(attributeId)
+                .orElseThrow(() -> new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND));
+
+        // Kiểm tra code trùng với attribute khác
+        if (attributeRepository.existsByCodeAndIdNot(request.getCode(), attributeId)) {
+            throw new AppException(ErrorCode.ATTRIBUTE_EXISTS);
+        }
+
+        attributeMapper.updateAttribute(attribute, request);
+        attribute.setUpdatedAt(OffsetDateTime.now());
+        attributeRepository.save(attribute);
+
+        return attributeMapper.toAttributeResponse(attribute);
+    }
+
+    public void deleteAttribute(Long attributeId) {
+        if (!attributeRepository.existsById(attributeId)) {
+            throw new AppException(ErrorCode.ATTRIBUTE_NOT_FOUND);
+        }
+        attributeRepository.deleteById(attributeId);
+        log.info("Deleted attribute id={}", attributeId);
     }
 }

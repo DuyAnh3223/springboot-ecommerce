@@ -57,6 +57,8 @@ public enum ErrorCode {
     SYSTEM_ERROR(1045, "System error, try again later", HttpStatus.BAD_REQUEST),
     ATTRIBUTE_EXISTS(1046, "Attribute already exists", HttpStatus.BAD_REQUEST),
     ATTRIBUTE_NOT_FOUND(1047, "Attribute not found", HttpStatus.NOT_FOUND),
+    CATEGORY_ATTRIBUTE_ALREADY_ASSIGNED(1048, "Attribute is already assigned to this category", HttpStatus.CONFLICT),
+    CATEGORY_ATTRIBUTE_NOT_FOUND(1049, "Category attribute assignment not found", HttpStatus.NOT_FOUND),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

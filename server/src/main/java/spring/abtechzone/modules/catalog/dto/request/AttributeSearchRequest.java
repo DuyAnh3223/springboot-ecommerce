@@ -19,9 +19,6 @@ import lombok.experimental.FieldDefaults;
 public class AttributeSearchRequest {
 
     String keyword;
-    Boolean isVariantDefining;
-    Boolean isFilterable;
-    Boolean isCompatibilityKey;
 
     @Min(value = 1, message = "CATEGORY_PAGE_INVALID")
     @Builder.Default
@@ -46,8 +43,7 @@ public class AttributeSearchRequest {
         return PageRequest.of(pageNumber - 1, pageSize, Sort.by(direction, normalizeSortField(sortBy)));
     }
 
-    private static final Set<String> SORT_FIELDS =
-            Set.of("code", "name", "isFilterable", "isVariantDefining", "isCompatibilityKey");
+    private static final Set<String> SORT_FIELDS = Set.of("code", "name", "dataType", "unit");
 
     private String normalizeSortField(String field) {
         return SORT_FIELDS.contains(field) ? field : "name";

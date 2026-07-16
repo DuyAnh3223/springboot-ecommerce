@@ -32,7 +32,9 @@ import spring.abtechzone.modules.catalog.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.catalog.dto.request.ProductUpdateRequest;
 import spring.abtechzone.modules.catalog.entity.Attribute;
+import spring.abtechzone.modules.catalog.entity.CategoryAttribute;
 import spring.abtechzone.modules.catalog.repository.AttributeRepository;
+import spring.abtechzone.modules.catalog.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.catalog.repository.ProductRepository;
 
 @Slf4j
@@ -70,6 +72,9 @@ class ProductIntegrationTest {
     @Autowired
     private AttributeRepository attributeRepository;
 
+    @Autowired
+    private CategoryAttributeRepository categoryAttributeRepository;
+
     private ProductCreateRequest request;
     private spring.abtechzone.modules.catalog.entity.Category seededCategory;
     private spring.abtechzone.modules.catalog.entity.Brand seededBrand;
@@ -77,6 +82,7 @@ class ProductIntegrationTest {
     @BeforeEach
     void initData() {
         productRepository.deleteAll();
+        categoryAttributeRepository.deleteAll();
         attributeRepository.deleteAll();
         categoryRepository.deleteAll();
         brandRepository.deleteAll();
@@ -93,16 +99,27 @@ class ProductIntegrationTest {
         seededBrand.setSlug("test-brand");
         seededBrand = brandRepository.save(seededBrand);
 
+        // Tạo attribute trong kho (chỉ định nghĩa)
         Attribute colorDef = new Attribute();
-        colorDef.setCategory(seededCategory);
         colorDef.setCode("Color");
         colorDef.setName("Color");
         colorDef.setDataType("STRING");
-        colorDef.setIsFilterable(true);
-        colorDef.setIsVariantDefining(true);
-        colorDef.setIsCompatibilityKey(false);
-        colorDef.setSortOrder(1);
-        attributeRepository.save(colorDef);
+        colorDef.setCreatedAt(java.time.OffsetDateTime.now());
+        colorDef.setUpdatedAt(java.time.OffsetDateTime.now());
+        colorDef = attributeRepository.save(colorDef);
+
+        // Gán attribute vào category kèm cấu hình
+        CategoryAttribute colorCa = new CategoryAttribute();
+        colorCa.setCategory(seededCategory);
+        colorCa.setAttribute(colorDef);
+        colorCa.setIsFilterable(true);
+        colorCa.setIsVariantDefining(true);
+        colorCa.setIsCompatibilityKey(false);
+        colorCa.setIsRequired(false);
+        colorCa.setSortOrder(1);
+        colorCa.setCreatedAt(java.time.OffsetDateTime.now());
+        colorCa.setUpdatedAt(java.time.OffsetDateTime.now());
+        categoryAttributeRepository.save(colorCa);
 
         request = ProductCreateRequest.builder()
                 .name("Test Product NAME")

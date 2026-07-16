@@ -2,6 +2,9 @@ package spring.abtechzone.modules.catalog.dto.request;
 
 import java.util.Map;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
@@ -11,14 +14,21 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AttributeRequest {
-    Long categoryId;
+
+    @NotBlank(message = "Attribute code is required")
+    @Size(max = 100, message = "Attribute code must be at most 100 characters")
     String code;
+
+    @NotBlank(message = "Attribute name is required")
+    @Size(max = 150, message = "Attribute name must be at most 150 characters")
     String name;
+
+    @NotBlank(message = "Data type is required")
+    @Size(max = 20, message = "Data type must be at most 20 characters")
     String dataType;
+
+    @Size(max = 20, message = "Unit must be at most 20 characters")
     String unit;
+
     Map<String, Object> enumValues;
-    Boolean isFilterable;
-    Boolean isVariantDefining;
-    Boolean isCompatibilityKey;
-    Integer sortOrder;
 }

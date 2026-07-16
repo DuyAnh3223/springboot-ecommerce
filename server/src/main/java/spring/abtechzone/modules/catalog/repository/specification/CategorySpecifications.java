@@ -22,12 +22,6 @@ public class CategorySpecifications {
         };
     }
 
-    /**
-     * Filter: parentId:
-     * - null  → No filter -> Return all
-     * - 0L    → get root category (parent IS NULL)
-     * - n > 0 → get child of category has id = n
-     */
     public static Specification<Category> hasParent(Long parentId) {
         return (root, query, cb) -> {
             if (parentId == null) return null;

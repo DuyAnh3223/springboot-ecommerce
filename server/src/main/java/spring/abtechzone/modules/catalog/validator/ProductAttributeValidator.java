@@ -10,16 +10,17 @@ import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.catalog.entity.Attribute;
+import spring.abtechzone.modules.catalog.entity.CategoryAttribute;
 import spring.abtechzone.modules.catalog.entity.Product;
 import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.AttributeRepository;
+import spring.abtechzone.modules.catalog.repository.CategoryAttributeRepository;
 
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductAttributeValidator {
 
-    AttributeRepository attributeRepository;
+    CategoryAttributeRepository categoryAttributeRepository;
 
     public void validateProductAttributes(Product product) {
         validateAttributesMap(product.getCategory().getId(), product.getAttributes());
@@ -32,10 +33,11 @@ public class ProductAttributeValidator {
 
         toAllowedAttributes(attributes);
 
-        List<Attribute> definitions = attributeRepository.findByCategoryId(categoryId);
+        List<CategoryAttribute> categoryAttributes =
+                categoryAttributeRepository.findByCategoryIdWithAttribute(categoryId);
         Map<String, Attribute> defMap = new HashMap<>();
-        for (Attribute def : definitions) {
-            defMap.put(def.getCode(), def);
+        for (CategoryAttribute ca : categoryAttributes) {
+            defMap.put(ca.getAttribute().getCode(), ca.getAttribute());
         }
 
         for (Map.Entry<String, Object> entry : attributes.entrySet()) {
