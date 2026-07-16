@@ -1,10 +1,9 @@
 import React from 'react';
 import { PageResponse } from "@/types/page.type";
-import { CategoryResponse } from "../category.type";
 import { Button } from "@/components/ui/button";
 
 interface PaginationBarProps {
-  initialData: PageResponse<CategoryResponse>;
+  initialData: PageResponse<any>;
   currentPage: number;
   currentSize: number;
   isPending: boolean;

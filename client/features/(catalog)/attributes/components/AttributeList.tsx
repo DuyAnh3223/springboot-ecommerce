@@ -47,24 +47,16 @@ export default function AttributeList({
               <span className="text-xs font-bold text-slate-800">
                 {attr.name}
               </span>
-              {attr.isFilterable && (
-                <span className="text-[9px] bg-slate-150 text-slate-700 font-medium px-1 rounded">
-                  Lọc
-                </span>
-              )}
-              {attr.isVariantDefining && (
-                <span className="text-[9px] bg-slate-150 text-slate-700 font-medium px-1 rounded">
-                  Biến thể
-                </span>
-              )}
-              {attr.isCompatibilityKey && (
-                <span className="text-[9px] bg-slate-150 text-slate-700 font-medium px-1 rounded">
-                  Tương thích
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-slate-500 font-mono">
+                {attr.code}
+              </span>
+              <span className="text-[10px] text-slate-300">•</span>
+              <span className="text-[10px] text-slate-500 font-bold">
+                {attr.dataType}
+              </span>
               {attr.dataType === "NUMBER" && attr.unit && (
                 <span className="text-[11px] text-slate-500 font-medium">
                   ({attr.unit})

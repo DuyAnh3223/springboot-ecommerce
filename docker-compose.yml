@@ -64,9 +64,14 @@ services:
     container_name: ecommerce-nextjs-client
     ports:
       - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
     environment:
       SPRING_API_URL: http://backend:8080/abtechzone
       WATCHPACK_POLLING: "true"
+    tty: true
+    stdin_open: true
     depends_on:
       - backend
     develop:
@@ -79,6 +84,8 @@ services:
             - .next/
         - action: rebuild
           path: ./client/package.json
+        - action: rebuild
+          path: ./client/package-lock.json
 
 volumes:
   postgres_data:

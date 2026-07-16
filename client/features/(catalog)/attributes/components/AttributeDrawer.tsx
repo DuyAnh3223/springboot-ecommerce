@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
-import { AttributeResponse } from "@/features/(catalog)/attributes/attribute.type";
+import { AttributeResponse, CategoryAttributeResponse } from "@/features/(catalog)/attributes/attribute.type";
 import { getAttributesAction } from "@/features/(catalog)/attributes/actions/get-attributes.action";
-import { createAttributeAction } from "@/features/(catalog)/attributes/actions/create-attribute.action";
-import { deleteAttributeAction } from "@/features/(catalog)/attributes/actions/delete-attribute.action";
-import AttributeList from "./AttributeList";
-import AttributeForm from "./AttributeForm";
+import { getGlobalAttributesAction } from "@/features/(catalog)/attributes/actions/get-global-attributes.action";
+import { assignCategoryAttributesAction } from "@/features/(catalog)/attributes/actions/assign-attributes.action";
+import { updateCategoryAttributeAction } from "@/features/(catalog)/attributes/actions/update-category-attribute.action";
+import { removeCategoryAttributeAction } from "@/features/(catalog)/attributes/actions/remove-category-attribute.action";
+import AttributeSearchSelect from "./AttributeSearchSelect";
+import CategoryAttributeList from "./CategoryAttributeList";
+import QuickCreateAttributeModal from "./QuickCreateAttributeModal";
 import { Button } from "@/components/ui/button";
 import {
   X,
@@ -23,47 +26,80 @@ interface AttributeDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface SelectedAttributeItem {
+  id?: number; // PK of category_attribute table
+  attributeId: number; // FK attribute id
+  name: string;
+  code: string;
+  dataType: string;
+  unit: string | null;
+  enumValues: any;
+  isFilterable: boolean;
+  isVariantDefining: boolean;
+  isCompatibilityKey: boolean;
+  isRequired: boolean;
+  sortOrder: number;
+  isNew: boolean;
+}
+
 export default function AttributeDrawer({
   category,
   open,
   onOpenChange,
 }: AttributeDrawerProps) {
-  const [attributes, setAttributes] = useState<AttributeResponse[]>([]);
+  const [originalAttributes, setOriginalAttributes] = useState<CategoryAttributeResponse[]>([]);
+  const [selectedItems, setSelectedItems] = useState<SelectedAttributeItem[]>([]);
+  const [globalAttributes, setGlobalAttributes] = useState<AttributeResponse[]>([]);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Form states
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [isCodeLocked, setIsCodeLocked] = useState(true);
-  const [dataType, setDataType] = useState<"STRING" | "NUMBER" | "BOOLEAN" | "ENUM">("STRING");
-  const [unit, setUnit] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
+  // Modal control
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
-  const [isFilterable, setIsFilterable] = useState(true);
-  const [isVariantDefining, setIsVariantDefining] = useState(false);
-  const [isCompatibilityKey, setIsCompatibilityKey] = useState(false);
-  const [sortOrder, setSortOrder] = useState(0);
-
-  // Load existing attributes
-  const fetchAttributes = async () => {
+  // Load existing category attributes & global attributes
+  const loadData = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getAttributesAction(category.id, {
-        size: 100, // Load all attributes
-        sortBy: "sortOrder",
-        order: "asc",
-      });
-      if (result.error) {
-        setError(result.error);
-      } else if (result.data) {
-        setAttributes(result.data.content || []);
+      const [catResult, globalResult] = await Promise.all([
+        getAttributesAction(category.id),
+        getGlobalAttributesAction({ size: 100 }),
+      ]);
+
+      if (catResult.error) {
+        setError(catResult.error);
+        return;
+      }
+      
+      const catAttrs = (catResult.data || []) as CategoryAttributeResponse[];
+      setOriginalAttributes(catAttrs);
+      
+      // Map existing category attributes to drawer items
+      setSelectedItems(
+        catAttrs.map((attr) => ({
+          id: attr.id,
+          attributeId: attr.attributeId,
+          name: attr.name,
+          code: attr.code,
+          dataType: attr.dataType,
+          unit: attr.unit,
+          enumValues: attr.enumValues,
+          isFilterable: attr.isFilterable,
+          isVariantDefining: attr.isVariantDefining,
+          isCompatibilityKey: attr.isCompatibilityKey,
+          isRequired: attr.isRequired,
+          sortOrder: attr.sortOrder,
+          isNew: false,
+        }))
+      );
+
+      if (globalResult.data) {
+        setGlobalAttributes(globalResult.data.content || []);
       }
     } catch (err: any) {
-      console.error("Fetch attributes error:", err);
+      console.error("Load attributes drawer data error:", err);
       setError("Không thể tải danh sách thuộc tính.");
     } finally {
       setIsLoading(false);
@@ -72,119 +108,119 @@ export default function AttributeDrawer({
 
   useEffect(() => {
     if (open) {
-      fetchAttributes();
-      resetForm();
+      loadData();
     }
   }, [category.id, open]);
 
-  const resetForm = () => {
-    setName("");
-    setCode("");
-    setIsCodeLocked(true);
-    setDataType("STRING");
-    setUnit("");
-    setTags([]);
-    setTagInput("");
-    setIsFilterable(true);
-    setIsVariantDefining(false);
-    setIsCompatibilityKey(false);
-    setSortOrder(0);
-    setError(null);
-  };
-
-  // Auto-generate code from name
-  const convertToSnakeCase = (str: string) => {
-    return str
-      .trim()
-      .toLowerCase()
-      .replace(/đ/g, "d")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/[\s\-\.]+/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "");
-  };
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setName(val);
-    if (isCodeLocked) {
-      setCode(convertToSnakeCase(val));
-    }
-  };
-
-  // Add enum tag
-  const handleTagAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      const cleaned = tagInput.trim();
-      if (cleaned && !tags.includes(cleaned)) {
-        setTags([...tags, cleaned]);
-      }
-      setTagInput("");
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
-  };
-
-  // Delete attribute
-  const handleDeleteAttribute = async (attrId: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa thuộc tính này?")) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await deleteAttributeAction(attrId);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        fetchAttributes();
-      }
-    });
-  };
-
-  // Save attribute
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    
-    if (!name.trim()) {
-      setError("Tên thuộc tính không được để trống.");
-      return;
-    }
-
-    setError(null);
-    
-    // Map list tags to object structure for Enum Map validation
-    const enumValuesMap =
-      dataType === "ENUM"
-        ? tags.reduce((acc, tag) => {
-            acc[tag] = true;
-            return acc;
-          }, {} as Record<string, boolean>)
-        : null;
-
-    const payload = {
-      categoryId: category.id,
-      name: name.trim(),
-      code: code.trim() || convertToSnakeCase(name),
-      dataType,
-      unit: dataType === "NUMBER" && unit.trim() ? unit.trim() : null,
-      enumValues: enumValuesMap,
-      isFilterable,
-      isVariantDefining,
-      isCompatibilityKey,
-      sortOrder,
+  const handleSelectAttribute = (gAttr: AttributeResponse) => {
+    const newItem: SelectedAttributeItem = {
+      attributeId: gAttr.id,
+      name: gAttr.name,
+      code: gAttr.code,
+      dataType: gAttr.dataType,
+      unit: gAttr.unit,
+      enumValues: gAttr.enumValues,
+      isFilterable: true,
+      isVariantDefining: false,
+      isCompatibilityKey: false,
+      isRequired: false,
+      sortOrder: selectedItems.length,
+      isNew: true,
     };
+    setSelectedItems([...selectedItems, newItem]);
+  };
 
+  const handleRemoveItem = (code: string) => {
+    setSelectedItems(selectedItems.filter((item) => item.code !== code));
+  };
+
+  const handleToggleCheckbox = (
+    code: string,
+    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired"
+  ) => {
+    setSelectedItems(
+      selectedItems.map((item) =>
+        item.code === code ? { ...item, [field]: !item[field] } : item
+      )
+    );
+  };
+
+  const handleQuickCreateSuccess = (newAttr: AttributeResponse) => {
+    // Add to global list cache
+    setGlobalAttributes((prev) => [...prev, newAttr]);
+    // Immediately select it
+    handleSelectAttribute(newAttr);
+  };
+
+  // Perform updates
+  const handleSave = () => {
+    setError(null);
     startTransition(async () => {
-      const result = await createAttributeAction(payload);
-      if (result.error) {
-        setError(result.error);
-      } else {
-        resetForm();
-        fetchAttributes();
+      try {
+        // 1. Items to unassign (present originally but removed now)
+        const toUnassign = originalAttributes.filter(
+          (orig) => !selectedItems.some((sel) => sel.attributeId === orig.attributeId)
+        );
+        for (const item of toUnassign) {
+          const res = await removeCategoryAttributeAction(category.id, item.attributeId);
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+        }
+
+        // 2. Items to assign (newly selected from global list)
+        const toAssign = selectedItems.filter((sel) => sel.isNew || !sel.id);
+        if (toAssign.length > 0) {
+          const assignRequests = toAssign.map((item) => ({
+            attributeId: item.attributeId,
+            isFilterable: item.isFilterable,
+            isVariantDefining: item.isVariantDefining,
+            isCompatibilityKey: item.isCompatibilityKey,
+            isRequired: item.isRequired,
+            sortOrder: item.sortOrder,
+          }));
+          const res = await assignCategoryAttributesAction(category.id, assignRequests);
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+        }
+
+        // 3. Items to update (existed originally, still selected, but config changed)
+        const toUpdate = selectedItems.filter((sel) => {
+          if (sel.isNew || !sel.id) return false;
+          const orig = originalAttributes.find((o) => o.id === sel.id);
+          if (!orig) return false;
+          return (
+            orig.isFilterable !== sel.isFilterable ||
+            orig.isVariantDefining !== sel.isVariantDefining ||
+            orig.isCompatibilityKey !== sel.isCompatibilityKey ||
+            orig.isRequired !== sel.isRequired ||
+            orig.sortOrder !== sel.sortOrder
+          );
+        });
+        for (const item of toUpdate) {
+          const res = await updateCategoryAttributeAction(category.id, item.id!, {
+            attributeId: item.attributeId,
+            isFilterable: item.isFilterable,
+            isVariantDefining: item.isVariantDefining,
+            isCompatibilityKey: item.isCompatibilityKey,
+            isRequired: item.isRequired,
+            sortOrder: item.sortOrder,
+          });
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+        }
+
+        // Reload data from backend to reset states
+        await loadData();
+        onOpenChange(false);
+      } catch (err: any) {
+        console.error("Save category attributes error:", err);
+        setError("Có lỗi xảy ra khi lưu cấu hình thuộc tính.");
       }
     });
   };
@@ -197,9 +233,9 @@ export default function AttributeDrawer({
           <Sliders className="size-5 text-slate-700" />
           <div>
             <h2 className="text-sm font-bold text-slate-900 leading-tight">
-              Quản lý thuộc tính
+              Cấu hình thuộc tính danh mục
             </h2>
-            <span className="text-xs text-slate-500 font-medium font-mono">
+            <span className="text-xs text-shop_light_green font-bold">
               {category.name}
             </span>
           </div>
@@ -212,64 +248,34 @@ export default function AttributeDrawer({
         </button>
       </div>
 
-      {/* Scrollable Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 pb-20">
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 flex flex-col pb-20 relative">
         {error && (
-          <div className="flex items-center gap-2 p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg shrink-0">
             <AlertCircle className="size-4 shrink-0" />
             <p className="font-semibold">{error}</p>
           </div>
         )}
 
-        {/* Part 1: List of Attributes */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Danh sách thuộc tính
+        {/* Search & Select input component */}
+        <AttributeSearchSelect
+          globalAttributes={globalAttributes}
+          selectedItems={selectedItems}
+          onSelect={handleSelectAttribute}
+          onQuickCreateClick={() => setQuickCreateOpen(true)}
+        />
+
+        {/* Selected Attributes List component */}
+        <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Thuộc tính của danh mục ({selectedItems.length})
           </h3>
-          <AttributeList
-            attributes={attributes}
+
+          <CategoryAttributeList
+            selectedItems={selectedItems}
             isLoading={isLoading}
-            isPending={isPending}
-            onDelete={handleDeleteAttribute}
-          />
-        </div>
-
-        <hr className="border-slate-100" />
-
-        {/* Part 2: Form to Add New Attribute */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Thêm thuộc tính mới
-          </h3>
-          <AttributeForm
-            name={name}
-            onNameChange={handleNameChange}
-            code={code}
-            onCodeChange={(e) => setCode(e.target.value)}
-            isCodeLocked={isCodeLocked}
-            onToggleCodeLock={() => setIsCodeLocked(!isCodeLocked)}
-            dataType={dataType}
-            onDataTypeChange={(type) => {
-              setDataType(type);
-              setUnit("");
-              setTags([]);
-            }}
-            unit={unit}
-            onUnitChange={setUnit}
-            tags={tags}
-            tagInput={tagInput}
-            onTagInputChange={setTagInput}
-            onTagAdd={handleTagAdd}
-            onTagRemove={handleRemoveTag}
-            isFilterable={isFilterable}
-            onFilterableChange={setIsFilterable}
-            isVariantDefining={isVariantDefining}
-            onVariantDefiningChange={setIsVariantDefining}
-            isCompatibilityKey={isCompatibilityKey}
-            onCompatibilityKeyChange={setIsCompatibilityKey}
-            sortOrder={sortOrder}
-            onSortOrderChange={setSortOrder}
-            onSaveSubmit={handleSave}
+            onRemove={handleRemoveItem}
+            onToggleCheckbox={handleToggleCheckbox}
           />
         </div>
       </div>
@@ -286,8 +292,8 @@ export default function AttributeDrawer({
         </Button>
         <Button
           type="submit"
-          onClick={() => handleSave()}
-          disabled={isPending}
+          onClick={handleSave}
+          disabled={isPending || isLoading}
           className="h-9 bg-shop_dark_green hover:bg-shop_btn_dark_green text-white text-xs font-bold px-4 cursor-pointer rounded-lg shadow-sm"
         >
           {isPending ? (
@@ -298,11 +304,18 @@ export default function AttributeDrawer({
           ) : (
             <>
               <Check className="mr-1.5 size-3.5" />
-              Lưu lại
+              Lưu cấu hình
             </>
           )}
         </Button>
       </div>
+
+      {/* Quick Create Modal component */}
+      <QuickCreateAttributeModal
+        open={quickCreateOpen}
+        onOpenChange={setQuickCreateOpen}
+        onSuccess={handleQuickCreateSuccess}
+      />
     </div>
   );
 }

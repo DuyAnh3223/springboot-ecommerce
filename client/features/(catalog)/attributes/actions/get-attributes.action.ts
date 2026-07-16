@@ -1,20 +1,16 @@
 "use server";
 
-import { getAttributesByCategoryId as getAttributesByCategoryIdService } from "../services/attribute.service";
-import { GetAttributesParams } from "../attribute.type";
+import { getCategoryAttributes } from "../services/attribute.service";
 
-export async function getAttributesAction(
-  categoryId: number,
-  params?: GetAttributesParams,
-) {
+export async function getAttributesAction(categoryId: number) {
   try {
-    const result = await getAttributesByCategoryIdService(categoryId, params);
+    const result = await getCategoryAttributes(categoryId);
     return { success: true, data: result };
   } catch (error: any) {
-    console.error("Get attributes action error:", error);
+    console.error("Get category attributes action error:", error);
     const backendMessage = error.response?.data?.message || error.message;
     return {
-      error: backendMessage || "Tải danh sách thuộc tính thất bại.",
+      error: backendMessage || "Tải danh sách thuộc tính danh mục thất bại.",
     };
   }
 }

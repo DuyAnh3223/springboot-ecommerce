@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { PageResponse, UserResponse } from "../user.type"
+import { UserResponse } from "../user.type"
+import { PageResponse } from "@/types/page.type"
 import { deleteUserAction } from "../actions"
 import { CustomerEditDialog } from "./CustomerEditDialog"
 import { Card, CardContent } from "@/components/ui/card"

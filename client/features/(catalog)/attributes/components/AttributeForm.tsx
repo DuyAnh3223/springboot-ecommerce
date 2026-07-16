@@ -20,14 +20,6 @@ interface AttributeFormProps {
   onTagInputChange: (val: string) => void;
   onTagAdd: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onTagRemove: (tag: string) => void;
-  isFilterable: boolean;
-  onFilterableChange: (checked: boolean) => void;
-  isVariantDefining: boolean;
-  onVariantDefiningChange: (checked: boolean) => void;
-  isCompatibilityKey: boolean;
-  onCompatibilityKeyChange: (checked: boolean) => void;
-  sortOrder: number;
-  onSortOrderChange: (val: number) => void;
   onSaveSubmit: (e: React.FormEvent) => void;
 }
 
@@ -47,14 +39,6 @@ export default function AttributeForm({
   onTagInputChange,
   onTagAdd,
   onTagRemove,
-  isFilterable,
-  onFilterableChange,
-  isVariantDefining,
-  onVariantDefiningChange,
-  isCompatibilityKey,
-  onCompatibilityKeyChange,
-  sortOrder,
-  onSortOrderChange,
   onSaveSubmit,
 }: AttributeFormProps) {
   return (
@@ -166,58 +150,6 @@ export default function AttributeForm({
           </div>
         </div>
       )}
-
-      {/* Checkbox Flags */}
-      <div className="space-y-2 pt-1">
-        <label className="text-xs font-semibold text-slate-650 mb-1 block">
-          Cấu hình thuộc tính
-        </label>
-
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isFilterable}
-              onChange={(e) => onFilterableChange(e.target.checked)}
-              className="rounded border-slate-350 accent-shop_dark_green cursor-pointer size-4"
-            />
-            Dùng làm bộ lọc tìm kiếm
-          </label>
-
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isVariantDefining}
-              onChange={(e) => onVariantDefiningChange(e.target.checked)}
-              className="rounded border-slate-350 accent-shop_dark_green cursor-pointer size-4"
-            />
-            Thuộc tính phân loại biến thể/SKU
-          </label>
-
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isCompatibilityKey}
-              onChange={(e) => onCompatibilityKeyChange(e.target.checked)}
-              className="rounded border-slate-350 accent-shop_dark_green cursor-pointer size-4"
-            />
-            Kiểm tra độ tương thích thiết bị
-          </label>
-        </div>
-      </div>
-
-      {/* Sort Order */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-650">
-          Thứ tự hiển thị
-        </label>
-        <Input
-          type="number"
-          value={sortOrder}
-          onChange={(e) => onSortOrderChange(parseInt(e.target.value) || 0)}
-          className="h-9 border-slate-200 focus-visible:ring-slate-300 text-xs bg-white w-24"
-        />
-      </div>
     </form>
   );
 }
