@@ -17,12 +17,6 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
 
     boolean existsBySkuAndIdNot(String sku, Long id);
 
-    @Query(value = "SELECT COUNT(*) > 0 FROM product_sku WHERE sku = :sku", nativeQuery = true)
-    boolean existsBySkuIncludingDeleted(@Param("sku") String sku);
-
-    @Query(value = "SELECT COUNT(*) > 0 FROM product_sku WHERE sku = :sku AND id != :id", nativeQuery = true)
-    boolean existsBySkuAndIdNotIncludingDeleted(@Param("sku") String sku, @Param("id") Long id);
-
     @Override
     @EntityGraph(attributePaths = "product")
     Optional<ProductSku> findById(Long id);

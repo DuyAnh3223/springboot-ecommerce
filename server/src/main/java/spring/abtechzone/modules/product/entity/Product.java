@@ -37,7 +37,7 @@ public class Product {
     @Column(nullable = false)
     String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     String slug;
 
     String thumbnail;

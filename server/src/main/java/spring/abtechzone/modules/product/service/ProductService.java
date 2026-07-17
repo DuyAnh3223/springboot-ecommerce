@@ -66,7 +66,7 @@ public class ProductService {
 
         // Validate Slug uniqueness
         String slug = product.generateSlug(product.getName());
-        if (productRepository.existsBySlugIncludingDeleted(slug)) {
+        if (productRepository.existsBySlug(slug)) {
             throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
         }
 
@@ -77,7 +77,7 @@ public class ProductService {
             product = productRepository.save(product);
         } catch (DataIntegrityViolationException ex) {
             if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_slug_key".equals(cve.getConstraintName())) {
+                    && "product_slug_active_uq".equals(cve.getConstraintName())) {
                 throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
             }
             throw ex;
@@ -109,12 +109,11 @@ public class ProductService {
 
         validateProductFieldsForUpdate(request);
 
-        if (request.getCategoryId() != null) {
-            Category category = categoryRepository
-                    .findById(request.getCategoryId())
-                    .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-            product.setCategory(category);
+        if (request.getCategoryId() != null
+                && !request.getCategoryId().equals(product.getCategory().getId())) {
+            throw new AppException(ErrorCode.PRODUCT_CATEGORY_CANNOT_BE_CHANGED);
         }
+
         if (request.getBrandId() != null) {
             Brand brand = brandRepository.findById(request.getBrandId()).orElse(null);
             product.setBrand(brand);
@@ -125,7 +124,7 @@ public class ProductService {
                 && !request.getName().isBlank()
                 && !request.getName().equals(product.getName())) {
             String newSlug = product.generateSlug(request.getName());
-            if (productRepository.existsBySlugAndIdNotIncludingDeleted(newSlug, product.getId())) {
+            if (productRepository.existsBySlugAndIdNot(newSlug, product.getId())) {
                 throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
             }
         }
@@ -140,7 +139,7 @@ public class ProductService {
             product = productRepository.save(product);
         } catch (DataIntegrityViolationException ex) {
             if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_slug_key".equals(cve.getConstraintName())) {
+                    && "product_slug_active_uq".equals(cve.getConstraintName())) {
                 throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
             }
             throw ex;
@@ -173,8 +172,7 @@ public class ProductService {
                 throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
             }
 
-            if (!skus.add(skuRequest.getSku())
-                    || productSkuRepository.existsBySkuIncludingDeleted(skuRequest.getSku())) {
+            if (!skus.add(skuRequest.getSku()) || productSkuRepository.existsBySku(skuRequest.getSku())) {
                 throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
             }
         }

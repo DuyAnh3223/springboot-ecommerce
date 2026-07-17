@@ -31,7 +31,7 @@ public class ProductSku {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     String sku;
 
     @Column(nullable = false)
@@ -101,5 +101,6 @@ public class ProductSku {
 
     public void softDelete() {
         this.deletedAt = OffsetDateTime.now();
+        this.isActive = false;
     }
 }

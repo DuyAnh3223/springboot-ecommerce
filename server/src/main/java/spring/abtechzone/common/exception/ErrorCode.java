@@ -68,6 +68,9 @@ public enum ErrorCode {
     ATTRIBUTE_VALUE_INVALID(1056, "Attribute value is invalid for the defined type", HttpStatus.BAD_REQUEST),
     PRODUCT_CATEGORY_REQUIRED(1057, "Product must belong to a category", HttpStatus.BAD_REQUEST),
     VARIANT_ATTRIBUTE_MUST_BE_ENUM(1058, "Variant-defining attribute must have ENUM data type", HttpStatus.BAD_REQUEST),
+    PRODUCT_MUST_HAVE_ACTIVE_SKU(1059, "Published product must have at least one active SKU", HttpStatus.BAD_REQUEST),
+    PRODUCT_CATEGORY_CANNOT_BE_CHANGED(
+            1060, "Product category cannot be changed after creation", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

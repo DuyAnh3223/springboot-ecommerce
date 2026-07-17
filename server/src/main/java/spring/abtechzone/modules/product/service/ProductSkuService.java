@@ -74,7 +74,7 @@ public class ProductSkuService {
             sku = productSkuRepository.save(sku);
         } catch (DataIntegrityViolationException ex) {
             if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_sku_sku_key".equals(cve.getConstraintName())) {
+                    && "product_sku_sku_active_uq".equals(cve.getConstraintName())) {
                 throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
             }
             throw ex;
@@ -108,7 +108,7 @@ public class ProductSkuService {
             sku = productSkuRepository.save(sku);
         } catch (DataIntegrityViolationException ex) {
             if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_sku_sku_key".equals(cve.getConstraintName())) {
+                    && "product_sku_sku_active_uq".equals(cve.getConstraintName())) {
                 throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
             }
             throw ex;
@@ -121,6 +121,17 @@ public class ProductSkuService {
     public void deleteSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
+
+        Product product = sku.getProduct();
+        if (product.isPublished()) {
+            long remainingActive = product.getSkus().stream()
+                    .filter(s -> !s.getId().equals(skuId) && Boolean.TRUE.equals(s.getIsActive()))
+                    .count();
+            if (remainingActive == 0) {
+                throw new AppException(ErrorCode.PRODUCT_MUST_HAVE_ACTIVE_SKU);
+            }
+        }
+
         sku.softDelete();
         productSkuRepository.save(sku);
     }
@@ -130,7 +141,7 @@ public class ProductSkuService {
             throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
         }
 
-        if (productSkuRepository.existsBySkuIncludingDeleted(sku)) {
+        if (productSkuRepository.existsBySku(sku)) {
             throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
         }
     }
@@ -144,7 +155,7 @@ public class ProductSkuService {
             throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
         }
 
-        if (productSkuRepository.existsBySkuAndIdNotIncludingDeleted(sku, skuId)) {
+        if (productSkuRepository.existsBySkuAndIdNot(sku, skuId)) {
             throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
         }
     }
