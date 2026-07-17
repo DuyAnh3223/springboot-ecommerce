@@ -577,4 +577,171 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.code").value(1018))
                 .andExpect(jsonPath("$.message").value("Product slug already exists"));
     }
+
+    @Test
+    void previewSkus_validAttributes_returnsCartesianProduct() throws Exception {
+        spring.abtechzone.modules.product.entity.Product product =
+                new spring.abtechzone.modules.product.entity.Product();
+        product.setName("Preview Test Product");
+        product.setSlug("preview-test-product");
+        product.setCategory(seededCategory);
+        product.setBrand(seededBrand);
+        product.setDraft(true);
+        product.setPublished(false);
+        product = productRepository.save(product);
+
+        Attribute variantAttr = new Attribute();
+        variantAttr.setName("Color");
+        variantAttr.setCode("COLOR");
+        variantAttr.setDataType("ENUM");
+        variantAttr.setEnumValues(List.of(Map.of("value", "Red"), Map.of("value", "Blue")));
+        variantAttr = attributeRepository.save(variantAttr);
+
+        CategoryAttribute ca = new CategoryAttribute();
+        ca.setCategory(seededCategory);
+        ca.setAttribute(variantAttr);
+        ca.setIsVariantDefining(true);
+        ca.setIsMultiValue(false);
+        ca.setIsRequired(true);
+        ca.setCreatedAt(java.time.OffsetDateTime.now());
+        ca.setUpdatedAt(java.time.OffsetDateTime.now());
+        categoryAttributeRepository.save(ca);
+
+        spring.abtechzone.modules.product.dto.request.SkuPreviewRequest previewRequest =
+                spring.abtechzone.modules.product.dto.request.SkuPreviewRequest.builder()
+                        .attributes(Map.of("COLOR", List.of("Red", "Blue")))
+                        .build();
+
+        mockMvc.perform(post("/products/" + product.getId() + "/skus/preview")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(previewRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result[0].attributes.COLOR").value("Red"))
+                .andExpect(jsonPath("$.result[1].attributes.COLOR").value("Blue"));
+    }
+
+    @Test
+    void createSkusBulk_validRequests_savesSuccessfully() throws Exception {
+        spring.abtechzone.modules.product.entity.Product product =
+                new spring.abtechzone.modules.product.entity.Product();
+        product.setName("Bulk Test Product");
+        product.setSlug("bulk-test-product");
+        product.setCategory(seededCategory);
+        product.setBrand(seededBrand);
+        product.setDraft(true);
+        product.setPublished(false);
+        product = productRepository.save(product);
+
+        Attribute variantAttr = new Attribute();
+        variantAttr.setName("Size");
+        variantAttr.setCode("SIZE");
+        variantAttr.setDataType("ENUM");
+        variantAttr.setEnumValues(List.of(Map.of("value", "M"), Map.of("value", "L")));
+        variantAttr = attributeRepository.save(variantAttr);
+
+        CategoryAttribute ca = new CategoryAttribute();
+        ca.setCategory(seededCategory);
+        ca.setAttribute(variantAttr);
+        ca.setIsVariantDefining(true);
+        ca.setIsMultiValue(false);
+        ca.setIsRequired(true);
+        ca.setCreatedAt(java.time.OffsetDateTime.now());
+        ca.setUpdatedAt(java.time.OffsetDateTime.now());
+        categoryAttributeRepository.save(ca);
+
+        List<ProductSkuCreateRequest> bulkRequests = List.of(
+                ProductSkuCreateRequest.builder()
+                        .productId(product.getId())
+                        .sku("BULK-M")
+                        .price(BigDecimal.valueOf(100))
+                        .stock(10)
+                        .attributes(Map.of("SIZE", "M"))
+                        .build(),
+                ProductSkuCreateRequest.builder()
+                        .productId(product.getId())
+                        .sku("BULK-L")
+                        .price(BigDecimal.valueOf(120))
+                        .stock(15)
+                        .attributes(Map.of("SIZE", "L"))
+                        .build());
+
+        mockMvc.perform(post("/products/" + product.getId() + "/skus/bulk")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bulkRequests)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").isArray())
+                .andExpect(jsonPath("$.result[0].sku").value("BULK-M"))
+                .andExpect(jsonPath("$.result[1].sku").value("BULK-L"));
+    }
+
+    @Test
+    void publishProduct_withActiveSkus_publishesSuccessfully() throws Exception {
+        spring.abtechzone.modules.product.entity.Product product =
+                new spring.abtechzone.modules.product.entity.Product();
+        product.setName("Publish Test Product");
+        product.setSlug("publish-test-product");
+        product.setCategory(seededCategory);
+        product.setBrand(seededBrand);
+        product.setDraft(true);
+        product.setPublished(false);
+        product = productRepository.save(product);
+
+        Attribute variantAttr = new Attribute();
+        variantAttr.setName("Size");
+        variantAttr.setCode("SIZE");
+        variantAttr.setDataType("ENUM");
+        variantAttr.setEnumValues(List.of(Map.of("value", "M")));
+        variantAttr = attributeRepository.save(variantAttr);
+
+        CategoryAttribute ca = new CategoryAttribute();
+        ca.setCategory(seededCategory);
+        ca.setAttribute(variantAttr);
+        ca.setIsVariantDefining(true);
+        ca.setIsMultiValue(false);
+        ca.setIsRequired(true);
+        ca.setCreatedAt(java.time.OffsetDateTime.now());
+        ca.setUpdatedAt(java.time.OffsetDateTime.now());
+        categoryAttributeRepository.save(ca);
+
+        List<ProductSkuCreateRequest> bulkRequests = List.of(ProductSkuCreateRequest.builder()
+                .productId(product.getId())
+                .sku("PUB-M")
+                .price(BigDecimal.valueOf(100))
+                .stock(10)
+                .attributes(Map.of("SIZE", "M"))
+                .build());
+
+        mockMvc.perform(post("/products/" + product.getId() + "/skus/bulk")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(bulkRequests)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/products/" + product.getId() + "/publish")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.isPublished").value(true))
+                .andExpect(jsonPath("$.result.isDraft").value(false));
+    }
+
+    @Test
+    void publishProduct_noActiveSkus_throwsException() throws Exception {
+        spring.abtechzone.modules.product.entity.Product product =
+                new spring.abtechzone.modules.product.entity.Product();
+        product.setName("Publish No Sku Product");
+        product.setSlug("publish-no-sku-product");
+        product.setCategory(seededCategory);
+        product.setBrand(seededBrand);
+        product.setDraft(true);
+        product.setPublished(false);
+        product = productRepository.save(product);
+
+        mockMvc.perform(patch("/products/" + product.getId() + "/publish")
+                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1059));
+    }
 }

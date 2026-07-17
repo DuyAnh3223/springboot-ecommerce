@@ -181,4 +181,22 @@ public class ProductService {
             }
         }
     }
+
+    @Transactional
+    public ProductResponse publishProduct(Long id) {
+        Product product = findProductById(id);
+
+        long activeSkus = product.getSkus().stream()
+                .filter(sku -> Boolean.TRUE.equals(sku.getIsActive()))
+                .count();
+
+        if (activeSkus == 0) {
+            throw new AppException(ErrorCode.PRODUCT_MUST_HAVE_ACTIVE_SKU);
+        }
+
+        product.setDraft(false);
+        product.setPublished(true);
+        product = productRepository.save(product);
+        return productMapper.toProductResponse(product);
+    }
 }
