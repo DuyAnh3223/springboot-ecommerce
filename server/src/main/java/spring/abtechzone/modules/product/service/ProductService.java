@@ -7,6 +7,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductService {
     ProductRepository productRepository;
@@ -90,10 +92,12 @@ public class ProductService {
         return productRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
+    @PreAuthorize("permitAll()")
     public ProductResponse getProduct(Long id) {
         return productMapper.toProductResponse(findProductById(id));
     }
-
+    
+    @PreAuthorize("permitAll()")
     public Page<ProductResponse> getProducts(ProductSearchRequest request) {
         Specification<Product> spec = Specification.where(ProductSpecifications.isPublished())
                 .and(ProductSpecifications.hasKeyword(request.getSearch()));

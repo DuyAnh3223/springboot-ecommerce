@@ -15,18 +15,7 @@ import spring.abtechzone.modules.category.repository.CategoryAttributeRepository
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 
-/**
- * Quy tac chung:
- * - Thuoc tinh KHONG variant-defining (isVariantDefining = false) chi duoc khai bao o Product.attributes.
- * Neu isRequired = true thi bat buoc phai co trong Product.attributes.
- * Neu isMultiValue = true thi gia tri phai la Collection (nhieu gia tri cung luc, vd Part#, CPU Socket).
- * - Thuoc tinh CO variant-defining (isVariantDefining = true) bat buoc phai co o MOI ProductSku.attributes,
- * moi SKU dung DUNG 1 gia tri scalar (khong duoc la Collection, khong duoc thieu).
- * - ProductSku.attributes CO THE chua them key thuoc nhom non-variant-defining de OVERRIDE gia tri
- * rieng cho SKU do (vd 1 mau co backplate khac support them 1 CPU socket) - day la optional,
- * khong bat buoc phai co du toan bo non-variant attribute o SKU.
- * - Khong cho 2 SKU cua cung 1 Product co CUNG mot to hop gia tri o cac thuoc tinh variant-defining.
- */
+
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -53,8 +42,6 @@ public class ProductAttributeValidator {
 
             CategoryAttribute def = nonVariantDefs.get(code);
             if (def == null) {
-                // Key khong ton tai trong nhom non-variant cua category nay -
-                // co the do go sai code, hoac day la key variant-defining (khong duoc phep o Product)
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
 
@@ -121,11 +108,7 @@ public class ProductAttributeValidator {
         validateNoDuplicateVariantCombination(product, skus);
     }
 
-    /**
-     * Dung khi them 1 SKU moi vao product da ton tai (ProductSkuService.createSku),
-     * luc nay khong co san toan bo list SKU trong 1 request nen phai truyen existingSkus
-     * (fetch tu DB) de so sanh.
-     */
+
     public void validateSkuNotDuplicate(
             Product product, List<ProductSku> existingSkus, Map<String, Object> candidateAttributes) {
         requireCategory(product);
@@ -144,13 +127,13 @@ public class ProductAttributeValidator {
         }
     }
 
-    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object> updatedAttributes) {
-        requireCategory(product);
-        // Gia tri hop le cua SKU khong con phu thuoc vao Product.attributes (da tach rieng theo
-        // isVariantDefining o CategoryAttribute), nen chi can validate lai map attributes moi cua
-        // Product theo dinh nghia category - khong can duyet lai tung SKU o day.
-        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
-    }
+//    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object> updatedAttributes) {
+//        requireCategory(product);
+//        // Gia tri hop le cua SKU khong con phu thuoc vao Product.attributes (da tach rieng theo
+//        // isVariantDefining o CategoryAttribute), nen chi can validate lai map attributes moi cua
+//        // Product theo dinh nghia category - khong can duyet lai tung SKU o day.
+//        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
+//    }
 
     // ==================== helpers ====================
 

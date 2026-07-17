@@ -7,6 +7,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductSkuService {
 
@@ -40,6 +42,7 @@ public class ProductSkuService {
     ProductAttributeValidator productAttributeValidator;
 
     @Transactional(readOnly = true)
+    @PreAuthorize("permitAll()")
     public Page<ProductSkuResponse> getSkus(ProductSkuSearchRequest request) {
         Specification<ProductSku> spec = Specification.where(ProductSkuSpecifications.hasKeyword(request.getSearch()))
                 .and(ProductSkuSpecifications.hasProductId(request.getProductId()))
@@ -50,6 +53,7 @@ public class ProductSkuService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("permitAll()")
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
