@@ -4,11 +4,11 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 import spring.abtechzone.modules.cart.entity.CartItem;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
 import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
+import spring.abtechzone.modules.product.entity.ProductSku;
 
 @Mapper(componentModel = "spring")
 public interface OrderMapper {

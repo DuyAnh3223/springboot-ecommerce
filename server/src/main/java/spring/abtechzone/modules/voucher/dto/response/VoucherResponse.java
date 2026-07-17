@@ -6,7 +6,7 @@ import java.util.Set;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.catalog.dto.response.ProductSkuResponse;
+import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 

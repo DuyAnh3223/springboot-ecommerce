@@ -13,13 +13,13 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
 import spring.abtechzone.modules.inventory.entity.InventoryReservation;
 import spring.abtechzone.modules.inventory.entity.StockMovement;
 import spring.abtechzone.modules.inventory.repository.InventoryReservationRepository;
 import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.order.entity.Order;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Service

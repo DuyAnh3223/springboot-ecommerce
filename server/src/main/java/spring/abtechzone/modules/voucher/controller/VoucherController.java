@@ -11,7 +11,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResponse;
-import spring.abtechzone.modules.catalog.dto.response.ProductSkuResponse;
+import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherDiscountRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherSearchRequest;

@@ -10,8 +10,8 @@ import org.hibernate.annotations.ColumnDefault;
 
 import lombok.Getter;
 import lombok.Setter;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
 import spring.abtechzone.modules.order.entity.Order;
+import spring.abtechzone.modules.product.entity.ProductSku;
 
 @Getter
 @Setter

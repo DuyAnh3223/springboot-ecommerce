@@ -59,6 +59,15 @@ public enum ErrorCode {
     ATTRIBUTE_NOT_FOUND(1047, "Attribute not found", HttpStatus.NOT_FOUND),
     CATEGORY_ATTRIBUTE_ALREADY_ASSIGNED(1048, "Attribute is already assigned to this category", HttpStatus.CONFLICT),
     CATEGORY_ATTRIBUTE_NOT_FOUND(1049, "Category attribute assignment not found", HttpStatus.NOT_FOUND),
+    PRODUCT_ATTRIBUTES_REQUIRED(1050, "Product attributes required", HttpStatus.BAD_REQUEST),
+    PRODUCT_SKU_VARIANT_ATTRIBUTES_MISSING(1051, "Product sku variant attributes missing", HttpStatus.BAD_REQUEST),
+    PRODUCT_SKU_ATTRIBUTES_DUPLICATED(1052, "Product sku variant attributes duplicated", HttpStatus.BAD_REQUEST),
+    CATEGORY_REQUIRED(1053, "Category required", HttpStatus.BAD_REQUEST),
+    ATTRIBUTE_ENUM_VALUES_MISSING(1054, "Attribute values missing", HttpStatus.BAD_REQUEST),
+    VARIANT_CANNOT_BE_MULTI_VALUE(1055, "Variant-defining attribute cannot be multi-value", HttpStatus.BAD_REQUEST),
+    ATTRIBUTE_VALUE_INVALID(1056, "Attribute value is invalid for the defined type", HttpStatus.BAD_REQUEST),
+    PRODUCT_CATEGORY_REQUIRED(1057, "Product must belong to a category", HttpStatus.BAD_REQUEST),
+    VARIANT_ATTRIBUTE_MUST_BE_ENUM(1058, "Variant-defining attribute must have ENUM data type", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

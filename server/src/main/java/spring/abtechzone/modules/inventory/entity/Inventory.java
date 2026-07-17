@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.product.entity.ProductSku;
 
 @Entity
 @Getter

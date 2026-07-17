@@ -14,7 +14,7 @@ import jakarta.validation.constraints.NotNull;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
+import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
