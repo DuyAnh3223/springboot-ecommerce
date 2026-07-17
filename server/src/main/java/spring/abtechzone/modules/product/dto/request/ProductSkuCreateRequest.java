@@ -17,6 +17,9 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProductSkuCreateRequest {
 
+    @NotNull(message = "PRODUCT_NOT_FOUND")
+    Long productId;
+
     @NotBlank(message = "PRODUCT_SKU_INVALID")
     String sku;
 

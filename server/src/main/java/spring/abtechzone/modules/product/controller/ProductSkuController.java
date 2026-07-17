@@ -16,36 +16,35 @@ import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.service.ProductSkuService;
 
 @RestController
-@RequestMapping("/products")
+@RequestMapping("/skus")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ProductSkuController {
 
     ProductSkuService productSkuService;
 
-    @GetMapping("/skus")
+    @GetMapping
     public ApiResponse<Page<ProductSkuResponse>> getSkus(@Valid @ModelAttribute ProductSkuSearchRequest request) {
         return ApiResponse.<Page<ProductSkuResponse>>builder()
                 .result(productSkuService.getSkus(request))
                 .build();
     }
 
-    @GetMapping("/skus/{skuId}")
+    @GetMapping("/{skuId}")
     public ApiResponse<ProductSkuResponse> getSku(@PathVariable Long skuId) {
         return ApiResponse.<ProductSkuResponse>builder()
                 .result(productSkuService.getSku(skuId))
                 .build();
     }
 
-    @PostMapping("/{productId}/skus")
-    public ApiResponse<ProductSkuResponse> createSku(
-            @PathVariable Long productId, @RequestBody @Valid ProductSkuCreateRequest request) {
+    @PostMapping
+    public ApiResponse<ProductSkuResponse> createSku(@RequestBody @Valid ProductSkuCreateRequest request) {
         return ApiResponse.<ProductSkuResponse>builder()
-                .result(productSkuService.createSku(productId, request))
+                .result(productSkuService.createSku(request))
                 .build();
     }
 
-    @PatchMapping("/skus/{skuId}")
+    @PatchMapping("/{skuId}")
     public ApiResponse<ProductSkuResponse> updateSku(
             @PathVariable Long skuId, @RequestBody @Valid ProductSkuUpdateRequest request) {
         return ApiResponse.<ProductSkuResponse>builder()
@@ -53,7 +52,7 @@ public class ProductSkuController {
                 .build();
     }
 
-    @DeleteMapping("/skus/{skuId}")
+    @DeleteMapping("/{skuId}")
     public ApiResponse<String> deleteSku(@PathVariable Long skuId) {
         productSkuService.deleteSku(skuId);
         return ApiResponse.<String>builder()

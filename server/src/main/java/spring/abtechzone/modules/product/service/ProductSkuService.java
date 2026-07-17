@@ -61,11 +61,12 @@ public class ProductSkuService {
     }
 
     @Transactional
-    public ProductSkuResponse createSku(Long productId, ProductSkuCreateRequest request) {
+    public ProductSkuResponse createSku(ProductSkuCreateRequest request) {
         validateSkuForCreate(request.getSku());
 
-        Product product =
-                productRepository.findById(productId).orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+        Product product = productRepository
+                .findById(request.getProductId())
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         ProductSku sku = productSkuMapper.toProductSku(request);
         sku.setProduct(product);

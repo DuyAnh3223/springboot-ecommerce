@@ -36,9 +36,9 @@ import spring.abtechzone.modules.cart.mapper.CartMapper;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.cart.service.CartService;
-import spring.abtechzone.modules.catalog.entity.Product;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
+import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 

@@ -28,23 +28,16 @@ import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
-import spring.abtechzone.modules.catalog.entity.Product;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductRepository;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
+import spring.abtechzone.modules.category.entity.Category;
+import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductRepository;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
-/**
- * Integration Test cho Cart module.
- * <p>
- * Test toàn bộ luồng: HTTP Request → Controller → Service → Repository → MySQL (Testcontainers)
- * <p>
- * Khác với Unit Test (CartServiceTest):
- * - Spring Context thật, MySQL DB thật (Testcontainers), Security thật
- * - Gọi qua HTTP (MockMvc), verify JSON response + DB state
- * - Dùng .with(jwt()) để bypass CustomJwtDecoder
- */
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -81,7 +74,7 @@ class CartIntegrationTest {
     CartItemRepository cartItemRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.CategoryRepository categoryRepository;
+    private CategoryRepository categoryRepository;
 
     // ── Shared test data ──
     private User user;
@@ -98,8 +91,7 @@ class CartIntegrationTest {
         userRepository.deleteAll();
 
         // Tạo Category
-        spring.abtechzone.modules.catalog.entity.Category category =
-                new spring.abtechzone.modules.catalog.entity.Category();
+        Category category = new Category();
         category.setName("Seeded Category");
         category.setSlug("seeded-category");
         category.setIsActive(true);

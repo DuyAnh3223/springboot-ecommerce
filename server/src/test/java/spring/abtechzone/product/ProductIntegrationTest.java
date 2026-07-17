@@ -27,15 +27,19 @@ import org.testcontainers.mysql.MySQLContainer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.modules.catalog.dto.request.ProductCreateRequest;
-import spring.abtechzone.modules.catalog.dto.request.ProductSkuCreateRequest;
-import spring.abtechzone.modules.catalog.dto.request.ProductSkuUpdateRequest;
-import spring.abtechzone.modules.catalog.dto.request.ProductUpdateRequest;
-import spring.abtechzone.modules.catalog.entity.Attribute;
-import spring.abtechzone.modules.catalog.entity.CategoryAttribute;
-import spring.abtechzone.modules.catalog.repository.AttributeRepository;
-import spring.abtechzone.modules.catalog.repository.CategoryAttributeRepository;
-import spring.abtechzone.modules.catalog.repository.ProductRepository;
+import spring.abtechzone.modules.category.entity.Attribute;
+import spring.abtechzone.modules.category.entity.Brand;
+import spring.abtechzone.modules.category.entity.Category;
+import spring.abtechzone.modules.category.entity.CategoryAttribute;
+import spring.abtechzone.modules.category.repository.AttributeRepository;
+import spring.abtechzone.modules.category.repository.BrandRepository;
+import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
+import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.product.dto.request.ProductCreateRequest;
+import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
+import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
+import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
+import spring.abtechzone.modules.product.repository.ProductRepository;
 
 @Slf4j
 @SpringBootTest
@@ -64,10 +68,10 @@ class ProductIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.CategoryRepository categoryRepository;
+    private CategoryRepository categoryRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.BrandRepository brandRepository;
+    private BrandRepository brandRepository;
 
     @Autowired
     private AttributeRepository attributeRepository;
@@ -76,8 +80,8 @@ class ProductIntegrationTest {
     private CategoryAttributeRepository categoryAttributeRepository;
 
     private ProductCreateRequest request;
-    private spring.abtechzone.modules.catalog.entity.Category seededCategory;
-    private spring.abtechzone.modules.catalog.entity.Brand seededBrand;
+    private Category seededCategory;
+    private Brand seededBrand;
 
     @BeforeEach
     void initData() {
@@ -87,14 +91,14 @@ class ProductIntegrationTest {
         categoryRepository.deleteAll();
         brandRepository.deleteAll();
 
-        seededCategory = new spring.abtechzone.modules.catalog.entity.Category();
+        seededCategory = new Category();
         seededCategory.setName("Test Category");
         seededCategory.setSlug("test-category");
         seededCategory.setIsActive(true);
         seededCategory.setSortOrder(1);
         seededCategory = categoryRepository.save(seededCategory);
 
-        seededBrand = new spring.abtechzone.modules.catalog.entity.Brand();
+        seededBrand = new Brand();
         seededBrand.setName("Test Brand");
         seededBrand.setSlug("test-brand");
         seededBrand = brandRepository.save(seededBrand);
@@ -281,13 +285,14 @@ class ProductIntegrationTest {
                 objectMapper.readTree(productResponse).path("result").path("id").asLong();
 
         ProductSkuCreateRequest invalidSkuRequest = ProductSkuCreateRequest.builder()
+                .productId(productId)
                 .sku("SKU-BLUE-INVALID")
                 .price(new BigDecimal("129.99"))
                 .stock(20)
                 .attributes(Map.of("Color", "Blue"))
                 .build();
 
-        mockMvc.perform(post("/products/{productId}/skus", productId)
+        mockMvc.perform(post("/skus")
                         .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidSkuRequest)))
@@ -353,6 +358,7 @@ class ProductIntegrationTest {
                 objectMapper.readTree(productResponse).path("result").path("id").asLong();
 
         ProductSkuCreateRequest createSkuRequest = ProductSkuCreateRequest.builder()
+                .productId(productId)
                 .sku("SKU-GREEN-001")
                 .price(new BigDecimal("129.99"))
                 .stock(20)
@@ -360,7 +366,7 @@ class ProductIntegrationTest {
                 .attributes(Map.of("Color", "Green"))
                 .build();
 
-        String skuResponse = mockMvc.perform(post("/products/{productId}/skus", productId)
+        String skuResponse = mockMvc.perform(post("/skus")
                         .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createSkuRequest)))

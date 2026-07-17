@@ -15,7 +15,6 @@ import spring.abtechzone.modules.category.repository.CategoryAttributeRepository
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 
-
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -108,7 +107,6 @@ public class ProductAttributeValidator {
         validateNoDuplicateVariantCombination(product, skus);
     }
 
-
     public void validateSkuNotDuplicate(
             Product product, List<ProductSku> existingSkus, Map<String, Object> candidateAttributes) {
         requireCategory(product);
@@ -127,13 +125,14 @@ public class ProductAttributeValidator {
         }
     }
 
-//    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object> updatedAttributes) {
-//        requireCategory(product);
-//        // Gia tri hop le cua SKU khong con phu thuoc vao Product.attributes (da tach rieng theo
-//        // isVariantDefining o CategoryAttribute), nen chi can validate lai map attributes moi cua
-//        // Product theo dinh nghia category - khong can duyet lai tung SKU o day.
-//        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
-//    }
+    //    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object>
+    // updatedAttributes) {
+    //        requireCategory(product);
+    //        // Gia tri hop le cua SKU khong con phu thuoc vao Product.attributes (da tach rieng theo
+    //        // isVariantDefining o CategoryAttribute), nen chi can validate lai map attributes moi cua
+    //        // Product theo dinh nghia category - khong can duyet lai tung SKU o day.
+    //        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
+    //    }
 
     // ==================== helpers ====================
 

@@ -96,7 +96,7 @@ public class ProductService {
     public ProductResponse getProduct(Long id) {
         return productMapper.toProductResponse(findProductById(id));
     }
-    
+
     @PreAuthorize("permitAll()")
     public Page<ProductResponse> getProducts(ProductSearchRequest request) {
         Specification<Product> spec = Specification.where(ProductSpecifications.isPublished())

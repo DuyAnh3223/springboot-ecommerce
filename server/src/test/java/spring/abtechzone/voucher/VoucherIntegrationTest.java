@@ -28,10 +28,12 @@ import org.testcontainers.mysql.MySQLContainer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-import spring.abtechzone.modules.catalog.entity.Product;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductRepository;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
+import spring.abtechzone.modules.category.entity.Category;
+import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductRepository;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
@@ -72,7 +74,7 @@ class VoucherIntegrationTest {
     private ProductSkuRepository productSkuRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.CategoryRepository categoryRepository;
+    private CategoryRepository categoryRepository;
 
     @Autowired
     private VoucherService voucherService;
@@ -90,8 +92,7 @@ class VoucherIntegrationTest {
         productRepository.deleteAll();
         categoryRepository.deleteAll();
 
-        spring.abtechzone.modules.catalog.entity.Category category =
-                new spring.abtechzone.modules.catalog.entity.Category();
+        Category category = new Category();
         category.setName("Seeded Category");
         category.setSlug("seeded-category");
         category.setIsActive(true);

@@ -30,13 +30,15 @@ import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
-import spring.abtechzone.modules.catalog.entity.Product;
-import spring.abtechzone.modules.catalog.entity.ProductSku;
-import spring.abtechzone.modules.catalog.repository.ProductRepository;
-import spring.abtechzone.modules.catalog.repository.ProductSkuRepository;
+import spring.abtechzone.modules.category.entity.Category;
+import spring.abtechzone.modules.category.repository.CategoryRepository;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
 import spring.abtechzone.modules.order.repository.OrderRepository;
+import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.repository.ProductRepository;
+import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.entity.UserAddress;
 import spring.abtechzone.modules.user.repository.UserAddressRepository;
@@ -94,7 +96,7 @@ class OrderIntegrationTest {
     VoucherRepository voucherRepository;
 
     @Autowired
-    private spring.abtechzone.modules.catalog.repository.CategoryRepository categoryRepository;
+    private CategoryRepository categoryRepository;
 
     @Autowired
     private spring.abtechzone.modules.inventory.repository.InventoryReservationRepository
@@ -124,8 +126,7 @@ class OrderIntegrationTest {
         userRepository.deleteAll();
 
         // Seed Category
-        spring.abtechzone.modules.catalog.entity.Category category =
-                new spring.abtechzone.modules.catalog.entity.Category();
+        Category category = new Category();
         category.setName("Seeded Category");
         category.setSlug("seeded-category");
         category.setIsActive(true);

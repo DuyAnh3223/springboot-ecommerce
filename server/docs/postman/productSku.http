@@ -42,11 +42,12 @@ Authorization: Bearer {{token}}
 
 ### 1. Add a SKU to the Product
 # @name createSku
-POST http://localhost:8080/abtechzone/products/{{productId}}/skus
+POST http://localhost:8080/abtechzone/skus
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
+  "productId": {{productId}},
   "sku": "IPAD-M4-SB-256",
   "price": 999.00,
   "stock": 40,
