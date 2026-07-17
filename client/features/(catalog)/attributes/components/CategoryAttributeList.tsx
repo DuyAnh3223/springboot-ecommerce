@@ -15,6 +15,7 @@ interface SelectedAttributeItem {
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
+  isMultiValue: boolean;
   sortOrder: number;
   isNew: boolean;
 }
@@ -25,7 +26,7 @@ interface CategoryAttributeListProps {
   onRemove: (code: string) => void;
   onToggleCheckbox: (
     code: string,
-    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired"
+    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired" | "isMultiValue"
   ) => void;
 }
 

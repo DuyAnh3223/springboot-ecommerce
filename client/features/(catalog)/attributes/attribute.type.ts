@@ -6,7 +6,7 @@ export interface AttributeResponse {
   name: string;
   dataType: string;
   unit: string | null;
-  enumValues: Record<string, any> | null;
+  enumValues: any[] | null;
 }
 
 export interface AttributeRequest {
@@ -14,7 +14,7 @@ export interface AttributeRequest {
   name: string;
   dataType: string;
   unit?: string | null;
-  enumValues?: Record<string, any> | null;
+  enumValues?: any[] | null;
 }
 
 export interface CategoryAttributeResponse {
@@ -24,11 +24,12 @@ export interface CategoryAttributeResponse {
   name: string;
   dataType: string;
   unit: string | null;
-  enumValues: Record<string, any> | null;
+  enumValues: any[] | null;
   isFilterable: boolean;
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
+  isMultiValue: boolean;
   sortOrder: number;
 }
 
@@ -38,6 +39,7 @@ export interface AssignAttributeRequest {
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
+  isMultiValue: boolean;
   sortOrder: number;
 }
 

@@ -38,6 +38,7 @@ interface SelectedAttributeItem {
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
+  isMultiValue: boolean;
   sortOrder: number;
   isNew: boolean;
 }
@@ -90,6 +91,7 @@ export default function AttributeDrawer({
           isVariantDefining: attr.isVariantDefining,
           isCompatibilityKey: attr.isCompatibilityKey,
           isRequired: attr.isRequired,
+          isMultiValue: attr.isMultiValue,
           sortOrder: attr.sortOrder,
           isNew: false,
         }))
@@ -124,6 +126,7 @@ export default function AttributeDrawer({
       isVariantDefining: false,
       isCompatibilityKey: false,
       isRequired: false,
+      isMultiValue: false,
       sortOrder: selectedItems.length,
       isNew: true,
     };
@@ -136,12 +139,23 @@ export default function AttributeDrawer({
 
   const handleToggleCheckbox = (
     code: string,
-    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired"
+    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired" | "isMultiValue"
   ) => {
     setSelectedItems(
-      selectedItems.map((item) =>
-        item.code === code ? { ...item, [field]: !item[field] } : item
-      )
+      selectedItems.map((item) => {
+        if (item.code === code) {
+          const nextValue = !item[field];
+          const updated = { ...item, [field]: nextValue };
+          // Enforce mutual exclusivity
+          if (field === "isVariantDefining" && nextValue) {
+            updated.isMultiValue = false;
+          } else if (field === "isMultiValue" && nextValue) {
+            updated.isVariantDefining = false;
+          }
+          return updated;
+        }
+        return item;
+      })
     );
   };
 
@@ -178,6 +192,7 @@ export default function AttributeDrawer({
             isVariantDefining: item.isVariantDefining,
             isCompatibilityKey: item.isCompatibilityKey,
             isRequired: item.isRequired,
+            isMultiValue: item.isMultiValue,
             sortOrder: item.sortOrder,
           }));
           const res = await assignCategoryAttributesAction(category.id, assignRequests);
@@ -197,6 +212,7 @@ export default function AttributeDrawer({
             orig.isVariantDefining !== sel.isVariantDefining ||
             orig.isCompatibilityKey !== sel.isCompatibilityKey ||
             orig.isRequired !== sel.isRequired ||
+            orig.isMultiValue !== sel.isMultiValue ||
             orig.sortOrder !== sel.sortOrder
           );
         });
@@ -207,6 +223,7 @@ export default function AttributeDrawer({
             isVariantDefining: item.isVariantDefining,
             isCompatibilityKey: item.isCompatibilityKey,
             isRequired: item.isRequired,
+            isMultiValue: item.isMultiValue,
             sortOrder: item.sortOrder,
           });
           if (res.error) {

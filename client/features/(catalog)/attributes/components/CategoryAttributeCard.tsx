@@ -14,6 +14,7 @@ interface SelectedAttributeItem {
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
+  isMultiValue: boolean;
   sortOrder: number;
   isNew: boolean;
 }
@@ -23,7 +24,7 @@ interface CategoryAttributeCardProps {
   onRemove: (code: string) => void;
   onToggleCheckbox: (
     code: string,
-    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired"
+    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isRequired" | "isMultiValue"
   ) => void;
 }
 
@@ -119,6 +120,16 @@ export default function CategoryAttributeCard({
             className="rounded border-slate-300 accent-shop_dark_green cursor-pointer size-4"
           />
           Thuộc tính bắt buộc nhập
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-slate-655 font-semibold cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={item.isMultiValue}
+            onChange={() => onToggleCheckbox(item.code, "isMultiValue")}
+            className="rounded border-slate-300 accent-shop_dark_green cursor-pointer size-4"
+          />
+          Cho phép lưu nhiều giá trị đồng thời (Multi-value)
         </label>
       </div>
     </div>

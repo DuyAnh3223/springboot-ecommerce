@@ -67,13 +67,7 @@ export default function QuickCreateAttributeModal({
     setError(null);
     setIsLoading(true);
 
-    const enumValuesMap =
-      dataType === "ENUM"
-        ? tags.reduce((acc, tag) => {
-            acc[tag] = true;
-            return acc;
-          }, {} as Record<string, boolean>)
-        : null;
+    const enumValuesList = dataType === "ENUM" ? tags : null;
 
     const convertToSnakeCase = (str: string) => {
       return str
@@ -94,7 +88,7 @@ export default function QuickCreateAttributeModal({
       code: convertToSnakeCase(name),
       dataType,
       unit: dataType === "NUMBER" && unit.trim() ? unit.trim() : null,
-      enumValues: enumValuesMap,
+      enumValues: enumValuesList,
     };
 
     try {

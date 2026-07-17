@@ -130,20 +130,14 @@ export default function AttributeFormDialog({
 
     setError(null);
 
-    const enumValuesMap =
-      dataType === "ENUM"
-        ? tags.reduce((acc, tag) => {
-            acc[tag] = true;
-            return acc;
-          }, {} as Record<string, boolean>)
-        : null;
+    const enumValuesList = dataType === "ENUM" ? tags : null;
 
     const payload = {
       name: name.trim(),
       code: code.trim() || convertToSnakeCase(name),
       dataType,
       unit: dataType === "NUMBER" && unit.trim() ? unit.trim() : null,
-      enumValues: enumValuesMap,
+      enumValues: enumValuesList,
     };
 
     startTransition(async () => {
