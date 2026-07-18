@@ -113,15 +113,21 @@ export default function AttributeForm({
         </div>
       )}
 
-      {/* Conditional Enum values (if ENUM) */}
-      {dataType === "ENUM" && (
+      {/* Conditional Enum values (if ENUM, NUMBER or STRING) */}
+      {(dataType === "ENUM" || dataType === "NUMBER" || dataType === "STRING") && (
         <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-200">
           <label className="text-xs font-semibold text-slate-650">
-            Giá trị danh sách (Gõ Enter hoặc phẩy để thêm)
+            Giá trị danh sách tùy chọn (Gõ Enter hoặc phẩy để thêm nếu cần giới hạn lựa chọn)
           </label>
           <div className="space-y-2">
             <Input
-              placeholder="e.g. Đỏ, Xanh, Vàng"
+              placeholder={
+                dataType === "NUMBER"
+                  ? "Ví dụ: 2, 4, 6, 8 (Gõ số và nhấn Enter)"
+                  : dataType === "STRING"
+                  ? "Ví dụ: Windows 10, Windows 11 (Gõ và nhấn Enter)"
+                  : "Ví dụ: Đỏ, Xanh, Vàng (Gõ và nhấn Enter)"
+              }
               value={tagInput}
               onChange={(e) => onTagInputChange(e.target.value)}
               onKeyDown={onTagAdd}

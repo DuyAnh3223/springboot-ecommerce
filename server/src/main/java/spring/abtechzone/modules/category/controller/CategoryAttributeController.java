@@ -4,6 +4,7 @@ import java.util.List;
 
 import jakarta.validation.Valid;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;
@@ -23,6 +24,7 @@ public class CategoryAttributeController {
     CategoryAttributeService categoryAttributeService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<List<CategoryAttributeResponse>> assignAttributes(
             @PathVariable("categoryId") Long categoryId, @Valid @RequestBody List<AssignAttributeRequest> requests) {
         return ApiResponse.<List<CategoryAttributeResponse>>builder()
@@ -38,6 +40,7 @@ public class CategoryAttributeController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<CategoryAttributeResponse> updateCategoryAttribute(
             @PathVariable("categoryId") Long categoryId,
             @PathVariable("id") Long id,
@@ -48,6 +51,7 @@ public class CategoryAttributeController {
     }
 
     @DeleteMapping("/{attributeId}")
+    @PreAuthorize("hasRole('ADMIN')")
     ApiResponse<Void> removeCategoryAttribute(
             @PathVariable("categoryId") Long categoryId, @PathVariable("attributeId") Long attributeId) {
         categoryAttributeService.removeCategoryAttribute(categoryId, attributeId);

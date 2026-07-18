@@ -81,9 +81,9 @@ export default function AttributeFormDialog({
         setUnit(editingAttr.unit || "");
         setError(null);
 
-        if (editingAttr.dataType === "ENUM" && editingAttr.enumValues) {
+        if (editingAttr.enumValues) {
           if (Array.isArray(editingAttr.enumValues)) {
-            setTags(editingAttr.enumValues);
+            setTags(editingAttr.enumValues.map(String));
           } else {
             setTags(Object.keys(editingAttr.enumValues));
           }
@@ -130,7 +130,18 @@ export default function AttributeFormDialog({
 
     setError(null);
 
-    const enumValuesList = dataType === "ENUM" ? tags : null;
+    if (dataType === "NUMBER" && tags.length > 0) {
+      const invalid = tags.some((t) => isNaN(Number(t)));
+      if (invalid) {
+        setError("Tất cả giá trị tùy chọn của thuộc tính kiểu số phải là số hợp lệ.");
+        return;
+      }
+    }
+
+    const enumValuesList =
+      (dataType === "ENUM" || dataType === "NUMBER" || dataType === "STRING") && tags.length > 0
+        ? tags
+        : null;
 
     const payload = {
       name: name.trim(),

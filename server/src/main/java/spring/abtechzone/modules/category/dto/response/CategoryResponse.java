@@ -14,4 +14,5 @@ public class CategoryResponse {
     String slug;
     String thumbnail;
     Boolean isActive;
+    Long parentId;
 }

@@ -6,6 +6,7 @@ export interface CategoryResponse {
   slug: string;
   thumbnail: string | null;
   active: boolean;
+  parentId?: number;
 }
 
 export interface CategoryRequest {
