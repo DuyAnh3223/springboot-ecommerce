@@ -1,5 +1,7 @@
 package spring.abtechzone.modules.product.repository;
 
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -11,4 +13,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
     boolean existsBySlug(String slug);
 
     boolean existsBySlugAndIdNot(String slug, Long id);
+
+    Optional<Product> findBySlug(String slug);
 }

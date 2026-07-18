@@ -3,6 +3,7 @@ package spring.abtechzone.modules.product.controller;
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;

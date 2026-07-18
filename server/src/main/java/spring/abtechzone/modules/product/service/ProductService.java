@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.product.service;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -98,9 +99,30 @@ public class ProductService {
     }
 
     @PreAuthorize("permitAll()")
+    public ProductResponse getProductBySlug(String slug) {
+        Product product =
+                productRepository.findBySlug(slug).orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        if (Boolean.TRUE.equals(product.isDraft()) || !Boolean.TRUE.equals(product.isPublished())) {
+            throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        ProductResponse response = productMapper.toProductResponse(product);
+        if (response.getProductSkus() != null) {
+            List<spring.abtechzone.modules.product.dto.response.ProductSkuResponse> activeSkus =
+                    response.getProductSkus().stream()
+                            .filter(sku -> Boolean.TRUE.equals(sku.getIsActive()))
+                            .toList();
+            response.setProductSkus(activeSkus);
+        }
+        return response;
+    }
+
+    @PreAuthorize("permitAll()")
     public Page<ProductResponse> getProducts(ProductSearchRequest request) {
         Specification<Product> spec = Specification.where(ProductSpecifications.isPublished())
-                .and(ProductSpecifications.hasKeyword(request.getSearch()));
+                .and(ProductSpecifications.hasKeyword(request.getSearch()))
+                .and(ProductSpecifications.hasCategory(request.getCategoryId()));
 
         Page<Product> productsPage = productRepository.findAll(spec, request.toPageable());
 
@@ -182,6 +204,21 @@ public class ProductService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getAdminProducts(ProductSearchRequest request) {
+        Specification<Product> spec = Specification.where(ProductSpecifications.hasKeyword(request.getSearch()))
+                .and(ProductSpecifications.hasCategory(request.getCategoryId()))
+                .and(ProductSpecifications.hasStatus(request.getStatus()));
+
+        Page<Product> productsPage = productRepository.findAll(spec, request.toPageable());
+
+        return productsPage.map(product -> {
+            ProductResponse response = productMapper.toProductResponse(product);
+            response.setProductSkus(null); // Do not return SKU details for list API
+            return response;
+        });
+    }
+
     @Transactional
     public ProductResponse publishProduct(Long id) {
         Product product = findProductById(id);
@@ -196,6 +233,15 @@ public class ProductService {
 
         product.setDraft(false);
         product.setPublished(true);
+        product = productRepository.save(product);
+        return productMapper.toProductResponse(product);
+    }
+
+    @Transactional
+    public ProductResponse unpublishProduct(Long id) {
+        Product product = findProductById(id);
+        product.setDraft(false);
+        product.setPublished(false);
         product = productRepository.save(product);
         return productMapper.toProductResponse(product);
     }

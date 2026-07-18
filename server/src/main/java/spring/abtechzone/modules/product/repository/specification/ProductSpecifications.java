@@ -25,4 +25,19 @@ public class ProductSpecifications {
             return cb.and(cb.equal(root.get("isDraft"), false), cb.equal(root.get("isPublished"), true));
         };
     }
+
+    public static Specification<Product> hasStatus(String status) {
+        return (root, query, cb) -> {
+            if (status == null || status.isBlank() || "all".equalsIgnoreCase(status)) {
+                return null;
+            }
+            if ("draft".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("isDraft"), true);
+            }
+            if ("published".equalsIgnoreCase(status)) {
+                return cb.and(cb.equal(root.get("isDraft"), false), cb.equal(root.get("isPublished"), true));
+            }
+            return null;
+        };
+    }
 }

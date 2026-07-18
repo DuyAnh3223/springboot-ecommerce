@@ -22,6 +22,7 @@ public class ProductSearchRequest {
     Long brandId;
     BigDecimal minPrice;
     BigDecimal maxPrice;
+    String status;
 
     @Min(value = 1, message = "PRODUCT_PAGE_INVALID")
     @Builder.Default
@@ -52,7 +53,8 @@ public class ProductSearchRequest {
 
     private String normalizeSortProperty(String requestedSortBy) {
         return switch (requestedSortBy) {
-            case "price" -> "skus.price";
+            case "price", "pricemin", "price_min" -> "priceMin";
+            case "updatedat", "updated_at" -> "updatedAt";
             case "name", "slug", "rating" -> requestedSortBy;
             default -> "name";
         };

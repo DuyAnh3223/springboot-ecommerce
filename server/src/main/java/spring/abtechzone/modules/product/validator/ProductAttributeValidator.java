@@ -65,7 +65,7 @@ public class ProductAttributeValidator {
         Map<String, CategoryAttribute> nonVariantDefs = loadDefs(categoryId, false);
         Map<String, Object> attrs = skuAttributes == null ? Collections.emptyMap() : skuAttributes;
 
-        // 1) Cac thuoc tinh variant-defining: bat buoc co du, moi cai dung 1 gia tri scalar hop le
+        // 1/ validate all variant-defining attributes 
         for (CategoryAttribute def : variantDefs.values()) {
             String code = def.getAttribute().getCode();
             Object value = attrs.get(code);
@@ -74,13 +74,13 @@ public class ProductAttributeValidator {
                 throw new AppException(ErrorCode.PRODUCT_SKU_VARIANT_ATTRIBUTES_MISSING);
             }
             if (value instanceof Collection) {
-                // variant-defining luon la 1 gia tri duy nhat, khong cho phep mang
+                //validate variant-defining unique
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
             validateScalarByType(def.getAttribute(), value);
         }
 
-        // 2) Cac key con lai (neu co): chi chap nhan neu la override hop le cua nhom non-variant
+        // 2) Other Attributes: Approve only non-variant
         for (Map.Entry<String, Object> entry : attrs.entrySet()) {
             if (variantDefs.containsKey(entry.getKey())) {
                 continue;
@@ -124,15 +124,6 @@ public class ProductAttributeValidator {
             }
         }
     }
-
-    //    public void validateExistingSkusAgainstUpdatedAttributes(Product product, Map<String, Object>
-    // updatedAttributes) {
-    //        requireCategory(product);
-    //        // Gia tri hop le cua SKU khong con phu thuoc vao Product.attributes (da tach rieng theo
-    //        // isVariantDefining o CategoryAttribute), nen chi can validate lai map attributes moi cua
-    //        // Product theo dinh nghia category - khong can duyet lai tung SKU o day.
-    //        validateAttributesMap(product.getCategory().getId(), updatedAttributes);
-    //    }
 
     // ==================== helpers ====================
 
@@ -180,7 +171,7 @@ public class ProductAttributeValidator {
     }
 
     /**
-     * Validate 1 gia tri (scalar hoac list) theo cau hinh isMultiValue cua CategoryAttribute.
+     * Validate 1 value: isMultiValue .
      */
     private void validateAttributeValue(CategoryAttribute def, Object value) {
         boolean multi = Boolean.TRUE.equals(def.getIsMultiValue());
@@ -209,7 +200,7 @@ public class ProductAttributeValidator {
     }
 
     /**
-     * Validate 1 gia tri scalar duy nhat theo dataType cua Attribute.
+     * Validate 1 unique scalar value of dataType .
      */
     private void validateScalarByType(Attribute def, Object value) {
         if (value == null) {
@@ -222,9 +213,42 @@ public class ProductAttributeValidator {
             if (!(value instanceof String) || ((String) value).isBlank()) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
+            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
+                if (!allowedEnumValues(def).contains(value)) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
+            }
         } else if ("NUMBER".equalsIgnoreCase(dataType)) {
             if (!(value instanceof Number)) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
+                boolean matched = false;
+                double valDouble = ((Number) value).doubleValue();
+                for (Object allowed : allowedEnumValues(def)) {
+                    if (allowed instanceof Number) {
+                        if (((Number) allowed).doubleValue() == valDouble) {
+                            matched = true;
+                            break;
+                        }
+                    } else if (allowed instanceof String) {
+                        try {
+                            double allowedDouble = Double.parseDouble((String) allowed);
+                            if (allowedDouble == valDouble) {
+                                matched = true;
+                                break;
+                            }
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    if (allowed.toString().equals(value.toString())) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
             }
         } else if ("BOOLEAN".equalsIgnoreCase(dataType)) {
             if (!(value instanceof Boolean)) {
@@ -240,7 +264,7 @@ public class ProductAttributeValidator {
     }
 
     /**
-     * Trich tap gia tri hop le tu Attribute.enumValues.
+     * get allowed  Attribute.enumValues.
      */
     private Set<Object> allowedEnumValues(Attribute def) {
         List<Object> options = def.getEnumValues();

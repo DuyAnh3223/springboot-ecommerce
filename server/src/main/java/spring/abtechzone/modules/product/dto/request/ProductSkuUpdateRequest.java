@@ -28,5 +28,6 @@ public class ProductSkuUpdateRequest {
     Integer weightGram;
 
     String imageUrl;
+    Boolean isActive;
     Map<String, Object> attributes;
 }

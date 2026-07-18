@@ -1,5 +1,6 @@
 package spring.abtechzone.modules.product.entity;
 
+import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -52,6 +53,30 @@ public class Product {
     boolean isDraft;
 
     boolean isPublished;
+
+    @NotNull
+    @ColumnDefault("0")
+    @Column(name = "sku_count", nullable = false)
+    @Builder.Default
+    Integer skuCount = 0;
+
+    @NotNull
+    @ColumnDefault("0")
+    @Column(name = "active_sku_count", nullable = false)
+    @Builder.Default
+    Integer activeSkuCount = 0;
+
+    @NotNull
+    @ColumnDefault("0")
+    @Column(name = "total_stock", nullable = false)
+    @Builder.Default
+    Integer totalStock = 0;
+
+    @Column(name = "price_min")
+    BigDecimal priceMin;
+
+    @Column(name = "price_max")
+    BigDecimal priceMax;
 
     @JdbcTypeCode(SqlTypes.JSON)
     Map<String, Object> attributes = new HashMap<>();

@@ -20,5 +20,6 @@ public class ProductSkuResponse {
     BigDecimal price;
     Integer stock;
     String imageUrl;
+    Boolean isActive;
     Map<String, Object> attributes;
 }

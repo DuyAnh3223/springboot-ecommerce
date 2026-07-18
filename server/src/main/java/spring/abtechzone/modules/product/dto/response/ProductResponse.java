@@ -25,6 +25,12 @@ public class ProductResponse {
     boolean isDraft;
     boolean isPublished;
 
+    Integer skuCount;
+    Integer activeSkuCount;
+    Integer totalStock;
+    java.math.BigDecimal priceMin;
+    java.math.BigDecimal priceMax;
+
     CategoryResponse category;
     BrandResponse brand;
 
