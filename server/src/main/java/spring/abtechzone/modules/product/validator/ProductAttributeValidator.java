@@ -65,7 +65,7 @@ public class ProductAttributeValidator {
         Map<String, CategoryAttribute> nonVariantDefs = loadDefs(categoryId, false);
         Map<String, Object> attrs = skuAttributes == null ? Collections.emptyMap() : skuAttributes;
 
-        // 1/ validate all variant-defining attributes 
+        // 1/ validate all variant-defining attributes
         for (CategoryAttribute def : variantDefs.values()) {
             String code = def.getAttribute().getCode();
             Object value = attrs.get(code);
@@ -74,7 +74,7 @@ public class ProductAttributeValidator {
                 throw new AppException(ErrorCode.PRODUCT_SKU_VARIANT_ATTRIBUTES_MISSING);
             }
             if (value instanceof Collection) {
-                //validate variant-defining unique
+                // validate variant-defining unique
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
             validateScalarByType(def.getAttribute(), value);
@@ -255,8 +255,14 @@ public class ProductAttributeValidator {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
         } else if ("ENUM".equalsIgnoreCase(dataType)) {
-            if (!allowedEnumValues(def).contains(value)) {
-                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
+                if (!allowedEnumValues(def).contains(value)) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
+            } else {
+                if (!(value instanceof String) || ((String) value).isBlank()) {
+                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+                }
             }
         } else {
             throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);

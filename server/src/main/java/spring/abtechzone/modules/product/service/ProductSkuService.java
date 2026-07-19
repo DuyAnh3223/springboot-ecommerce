@@ -34,6 +34,7 @@ import spring.abtechzone.modules.product.repository.specification.ProductSkuSpec
 import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 
 @Service
+@Transactional
 @Slf4j
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
@@ -196,10 +197,19 @@ public class ProductSkuService {
             }
 
             if ("ENUM".equalsIgnoreCase(def.getAttribute().getDataType())) {
-                Set<Object> allowedValues = allowedEnumValues(def.getAttribute());
-                for (Object val : values) {
-                    if (!allowedValues.contains(val)) {
-                        throw new AppException(ErrorCode.ATTRIBUTE_VALUE_INVALID);
+                List<Object> options = def.getAttribute().getEnumValues();
+                if (options != null && !options.isEmpty()) {
+                    Set<Object> allowedValues = allowedEnumValues(def.getAttribute());
+                    for (Object val : values) {
+                        if (!allowedValues.contains(val)) {
+                            throw new AppException(ErrorCode.ATTRIBUTE_VALUE_INVALID);
+                        }
+                    }
+                } else {
+                    for (Object val : values) {
+                        if (!(val instanceof String) || ((String) val).isBlank()) {
+                            throw new AppException(ErrorCode.ATTRIBUTE_VALUE_INVALID);
+                        }
                     }
                 }
             } else {

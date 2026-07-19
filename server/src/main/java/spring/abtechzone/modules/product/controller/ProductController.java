@@ -5,7 +5,6 @@ import java.util.List;
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import lombok.AccessLevel;
@@ -53,16 +52,8 @@ public class ProductController {
                 .build();
     }
 
-    @PutMapping("/{productId}")
-    ApiResponse<ProductResponse> updateProduct(
-            @PathVariable("productId") Long id, @RequestBody @Valid ProductUpdateRequest request) {
-        return ApiResponse.<ProductResponse>builder()
-                .result(productService.update(id, request))
-                .build();
-    }
-
     @PatchMapping("/{productId}")
-    ApiResponse<ProductResponse> updateProductPatch(
+    ApiResponse<ProductResponse> updateProduct(
             @PathVariable("productId") Long id, @RequestBody @Valid ProductUpdateRequest request) {
         return ApiResponse.<ProductResponse>builder()
                 .result(productService.update(id, request))

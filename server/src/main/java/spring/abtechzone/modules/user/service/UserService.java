@@ -35,6 +35,7 @@ import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.user.repository.specification.UserSpecifications;
 
 @Service
+@Transactional
 @RequiredArgsConstructor // Auto generate constructor but required "final"
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true) // simplify "private final string" -> "string"
 public class UserService {

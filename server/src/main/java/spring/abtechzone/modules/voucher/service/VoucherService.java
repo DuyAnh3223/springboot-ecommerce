@@ -36,6 +36,7 @@ import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 @Slf4j
 @Service
+@Transactional
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class VoucherService {

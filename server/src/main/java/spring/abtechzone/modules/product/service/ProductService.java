@@ -35,6 +35,7 @@ import spring.abtechzone.modules.product.repository.specification.ProductSpecifi
 import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 
 @Service
+@Transactional
 @Slf4j
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
