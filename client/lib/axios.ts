@@ -3,12 +3,13 @@
 import axios from "axios";
 
 export const api = axios.create({
-  baseURL: process.env.SPRING_API_URL,
+  baseURL: process.env.SPRING_API_URL || process.env.NEXT_PUBLIC_SPRING_API_URL,
   timeout: 10000,
 });
 
 api.interceptors.request.use(async (config) => {
-  if (!config.headers.Authorization) {
+  const isAuthPath = config.url?.startsWith("/auth/");
+  if (!isAuthPath && !config.headers.Authorization) {
     try {
       const { cookies } = await import("next/headers");
       const cookieStore = await cookies();

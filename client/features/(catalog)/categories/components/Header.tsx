@@ -14,12 +14,12 @@ const Header = ({ onAdd }: HeaderProps) => {
         <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1.5">
           <span className="hover:text-slate-800 cursor-pointer">Dashboard</span>
           <span className="text-slate-300 font-normal">&gt;</span>
-          <span className="text-slate-800 font-semibold">Categories</span>
+          <span className="text-slate-800 font-semibold">Danh mục</span>
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Categories</h1>
-        <p className="text-sm text-slate-500 mt-1">Browse and manage your product categories.</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Danh mục</h1>
+        <p className="text-sm text-slate-500 mt-1">Quản lý danh mục sản phẩm.</p>
       </div>
 
       {/* Add Button  */}
@@ -28,7 +28,7 @@ const Header = ({ onAdd }: HeaderProps) => {
         className="h-10 bg-shop_dark_green hover:bg-shop_btn_dark_green text-white cursor-pointer gap-1.5 font-semibold shadow-sm transition-colors rounded-lg px-4"
       >
         <Plus className="size-4.5" />
-        Add Category
+        Thêm danh mục
       </Button>
     </div>
   );

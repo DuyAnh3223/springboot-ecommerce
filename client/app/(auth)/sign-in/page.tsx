@@ -50,7 +50,7 @@ export default function SignInPage() {
           </div>
 
           <CardContent className="p-6 pt-4">
-            <Suspense fallback={<div className="flex items-center justify-center p-4">Loading...</div>}>
+            <Suspense fallback={<div className="flex items-center justify-center p-4">Đang tải...</div>}>
               <SignInFormWrapper />
             </Suspense>
           </CardContent>

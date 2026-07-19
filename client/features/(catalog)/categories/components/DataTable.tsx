@@ -165,11 +165,11 @@ const DataTable = ({
                   <TableCell className="text-center py-2">
                     {cat.active ? (
                       <Badge className="bg-emerald-50 hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2 py-0.5 shadow-none rounded-md">
-                        Active
+                        Hoạt động
                       </Badge>
                     ) : (
                       <Badge className="bg-slate-50 hover:bg-slate-50 text-slate-500 border border-slate-200 text-xs font-semibold px-2 py-0.5 shadow-none rounded-md">
-                        Draft
+                        Bản nháp
                       </Badge>
                     )}
                   </TableCell>

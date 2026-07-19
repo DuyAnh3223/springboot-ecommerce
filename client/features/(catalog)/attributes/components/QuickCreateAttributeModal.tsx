@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Loader2, Plus, Sliders, X } from "lucide-react";
+import { useAsyncAction, useTagInput } from "@/hooks";
+import { slugify } from "@/lib/slugify";
 
 interface QuickCreateAttributeModalProps {
   open: boolean;
@@ -29,33 +31,15 @@ export default function QuickCreateAttributeModal({
   const [name, setName] = useState("");
   const [dataType, setDataType] = useState<"STRING" | "NUMBER" | "BOOLEAN" | "ENUM">("STRING");
   const [unit, setUnit] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const tagInputState = useTagInput();
+  const { isLoading, error, setError, run } = useAsyncAction();
 
   const resetForm = () => {
     setName("");
     setDataType("STRING");
     setUnit("");
-    setTags([]);
-    setTagInput("");
+    tagInputState.reset();
     setError(null);
-  };
-
-  const handleTagAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      const cleaned = tagInput.trim();
-      if (cleaned && !tags.includes(cleaned)) {
-        setTags([...tags, cleaned]);
-      }
-      setTagInput("");
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -64,35 +48,17 @@ export default function QuickCreateAttributeModal({
       setError("Tên thuộc tính không được để trống.");
       return;
     }
-    setError(null);
-    setIsLoading(true);
-
-    const enumValuesList = dataType === "ENUM" ? tags : null;
-
-    const convertToSnakeCase = (str: string) => {
-      return str
-        .trim()
-        .toLowerCase()
-        .replace(/đ/g, "d")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/[\s\-\.]+/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_+|_+$/g, "");
-    };
 
     const payload = {
       name: name.trim(),
-      code: convertToSnakeCase(name),
+      code: slugify(name, "_"),
       dataType,
       unit: dataType === "NUMBER" && unit.trim() ? unit.trim() : null,
-      enumValues: enumValuesList,
+      enumValues: dataType === "ENUM" ? tagInputState.tags : null,
     };
 
-    try {
-      const result = await createAttributeAction(payload);
+    const result = await run(() => createAttributeAction(payload));
+    if (result) {
       if (result.error) {
         setError(result.error);
       } else if (result.attribute) {
@@ -100,10 +66,6 @@ export default function QuickCreateAttributeModal({
         resetForm();
         onOpenChange(false);
       }
-    } catch (err: any) {
-      setError("Có lỗi xảy ra khi tạo nhanh thuộc tính.");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -153,7 +115,7 @@ export default function QuickCreateAttributeModal({
               onChange={(e) => {
                 setDataType(e.target.value as any);
                 setUnit("");
-                setTags([]);
+                tagInputState.setTags([]);
               }}
               className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-350 cursor-pointer"
             >
@@ -188,14 +150,14 @@ export default function QuickCreateAttributeModal({
               <div className="space-y-2">
                 <Input
                   placeholder="e.g. RTX 4060, RTX 4070"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={handleTagAdd}
+                  value={tagInputState.tagInput}
+                  onChange={(e) => tagInputState.setTagInput(e.target.value)}
+                  onKeyDown={tagInputState.handleTagAdd}
                   className="h-9 border-slate-200 focus-visible:ring-slate-350"
                 />
-                {tags.length > 0 && (
+                {tagInputState.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 p-2 bg-slate-50 rounded-lg border border-slate-150 max-h-[80px] overflow-y-auto">
-                    {tags.map((tag) => (
+                    {tagInputState.tags.map((tag) => (
                       <Badge
                         key={tag}
                         variant="secondary"
@@ -204,7 +166,7 @@ export default function QuickCreateAttributeModal({
                         {tag}
                         <button
                           type="button"
-                          onClick={() => handleRemoveTag(tag)}
+                          onClick={() => tagInputState.handleRemoveTag(tag)}
                           className="text-slate-400 hover:text-slate-800 focus:outline-none"
                         >
                           <X className="size-2.5" />

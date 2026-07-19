@@ -31,7 +31,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    title: 'Dashboard',
+    title: 'Tổng quan',
     href: '/admin',
     icon: LayoutDashboard,
   },

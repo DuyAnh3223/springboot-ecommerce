@@ -125,7 +125,7 @@ export default function AttributesClient({ initialData }: AttributesClientProps)
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Sliders className="size-5 text-shop_light_green" /> Quản lý thuộc tính (Master Data)
+            <Sliders className="size-5 text-shop_light_green" /> Quản lý thuộc tính 
           </h1>
           <p className="text-xs text-slate-500 font-medium">
             Định nghĩa các thuộc tính lõi và kiểu dữ liệu dùng chung trong toàn bộ hệ thống.

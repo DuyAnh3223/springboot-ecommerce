@@ -7,9 +7,9 @@ interface TabsFilterProps {
 
 const TabsFilter = ({ currentIsActive, onChange }: TabsFilterProps) => {
   const tabs = [
-    { label: "All", value: "" },
-    { label: "Active", value: "true" },
-    { label: "Draft", value: "false" },
+    { label: "Tất cả", value: "" },
+    { label: "Hoạt động", value: "true" },
+    { label: "Bản nháp", value: "false" },
   ];
 
   const activeValue = currentIsActive || "";

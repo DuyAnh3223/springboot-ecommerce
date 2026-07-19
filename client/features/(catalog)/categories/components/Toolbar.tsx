@@ -25,7 +25,7 @@ const Toolbar = ({
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search categories..."
+              placeholder="Tìm danh mục..."
               className="pl-9 h-7 border-slate-200 focus-visible:ring-slate-400/20 focus-visible:border-slate-300 w-full bg-white"
             />
           </div>
