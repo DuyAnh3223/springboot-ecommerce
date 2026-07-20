@@ -47,7 +47,7 @@ services:
         condition: service_healthy
 
   frontend:
-    image: ${DOCKERHUB_USERNAME}/backend-prod:latest
+    image: ${DOCKERHUB_USERNAME}/frontend-prod:latest
     container_name: ecommerce-nextjs-client
     ports:
       - "3000:3000"
