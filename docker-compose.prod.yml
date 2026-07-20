@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:15
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: Redis
+
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+
+    image: ${DOCKERHUB_USERNAME}/ecommerce-backend:latest
+    container_name: ecommerce-springboot-server
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
+      REDIS_ADDRESS: ${REDIS_ADDRESS}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME}/ecommerce-frontend:latest
+    container_name: ecommerce-nextjs-client
+    ports:
+      - "3000:3000"
+    environment:
+      SPRING_API_URL: http://backend:8080/abtechzone
+      NEXT_PUBLIC_SPRING_API_URL: ${NEXT_PUBLIC_SPRING_API_URL}
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
