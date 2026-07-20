@@ -32,7 +32,6 @@ import spring.abtechzone.modules.user.dto.response.UserResponse;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.mapper.UserMapper;
 import spring.abtechzone.modules.user.repository.UserRepository;
-import spring.abtechzone.modules.user.repository.specification.UserSpecifications;
 
 @Service
 @Transactional
@@ -88,8 +87,8 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN')") // Ktra quyền trước khi chạy ~~ @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(UserSearchRequest request) {
-        Specification<User> spec = Specification.where(UserSpecifications.hasKeyword(request.getSearch()))
-                .and(UserSpecifications.isActive(request.getIsActive()));
+        Specification<User> spec = Specification.where(hasKeyword(request.getSearch()))
+                .and(isActive(request.getIsActive()));
         return userRepository.findAll(spec, request.toPageable()).map(userMapper::toUserResponse);
     }
 
@@ -137,5 +136,31 @@ public class UserService {
         User user = findUserById(userId);
         user.setActive(false);
         userRepository.save(user);
+    }
+
+    public User getCurrentUser() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private static Specification<User> hasKeyword(String keyword) {
+        return ((root, query, cb) -> {
+            if (keyword == null || keyword.isBlank()) return null;
+            String likeValue = "%" + keyword.toLowerCase() + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("username")), likeValue),
+                    cb.like(cb.lower(root.get("email")), likeValue),
+                    cb.like(cb.lower(root.get("firstName")), likeValue),
+                    cb.like(cb.lower(root.get("lastName")), likeValue),
+                    cb.like(cb.lower(root.get("phone")), likeValue));
+        });
+    }
+
+    private static Specification<User> isActive(Boolean active) {
+        return (root, query, cb) -> {
+            if (active == null) return null;
+            return cb.equal(root.get("isActive"), active);
+        };
     }
 }

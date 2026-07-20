@@ -23,7 +23,7 @@ import org.springframework.web.filter.CorsFilter;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-        "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
+            "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
     };
 
     @Value("${jwt.signerKey}")
@@ -39,7 +39,6 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) {
         httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
                 .permitAll()
-                //                        .requestMatchers(HttpMethod.GET,"/users").hasRole(Role.ADMIN.name())
                 .anyRequest()
                 .authenticated());
 
