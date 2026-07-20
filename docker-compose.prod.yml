@@ -6,8 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "3307:5432"
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +18,7 @@ services:
   redis:
     image: redis:latest
     container_name: Redis
-    ports:
-      - "3308:6379"
+
     volumes:
       - redis_data:/data
     healthcheck:
@@ -30,13 +28,9 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile.dev
+
+    image: ${DOCKERHUB_USERNAME}/ecommerce-backend:latest
     container_name: ecommerce-springboot-server
-    volumes:
-      - ./server/src:/app/src
-      - maven_cache:/root/.m2
     ports:
       - "8080:8080"
     environment:
@@ -51,47 +45,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./server/src
-          target: /app/src
-        - action: rebuild
-          path: ./server/pom.xml
 
   frontend:
-    build:
-      context: ./client
-      dockerfile: Dockerfile.dev
+    image: ${DOCKERHUB_USERNAME}/ecommerce-frontend:latest
     container_name: ecommerce-nextjs-client
     ports:
       - "3000:3000"
-    volumes:
-      - ./client:/app
-      - /app/node_modules
     environment:
       SPRING_API_URL: http://backend:8080/abtechzone
       NEXT_PUBLIC_SPRING_API_URL: ${NEXT_PUBLIC_SPRING_API_URL}
-      WATCHPACK_POLLING: "true"
-    tty: true
-    stdin_open: true
     depends_on:
       - backend
-    develop:
-      watch:
-        - action: sync
-          path: ./client
-          target: /app
-          ignore:
-            - node_modules/
-            - .next/
-        - action: rebuild
-          path: ./client/package.json
-        - action: rebuild
-          path: ./client/package-lock.json
 
 volumes:
   postgres_data:
-    external: true
-  maven_cache:
   redis_data:
