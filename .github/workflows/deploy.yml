@@ -69,10 +69,21 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
             cd ~/app
-            # Kéo image mới nhất từ Docker Hub về và chạy lại
+            
+            
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+            
+            
             docker compose -f docker-compose.prod.yml pull
+            
+            
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            # Dọn dẹp image cũ cho nhẹ ổ cứng EC2
+            
+            
             docker image prune -f
+            
+            
+            docker logout
