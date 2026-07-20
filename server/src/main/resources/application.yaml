@@ -7,19 +7,18 @@ spring:
   application:
     name: ABTechZone
   datasource:
-    url: "jdbc:postgresql://localhost:3307/ecommerce"
-    username: postgres
-    password: 3223
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
-    open-in-view: false
-
-
-
+  data:
+    redis:
+      url: ${REDIS_ADDRESS:redis://localhost:3308}
 
 jwt:
-  signerKey: "c1a82dd9443f07d5dc82ed097662030773c7f2ead8baa97fcfa0dba99f96407a"
+  signerKey: ${JWT_SIGNER_KEY}
   valid-duration: 86400 # in second
   refreshable-duration: 259200 #seconds

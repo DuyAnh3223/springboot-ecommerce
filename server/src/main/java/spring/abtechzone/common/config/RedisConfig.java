@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RedisConfig {
 
-    @Value("${REDIS_ADDRESS:redis://127.0.0.1:3308}")
+    @Value("${spring.data.redis.url}")
     private String redisAddress;
 
     @Bean
