@@ -22,3 +22,19 @@ jwt:
   signerKey: ${JWT_SIGNER_KEY}
   valid-duration: 86400 # in second
   refreshable-duration: 259200 #seconds
+
+open:
+  api:
+    title: ABTechZone API
+    version: v1.0.0
+    description: RESTful API documentation for ABTechZone e-commerce platform
+    serverUrl: http://localhost:8080/abtechzone
+    serverName: ABTechZone Local Server
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /api-docs

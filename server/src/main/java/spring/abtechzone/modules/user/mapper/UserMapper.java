@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.user.mapper;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -39,12 +40,12 @@ public interface UserMapper {
                             .permissions(
                                     role.getPermissions() != null
                                             ? role.getPermissions().stream()
-                                                    .map(p -> PermissionResponse.builder()
-                                                            .id(p.getId())
-                                                            .name(p.getName())
-                                                            .description(p.getDescription())
-                                                            .build())
-                                                    .collect(java.util.stream.Collectors.toSet())
+                                            .map(p -> PermissionResponse.builder()
+                                                    .id(p.getId())
+                                                    .name(p.getName())
+                                                    .description(p.getDescription())
+                                                    .build())
+                                            .collect(Collectors.toSet())
                                             : null)
                             .build();
                 })
