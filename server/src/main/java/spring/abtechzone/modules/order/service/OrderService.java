@@ -234,8 +234,9 @@ public class OrderService {
         Order order = buildOrder(
                 request, user, addressInfo, processed.subtotal(), voucherInfo.discountAmount(), processed.orderItems());
 
-        // Step 6: Clear Cart items
+        // Step 6: Clear Cart items and mark as COMPLETED
         freshCart.getItems().clear();
+        freshCart.setStatus(CartStatus.COMPLETED);
         cartRepository.save(freshCart);
 
         // Step 7: Update Voucher usage
@@ -395,8 +396,7 @@ public class OrderService {
 
     private Cart getActiveCart(User user) {
         return cartRepository
-                .findByUserId(user.getId())
-                .filter(cart -> cart.getStatus() == CartStatus.ACTIVE)
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
     }
 
