@@ -1,13 +1,16 @@
 package spring.abtechzone.modules.user.service;
 
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
+import java.util.UUID;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
@@ -17,8 +20,6 @@ import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.entity.UserAddress;
 import spring.abtechzone.modules.user.mapper.AddressMapper;
 import spring.abtechzone.modules.user.repository.UserAddressRepository;
-
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -47,7 +48,6 @@ public class AddressService {
         Specification<UserAddress> spec = Specification.where(hasKeyWord(request.getSearch()))
                 .and((root, query, cb) -> cb.equal(root.get("user").get("id"), currentUser.getId()));
         return userAddressRepository.findAll(spec, request.toPageable()).map(addressMapper::toAddressResponse);
-
     }
 
     public AddressResponse getAddress(UUID addressId) {
@@ -67,20 +67,19 @@ public class AddressService {
         return addressMapper.toAddressResponse(userAddressRepository.save(address));
     }
 
-
     public void deleteAddress(UUID addressId) {
         UserAddress address = findUserAddressWithOwnershipCheck(addressId);
         userAddressRepository.delete(address);
     }
 
-
     private UserAddress findUserAddressWithOwnershipCheck(UUID addressId) {
         User currentUser = userService.getCurrentUser();
-        UserAddress address = userAddressRepository.findById(addressId)
+        UserAddress address = userAddressRepository
+                .findById(addressId)
                 .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
 
         if (!address.getUser().getId().equals(currentUser.getId())) {
-            throw new AppException(ErrorCode.ACCESS_DENIED);  // 403 Forbidden
+            throw new AppException(ErrorCode.ACCESS_DENIED); // 403 Forbidden
         }
         return address;
     }

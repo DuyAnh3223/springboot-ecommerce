@@ -87,8 +87,8 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN')") // Ktra quyền trước khi chạy ~~ @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(UserSearchRequest request) {
-        Specification<User> spec = Specification.where(hasKeyword(request.getSearch()))
-                .and(isActive(request.getIsActive()));
+        Specification<User> spec =
+                Specification.where(hasKeyword(request.getSearch())).and(isActive(request.getIsActive()));
         return userRepository.findAll(spec, request.toPageable()).map(userMapper::toUserResponse);
     }
 
@@ -140,8 +140,7 @@ public class UserService {
 
     public User getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 
     private static Specification<User> hasKeyword(String keyword) {

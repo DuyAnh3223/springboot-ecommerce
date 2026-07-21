@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -85,7 +86,7 @@ class OrderServiceTest {
     @Mock
     org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
-    @org.mockito.Spy
+    @Spy
     spring.abtechzone.modules.order.mapper.OrderMapper orderMapper =
             org.mapstruct.factory.Mappers.getMapper(spring.abtechzone.modules.order.mapper.OrderMapper.class);
 

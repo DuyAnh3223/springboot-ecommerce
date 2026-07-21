@@ -1,13 +1,15 @@
 package spring.abtechzone.modules.user.dto.request;
 
+import java.util.Set;
+
 import jakarta.validation.constraints.Min;
-import lombok.*;
-import lombok.experimental.FieldDefaults;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
-import java.util.Set;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Data
 @NoArgsConstructor
@@ -41,8 +43,7 @@ public class AddressSearchRequest {
         return PageRequest.of(pageNumber - 1, pageSize, Sort.by(direction, normalizeSortProperty(sortBy)));
     }
 
-    private static final Set<String> SORT_FIELDS =
-            Set.of("province", "district", "ward", "streetAddress", "country");
+    private static final Set<String> SORT_FIELDS = Set.of("province", "district", "ward", "streetAddress", "country");
 
     private String normalizeSortProperty(String sortBy) {
         return SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
