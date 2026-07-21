@@ -10,8 +10,8 @@ export const addressSchema = z.object({
   district: z.string().min(1, "Vui lòng chọn Quận/Huyện"),
   ward: z.string().min(1, "Vui lòng chọn Phường/Xã"),
   streetAddress: z.string().min(1, "Vui lòng nhập địa chỉ chi tiết (số nhà, tên đường)"),
-  country: z.string().default("VN"),
-  isDefault: z.boolean().default(false),
+  country: z.string(),
+  isDefault: z.boolean(),
 });
 
 export type AddressInput = z.infer<typeof addressSchema>;
