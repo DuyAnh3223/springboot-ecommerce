@@ -46,6 +46,6 @@ public class AddressSearchRequest {
     private static final Set<String> SORT_FIELDS = Set.of("province", "district", "ward", "streetAddress", "country");
 
     private String normalizeSortProperty(String sortBy) {
-        return SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
+        return SORT_FIELDS.contains(sortBy) ? sortBy : "id";
     }
 }

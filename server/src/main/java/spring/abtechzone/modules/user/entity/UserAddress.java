@@ -45,7 +45,7 @@ public class UserAddress {
     String country = "VN";
 
     @Builder.Default
-    boolean isDefault = false;
+    Boolean isDefault = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

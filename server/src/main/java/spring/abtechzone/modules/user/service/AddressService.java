@@ -36,8 +36,9 @@ public class AddressService {
         UserAddress address = addressMapper.toAddress(request);
         address.setUser(currentUser);
 
-        if (address.isDefault() && userAddressRepository.existsByUserIdAndIsDefaultTrue(currentUser.getId())) {
-            address.setDefault(false);
+        if (Boolean.TRUE.equals(address.getIsDefault())
+                && userAddressRepository.existsByUserIdAndIsDefaultTrue(currentUser.getId())) {
+            address.setIsDefault(false);
         }
 
         return addressMapper.toAddressResponse(userAddressRepository.save(address));

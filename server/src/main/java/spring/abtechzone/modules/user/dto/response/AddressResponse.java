@@ -19,5 +19,5 @@ public class AddressResponse {
     String ward;
     String streetAddress;
     String country;
-    boolean isDefault;
+    Boolean isDefault;
 }
