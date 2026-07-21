@@ -18,12 +18,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
 
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
@@ -32,6 +33,8 @@ import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.repository.InventoryReservationRepository;
+import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
 import spring.abtechzone.modules.order.repository.OrderRepository;
@@ -51,17 +54,20 @@ import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class OrderIntegrationTest {
 
     @Container
-    static final MySQLContainer MY_SQL_CONTAINER = new MySQLContainer("mysql:latest");
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MY_SQL_CONTAINER::getJdbcUrl);
-        registry.add("spring.datasource.username", MY_SQL_CONTAINER::getUsername);
-        registry.add("spring.datasource.password", MY_SQL_CONTAINER::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
+        registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
@@ -99,11 +105,10 @@ class OrderIntegrationTest {
     private CategoryRepository categoryRepository;
 
     @Autowired
-    private spring.abtechzone.modules.inventory.repository.InventoryReservationRepository
-            inventoryReservationRepository;
+    private InventoryReservationRepository inventoryReservationRepository;
 
     @Autowired
-    private spring.abtechzone.modules.inventory.repository.StockMovementRepository stockMovementRepository;
+    private StockMovementRepository stockMovementRepository;
 
     private User user;
     private Product product;
@@ -216,10 +221,10 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-									{
-									"voucherCode": "NEWYEAR10"
-									}
-									"""))
+                                    {
+                                    "voucherCode": "NEWYEAR10"
+                                    }
+                                    """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.subtotal").value(3000000.00))
                     .andExpect(jsonPath("$.result.totalDiscount").value(300000.00)) // 10% of 3000000
@@ -244,19 +249,19 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-									{
-									"newUserAddress": {
-										"recipientName": "Tran Thi B",
-										"phone": "0123456789",
-										"province": "Da Nang",
-										"district": "Hai Chau",
-										"ward": "Thuan Phuoc",
-										"streetAddress": "100 Le Loi",
-										"saveAddress": true
-									},
-									"paymentMethod": "COD"
-									}
-									"""))
+                                    {
+                                    "newUserAddress": {
+                                    	"recipientName": "Tran Thi B",
+                                    	"phone": "0123456789",
+                                    	"province": "Da Nang",
+                                    	"district": "Hai Chau",
+                                    	"ward": "Thuan Phuoc",
+                                    	"streetAddress": "100 Le Loi",
+                                    	"saveAddress": true
+                                    },
+                                    "paymentMethod": "COD"
+                                    }
+                                    """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists())
                     .andExpect(jsonPath("$.result.orderCode").exists())
@@ -309,11 +314,11 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-									{
-									"addressId": "%s",
-									"paymentMethod": "BANK_TRANSFER"
-									}
-									""".formatted(userAddress.getId())))
+                                    {
+                                    "addressId": "%s",
+                                    "paymentMethod": "BANK_TRANSFER"
+                                    }
+                                    """.formatted(userAddress.getId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists());
 

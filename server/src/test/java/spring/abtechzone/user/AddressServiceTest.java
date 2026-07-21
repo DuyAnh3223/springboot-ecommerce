@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -64,10 +63,10 @@ public class AddressServiceTest {
     void create_whenNoExistingDefault_shouldSetDefaultTrue() {
         // Given
         AddressRequest request = new AddressRequest();
-        request.setDefault(true);
+        request.setIsDefault(true);
 
         UserAddress address = new UserAddress();
-        address.setDefault(true);
+        address.setIsDefault(true);
 
         when(addressMapper.toAddress(request)).thenReturn(address);
         when(userAddressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(false);
@@ -78,7 +77,7 @@ public class AddressServiceTest {
         AddressResponse response = addressService.create(request);
 
         // Then
-        assertTrue(address.isDefault());
+        assertTrue(address.getIsDefault());
         verify(userAddressRepository).save(address);
     }
 
@@ -87,10 +86,10 @@ public class AddressServiceTest {
     void create_whenExistingDefault_shouldSetDefaultFalse() {
         // Given
         AddressRequest request = new AddressRequest();
-        request.setDefault(true);
+        request.setIsDefault(true);
 
         UserAddress address = new UserAddress();
-        address.setDefault(true); // Request muốn default
+        address.setIsDefault(true); // Request muốn default
 
         when(addressMapper.toAddress(request)).thenReturn(address);
         when(userAddressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(true);
@@ -101,26 +100,26 @@ public class AddressServiceTest {
         addressService.create(request);
 
         // Then
-        assertFalse(address.isDefault()); // Bị ghi đè thành false
+        assertFalse(address.getIsDefault()); // Bị ghi đè thành false
     }
 
     @Test
     @DisplayName("Create address: when request isDefault=false, keep as false")
     void create_whenRequestNotDefault_shouldKeepFalse() {
         AddressRequest request = new AddressRequest();
-        request.setDefault(false);
+        request.setIsDefault(false);
 
         UserAddress address = new UserAddress();
-        address.setDefault(false);
+        address.setIsDefault(false);
 
         when(addressMapper.toAddress(request)).thenReturn(address);
-        // existsBy... không được gọi vì address.isDefault() = false
+        // existsBy... không được gọi vì address.getIsDefault() = false
         when(userAddressRepository.save(any())).thenReturn(address);
         when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
 
         addressService.create(request);
 
-        assertFalse(address.isDefault());
+        assertFalse(address.getIsDefault());
         verify(userAddressRepository, never()).existsByUserIdAndIsDefaultTrue(any());
     }
 
@@ -207,8 +206,9 @@ public class AddressServiceTest {
     void getAddresses_shouldFilterByUserId() {
         AddressSearchRequest request = new AddressSearchRequest();
         request.setSearch("Hanoi");
-        Pageable pageable = PageRequest.of(0, 10);
-        when(request.toPageable()).thenReturn(pageable); // Cần mock/spy
+        request.setPage(1);
+        request.setSize(10);
+        Pageable pageable = request.toPageable();
 
         Page<UserAddress> emptyPage = new PageImpl<>(Collections.emptyList());
         when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))

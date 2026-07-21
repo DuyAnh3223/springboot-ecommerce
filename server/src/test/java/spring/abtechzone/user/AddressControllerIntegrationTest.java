@@ -17,37 +17,43 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.entity.UserAddress;
 import spring.abtechzone.modules.user.repository.UserAddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class AddressControllerIntegrationTest {
 
     @Container
-    @SuppressWarnings("rawtypes")
-    static final MySQLContainer MY_SQL_CONTAINER = new MySQLContainer("mysql:latest");
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MY_SQL_CONTAINER::getJdbcUrl);
-        registry.add("spring.datasource.username", MY_SQL_CONTAINER::getUsername);
-        registry.add("spring.datasource.password", MY_SQL_CONTAINER::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
+        registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
+        registry.add(
+                "jwt.signerKey",
+                () ->
+                        "test-integration-signer-key-please-change-this-value-must-be-at-least-64-bytes-long-for-hs512-algorithm-requirement");
     }
 
     @Autowired
@@ -59,9 +65,12 @@ class AddressControllerIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper objectMapper;
 
-    /** Tên đăng nhập của user chính trong test — phải khớp với JWT subject */
+    /**
+     * Tên đăng nhập của user chính trong test — phải khớp với JWT subject
+     */
     private String ownerUsername;
 
     private String otherUsername;
