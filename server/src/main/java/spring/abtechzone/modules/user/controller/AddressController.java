@@ -1,14 +1,19 @@
 package spring.abtechzone.modules.user.controller;
 
-import jakarta.validation.Valid;
+import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.*;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.crossstore.ChangeSetPersister;
-import org.springframework.data.domain.Page;
-import org.springframework.web.bind.annotation.*;
-import spring.abtechzone.common.dto.ApiResponse;
+import spring.abtechzone.common.dto.ApiResult;
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.dto.request.AddressSearchRequest;
 import spring.abtechzone.modules.user.dto.response.AddressResponse;
@@ -21,33 +26,71 @@ import java.util.UUID;
 @RequestMapping("/addresses")
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Tag(name = "Addresses", description = "Manage shipping addresses for the authenticated user")
 public class AddressController {
+
     AddressService addressService;
 
     @PostMapping
-    ApiResponse<AddressResponse> create(@RequestBody AddressRequest request) {
-        return ApiResponse.<AddressResponse>builder().result(addressService.create(request)).build();
+    @Operation(
+            summary = "Create address",
+            description =
+                    "Add a new shipping address. If no default exists and isDefault=true, the new address becomes the default")
+    @ApiResponse(responseCode = "200", description = "Address created")
+    @ApiResponse(responseCode = "400", description = "Validation error")
+    @ApiResponse(responseCode = "401", description = "Unauthenticated")
+    ApiResult<AddressResponse> create(@RequestBody AddressRequest request) {
+        return ApiResult.<AddressResponse>builder()
+                .result(addressService.create(request))
+                .build();
     }
 
     @GetMapping
-    ApiResponse<Page<AddressResponse>> getAddresses(AddressSearchRequest request) {
-        return ApiResponse.<Page<AddressResponse>>builder().result(addressService.getAddresses(request)).build();
+    @Operation(
+            summary = "Get addresses (paginated)",
+            description = "List the authenticated user's shipping addresses with optional search and pagination")
+    @ApiResponse(responseCode = "200", description = "Addresses retrieved")
+    @ApiResponse(responseCode = "401", description = "Unauthenticated")
+    ApiResult<Page<AddressResponse>> getAddresses(AddressSearchRequest request) {
+        return ApiResult.<Page<AddressResponse>>builder()
+                .result(addressService.getAddresses(request))
+                .build();
     }
 
     @GetMapping("{addressId}")
-    ApiResponse<AddressResponse> getAddress(@PathVariable UUID addressId) {
-        return ApiResponse.<AddressResponse>builder().result(addressService.getAddress(addressId)).build();
+    @Operation(
+            summary = "Get address by ID",
+            description = "Retrieve a single address. Returns ACCESS_DENIED if the address belongs to another user")
+    @ApiResponse(responseCode = "200", description = "Address found")
+    @ApiResponse(responseCode = "404", description = "Address not found")
+    @ApiResponse(responseCode = "403", description = "Address belongs to another user")
+    ApiResult<AddressResponse> getAddress(@Parameter(description = "Address UUID") @PathVariable UUID addressId) {
+        return ApiResult.<AddressResponse>builder()
+                .result(addressService.getAddress(addressId))
+                .build();
     }
 
     @PatchMapping("{addressId}")
-    ApiResponse<AddressResponse> updateAddress(@PathVariable UUID addressId, @RequestBody AddressRequest request) {
-        return ApiResponse.<AddressResponse>builder().result(addressService.updateAddress(addressId, request)).build();
+    @Operation(summary = "Update address", description = "Update an existing address. Only the owner can update")
+    @ApiResponse(responseCode = "200", description = "Address updated")
+    @ApiResponse(responseCode = "404", description = "Address not found")
+    @ApiResponse(responseCode = "403", description = "Access denied")
+    ApiResult<AddressResponse> updateAddress(
+            @Parameter(description = "Address UUID") @PathVariable UUID addressId,
+            @RequestBody AddressRequest request) {
+        return ApiResult.<AddressResponse>builder()
+                .result(addressService.updateAddress(addressId, request))
+                .build();
     }
 
     @DeleteMapping("{addressId}")
-    ApiResponse<Void> deleteAddress(@PathVariable UUID addressId) {
+    @Operation(summary = "Delete address", description = "Delete a shipping address. Only the owner can delete")
+    @ApiResponse(responseCode = "200", description = "Address deleted")
+    @ApiResponse(responseCode = "404", description = "Address not found")
+    @ApiResponse(responseCode = "403", description = "Access denied")
+    ApiResult<Void> deleteAddress(@Parameter(description = "Address UUID") @PathVariable UUID addressId) {
         addressService.deleteAddress(addressId);
-        return ApiResponse.<Void>builder().build();
+        return ApiResult.<Void>builder().build();
     }
 
 }

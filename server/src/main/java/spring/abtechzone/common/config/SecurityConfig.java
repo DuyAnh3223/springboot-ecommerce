@@ -25,6 +25,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
             "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
     };
+    private static final String[] SWAGGER_ENDPOINTS = {
+        "/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/api-docs.yaml", "/swagger-resources/**", "/webjars/**"
+    };
 
     @Value("${jwt.signerKey}")
     private String jwtSignerKey;
@@ -37,7 +40,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) {
-        httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+
+        httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(SWAGGER_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
                 .permitAll()
                 .anyRequest()
                 .authenticated());
