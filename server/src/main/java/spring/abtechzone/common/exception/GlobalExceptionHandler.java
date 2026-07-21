@@ -42,7 +42,7 @@ public class GlobalExceptionHandler {
 
     // Nếu có exception khác ngoài các exception
     @ExceptionHandler(value = Exception.class)
-    ResponseEntity<ApiResult> handlingRuntimeException(RuntimeException exception) {
+    ResponseEntity<ApiResult> handlingRuntimeException(Exception exception) {
         ApiResult apiResult = new ApiResult();
         apiResult.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
         apiResult.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());
