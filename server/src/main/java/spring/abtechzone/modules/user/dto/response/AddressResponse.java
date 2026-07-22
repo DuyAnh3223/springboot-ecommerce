@@ -11,13 +11,13 @@ import lombok.experimental.FieldDefaults;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AddressResponse {
+    UUID id;
     UUID userId;
     String recipientName;
     String phone;
     String province;
-    String district;
     String ward;
-    String streetAddress;
+    String street;
     String country;
     Boolean isDefault;
 }

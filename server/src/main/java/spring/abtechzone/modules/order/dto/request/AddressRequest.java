@@ -20,14 +20,11 @@ public class AddressRequest {
     @NotBlank(message = "Province is required")
     String province;
 
-    @NotBlank(message = "District is required")
-    String district;
-
     @NotBlank(message = "Ward is required")
     String ward;
 
-    @NotBlank(message = "Street address is required")
-    String streetAddress;
+    @NotBlank(message = "Street is required")
+    String street;
 
     boolean saveAddress;
 }

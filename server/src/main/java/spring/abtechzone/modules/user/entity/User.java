@@ -53,7 +53,7 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    List<UserAddress> userAddresses = new ArrayList<>();
+    List<Address> addresses = new ArrayList<>();
 
     @NotNull
     @ColumnDefault("now()")

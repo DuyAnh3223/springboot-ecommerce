@@ -43,7 +43,7 @@ public class AddressSearchRequest {
         return PageRequest.of(pageNumber - 1, pageSize, Sort.by(direction, normalizeSortProperty(sortBy)));
     }
 
-    private static final Set<String> SORT_FIELDS = Set.of("province", "district", "ward", "streetAddress", "country");
+    private static final Set<String> SORT_FIELDS = Set.of("province", "ward", "street", "country");
 
     private String normalizeSortProperty(String sortBy) {
         return SORT_FIELDS.contains(sortBy) ? sortBy : "id";

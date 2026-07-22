@@ -6,15 +6,15 @@ import org.mapstruct.MappingTarget;
 
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.dto.response.AddressResponse;
-import spring.abtechzone.modules.user.entity.UserAddress;
+import spring.abtechzone.modules.user.entity.Address;
 
 @Mapper(componentModel = "spring")
 public interface AddressMapper {
 
-    UserAddress toAddress(AddressRequest request);
+    Address toAddress(AddressRequest request);
 
-    AddressResponse toAddressResponse(UserAddress address);
+    AddressResponse toAddressResponse(Address address);
 
     @Mapping(target = "user", ignore = true)
-    void updateAddress(@MappingTarget UserAddress address, AddressRequest request);
+    void updateAddress(@MappingTarget Address address, AddressRequest request);
 }

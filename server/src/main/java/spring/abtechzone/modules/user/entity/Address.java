@@ -14,8 +14,8 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Table(name = "user_address")
-public class UserAddress {
+@Table(name = "address")
+public class Address {
     @Id
     @GeneratedValue
     UUID id;
@@ -30,13 +30,10 @@ public class UserAddress {
     String province;
 
     @Column(nullable = false)
-    String district;
-
-    @Column(nullable = false)
     String ward;
 
     @Column(name = "line1", nullable = false)
-    String streetAddress;
+    String street;
 
     String line2;
 
