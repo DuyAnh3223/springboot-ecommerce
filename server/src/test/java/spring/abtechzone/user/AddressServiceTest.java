@@ -25,10 +25,10 @@ import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.dto.request.AddressSearchRequest;
 import spring.abtechzone.modules.user.dto.response.AddressResponse;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
 import spring.abtechzone.modules.user.mapper.AddressMapper;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.service.AddressService;
 import spring.abtechzone.modules.user.service.UserService;
 
@@ -36,7 +36,7 @@ import spring.abtechzone.modules.user.service.UserService;
 public class AddressServiceTest {
 
     @Mock
-    UserAddressRepository userAddressRepository;
+    AddressRepository addressRepository;
 
     @Mock
     AddressMapper addressMapper;
@@ -59,18 +59,18 @@ public class AddressServiceTest {
     }
 
     @Test
-    @DisplayName("Create address: when user has no default, new address becomes default")
-    void create_whenNoExistingDefault_shouldSetDefaultTrue() {
+    @DisplayName("Create address: when request isDefault=true, should unset existing defaults and keep isDefault=true")
+    void create_whenRequestDefaultTrue_shouldUnsetExistingAndKeepDefaultTrue() {
         // Given
         AddressRequest request = new AddressRequest();
         request.setIsDefault(true);
 
-        UserAddress address = new UserAddress();
+        Address address = new Address();
         address.setIsDefault(true);
 
         when(addressMapper.toAddress(request)).thenReturn(address);
-        when(userAddressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(false);
-        when(userAddressRepository.save(any())).thenReturn(address);
+        when(addressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(true);
+        when(addressRepository.save(any())).thenReturn(address);
         when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
 
         // When
@@ -78,49 +78,56 @@ public class AddressServiceTest {
 
         // Then
         assertTrue(address.getIsDefault());
-        verify(userAddressRepository).save(address);
+        verify(addressRepository).unsetDefaultAddressesByUserId(userId);
+        verify(addressRepository).save(address);
     }
 
     @Test
-    @DisplayName("Create address: when user already has default, new address should NOT be default")
-    void create_whenExistingDefault_shouldSetDefaultFalse() {
+    @DisplayName(
+            "Create address: when user has no existing default and request isDefault=false, automatically set isDefault=true")
+    void create_whenNoExistingDefaultAndRequestDefaultFalse_shouldSetDefaultTrue() {
         // Given
         AddressRequest request = new AddressRequest();
-        request.setIsDefault(true);
+        request.setIsDefault(false);
 
-        UserAddress address = new UserAddress();
-        address.setIsDefault(true); // Request muốn default
+        Address address = new Address();
+        address.setIsDefault(false);
 
         when(addressMapper.toAddress(request)).thenReturn(address);
-        when(userAddressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(true);
-        when(userAddressRepository.save(any())).thenReturn(address);
+        when(addressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(false);
+        when(addressRepository.save(any())).thenReturn(address);
         when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
 
         // When
         addressService.create(request);
 
         // Then
-        assertFalse(address.getIsDefault()); // Bị ghi đè thành false
+        assertTrue(address.getIsDefault());
+        verify(addressRepository).save(address);
     }
 
     @Test
-    @DisplayName("Create address: when request isDefault=false, keep as false")
-    void create_whenRequestNotDefault_shouldKeepFalse() {
+    @DisplayName("Create address: when user has existing default and request isDefault=false, keep as false")
+    void create_whenExistingDefaultAndRequestDefaultFalse_shouldKeepFalse() {
+        // Given
         AddressRequest request = new AddressRequest();
         request.setIsDefault(false);
 
-        UserAddress address = new UserAddress();
+        Address address = new Address();
         address.setIsDefault(false);
 
         when(addressMapper.toAddress(request)).thenReturn(address);
-        // existsBy... không được gọi vì address.getIsDefault() = false
-        when(userAddressRepository.save(any())).thenReturn(address);
+        when(addressRepository.existsByUserIdAndIsDefaultTrue(userId)).thenReturn(true);
+        when(addressRepository.save(any())).thenReturn(address);
         when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
 
+        // When
         addressService.create(request);
 
+        // Then
         assertFalse(address.getIsDefault());
-        verify(userAddressRepository, never()).existsByUserIdAndIsDefaultTrue(any());
+        verify(addressRepository, never()).unsetDefaultAddressesByUserId(any());
+        verify(addressRepository).save(address);
     }
 
     // ========== GET ADDRESS ==========
@@ -129,10 +136,10 @@ public class AddressServiceTest {
     @DisplayName("Get address: success when owner")
     void getAddress_whenOwner_shouldReturnAddress() {
         UUID addressId = UUID.randomUUID();
-        UserAddress address = new UserAddress();
+        Address address = new Address();
         address.setUser(mockUser);
 
-        when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(address));
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
         when(addressMapper.toAddressResponse(address)).thenReturn(new AddressResponse());
 
         assertDoesNotThrow(() -> addressService.getAddress(addressId));
@@ -145,10 +152,10 @@ public class AddressServiceTest {
         User otherUser = new User();
         otherUser.setId(UUID.randomUUID());
 
-        UserAddress address = new UserAddress();
+        Address address = new Address();
         address.setUser(otherUser);
 
-        when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(address));
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
 
         AppException exception = assertThrows(AppException.class, () -> addressService.getAddress(addressId));
 
@@ -159,7 +166,7 @@ public class AddressServiceTest {
     @DisplayName("Get address: throw ADDRESS_NOT_FOUND when not exists")
     void getAddress_whenNotFound_shouldThrowNotFound() {
         UUID addressId = UUID.randomUUID();
-        when(userAddressRepository.findById(addressId)).thenReturn(Optional.empty());
+        when(addressRepository.findById(addressId)).thenReturn(Optional.empty());
 
         AppException exception = assertThrows(AppException.class, () -> addressService.getAddress(addressId));
 
@@ -174,14 +181,34 @@ public class AddressServiceTest {
         UUID addressId = UUID.randomUUID();
         AddressRequest request = new AddressRequest();
 
-        UserAddress existing = new UserAddress();
+        Address existing = new Address();
         existing.setUser(mockUser);
 
-        when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(existing));
-        when(userAddressRepository.save(any())).thenReturn(existing);
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(existing));
+        when(addressRepository.save(any())).thenReturn(existing);
         when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
 
         assertDoesNotThrow(() -> addressService.updateAddress(addressId, request));
+    }
+
+    @Test
+    @DisplayName("Update address: when owner and request isDefault=true, should unset existing defaults")
+    void updateAddress_whenRequestDefaultTrue_shouldUnsetExistingDefault() {
+        UUID addressId = UUID.randomUUID();
+        AddressRequest request = new AddressRequest();
+        request.setIsDefault(true);
+
+        Address existing = new Address();
+        existing.setUser(mockUser);
+
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(existing));
+        when(addressRepository.save(any())).thenReturn(existing);
+        when(addressMapper.toAddressResponse(any())).thenReturn(new AddressResponse());
+
+        addressService.updateAddress(addressId, request);
+
+        verify(addressRepository).unsetDefaultAddressesByUserId(userId);
+        verify(addressRepository).save(existing);
     }
 
     // ========== DELETE ==========
@@ -190,13 +217,37 @@ public class AddressServiceTest {
     @DisplayName("Delete address: success when owner")
     void deleteAddress_whenOwner_shouldDelete() {
         UUID addressId = UUID.randomUUID();
-        UserAddress existing = new UserAddress();
+        Address existing = new Address();
         existing.setUser(mockUser);
+        existing.setIsDefault(false);
 
-        when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(existing));
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(existing));
 
         assertDoesNotThrow(() -> addressService.deleteAddress(addressId));
-        verify(userAddressRepository).delete(existing);
+        verify(addressRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName(
+            "Delete address: when deleting default address and other addresses exist, set first remaining as default")
+    void deleteAddress_whenDefaultAddress_shouldPromoteNextAddressToDefault() {
+        UUID addressId = UUID.randomUUID();
+        Address existing = new Address();
+        existing.setUser(mockUser);
+        existing.setIsDefault(true);
+
+        Address remainingAddress = new Address();
+        remainingAddress.setUser(mockUser);
+        remainingAddress.setIsDefault(false);
+
+        when(addressRepository.findById(addressId)).thenReturn(Optional.of(existing));
+        when(addressRepository.findByUserId(userId)).thenReturn(java.util.List.of(remainingAddress));
+
+        addressService.deleteAddress(addressId);
+
+        verify(addressRepository).delete(existing);
+        assertTrue(remainingAddress.getIsDefault());
+        verify(addressRepository).save(remainingAddress);
     }
 
     // ========== GET ADDRESSES (List) ==========
@@ -210,12 +261,11 @@ public class AddressServiceTest {
         request.setSize(10);
         Pageable pageable = request.toPageable();
 
-        Page<UserAddress> emptyPage = new PageImpl<>(Collections.emptyList());
-        when(userAddressRepository.findAll(any(Specification.class), eq(pageable)))
-                .thenReturn(emptyPage);
+        Page<Address> emptyPage = new PageImpl<>(Collections.emptyList());
+        when(addressRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(emptyPage);
 
         addressService.getAddresses(request);
 
-        verify(userAddressRepository).findAll(any(Specification.class), eq(pageable));
+        verify(addressRepository).findAll(any(Specification.class), eq(pageable));
     }
 }

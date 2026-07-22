@@ -599,8 +599,8 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        AppException exception = Assertions.assertThrows(
-                AppException.class, () -> voucherService.calculateDiscount(req));
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
         Assertions.assertEquals(ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
     }
 
@@ -626,8 +626,8 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        AppException exception = Assertions.assertThrows(
-                AppException.class, () -> voucherService.calculateDiscount(req));
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
         Assertions.assertEquals(ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
     }
 
@@ -653,8 +653,8 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        AppException exception = Assertions.assertThrows(
-                AppException.class, () -> voucherService.calculateDiscount(req));
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
         Assertions.assertEquals(ErrorCode.VOUCHER_ARE_OUT, exception.getErrorCode());
     }
 
@@ -680,10 +680,9 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(80.0))
                 .build();
 
-        AppException exception = Assertions.assertThrows(
-                AppException.class, () -> voucherService.calculateDiscount(req));
-        Assertions.assertEquals(
-                ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID, exception.getErrorCode());
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
+        Assertions.assertEquals(ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID, exception.getErrorCode());
     }
 
     @Test
@@ -709,12 +708,9 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(50.0).compareTo(resp.getDiscountAmount()));
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(150.0).compareTo(resp.getTotalOrder()));
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalPrice()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(50.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(150.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalPrice()));
     }
 
     @Test
@@ -740,12 +736,9 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(30.0).compareTo(resp.getDiscountAmount()));
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(200.0).compareTo(resp.getTotalOrder()));
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(170.0).compareTo(resp.getTotalPrice()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(30.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(200.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(170.0).compareTo(resp.getTotalPrice()));
     }
 
     @Test
@@ -771,10 +764,8 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getDiscountAmount()));
-        Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalOrder()));
         Assertions.assertEquals(0, BigDecimal.valueOf(0.0).compareTo(resp.getTotalPrice()));
     }
 }

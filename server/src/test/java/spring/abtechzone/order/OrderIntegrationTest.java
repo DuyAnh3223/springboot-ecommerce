@@ -42,9 +42,9 @@ import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
@@ -90,7 +90,7 @@ class OrderIntegrationTest {
     CartItemRepository cartItemRepository;
 
     @Autowired
-    UserAddressRepository userAddressRepository;
+    AddressRepository addressRepository;
 
     @Autowired
     OrderRepository orderRepository;
@@ -123,7 +123,7 @@ class OrderIntegrationTest {
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
-        userAddressRepository.deleteAll();
+        addressRepository.deleteAll();
         voucherRepository.deleteAll();
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
@@ -221,10 +221,10 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {
-                                    "voucherCode": "NEWYEAR10"
-                                    }
-                                    """))
+									{
+									"voucherCode": "NEWYEAR10"
+									}
+									"""))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.subtotal").value(3000000.00))
                     .andExpect(jsonPath("$.result.totalDiscount").value(300000.00)) // 10% of 3000000
@@ -249,19 +249,19 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {
-                                    "newUserAddress": {
-                                    	"recipientName": "Tran Thi B",
-                                    	"phone": "0123456789",
-                                    	"province": "Da Nang",
-                                    	"district": "Hai Chau",
-                                    	"ward": "Thuan Phuoc",
-                                    	"streetAddress": "100 Le Loi",
-                                    	"saveAddress": true
-                                    },
-                                    "paymentMethod": "COD"
-                                    }
-                                    """))
+									{
+									"newAddress": {
+										"recipientName": "Tran Thi B",
+										"phone": "0123456789",
+										"province": "Da Nang",
+										"district": "Hai Chau",
+										"ward": "Thuan Phuoc",
+										"streetAddress": "100 Le Loi",
+										"saveAddress": true
+									},
+									"paymentMethod": "COD"
+									}
+									"""))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists())
                     .andExpect(jsonPath("$.result.orderCode").exists())
@@ -277,9 +277,9 @@ class OrderIntegrationTest {
             assertThat(orderItemRepository.findAll()).hasSize(1);
 
             // Verify address was saved
-            List<UserAddress> savedUserAddresses = userAddressRepository.findByUserId(user.getId());
-            assertThat(savedUserAddresses).hasSize(1);
-            assertThat(savedUserAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
+            List<Address> savedAddresses = addressRepository.findByUserId(user.getId());
+            assertThat(savedAddresses).hasSize(1);
+            assertThat(savedAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
 
             // Verify stock reduced
             ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
@@ -300,13 +300,12 @@ class OrderIntegrationTest {
                     CartItem.builder().cart(cart).productSku(sku).quantity(1).build());
 
             // Setup address
-            UserAddress userAddress = userAddressRepository.save(UserAddress.builder()
+            Address address = addressRepository.save(Address.builder()
                     .recipientName("Le Van C")
                     .phone("0988888888")
                     .province("HCM")
-                    .district("Dist 3")
                     .ward("Ward 5")
-                    .streetAddress("123 Vo Van Tan")
+                    .street("123 Vo Van Tan")
                     .user(user)
                     .build());
 
@@ -314,11 +313,11 @@ class OrderIntegrationTest {
                             .with(jwt().jwt(j -> j.subject("testuser")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {
-                                    "addressId": "%s",
-                                    "paymentMethod": "BANK_TRANSFER"
-                                    }
-                                    """.formatted(userAddress.getId())))
+									{
+									"addressId": "%s",
+									"paymentMethod": "BANK_TRANSFER"
+									}
+									""".formatted(address.getId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists());
 

@@ -17,9 +17,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @SpringBootTest
@@ -42,7 +42,7 @@ class AddressRepositoryIntegrationTest {
     }
 
     @Autowired
-    private UserAddressRepository userAddressRepository;
+    private AddressRepository addressRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -52,7 +52,7 @@ class AddressRepositoryIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        userAddressRepository.deleteAll();
+        addressRepository.deleteAll();
         userRepository.deleteAll();
 
         userA = userRepository.save(User.builder()
@@ -77,7 +77,7 @@ class AddressRepositoryIntegrationTest {
         saveAddress(userA, "Hải Phòng", true);
         saveAddress(userB, "TP HCM", false);
 
-        List<UserAddress> result = userAddressRepository.findByUserId(userA.getId());
+        List<Address> result = addressRepository.findByUserId(userA.getId());
 
         assertThat(result).hasSize(2);
         assertThat(result).allMatch(addr -> addr.getUser().getId().equals(userA.getId()));
@@ -86,7 +86,7 @@ class AddressRepositoryIntegrationTest {
     @Test
     @DisplayName("findByUserId: trả về danh sách rỗng khi user chưa có địa chỉ nào")
     void findByUserId_whenNoAddress_shouldReturnEmptyList() {
-        List<UserAddress> result = userAddressRepository.findByUserId(userA.getId());
+        List<Address> result = addressRepository.findByUserId(userA.getId());
 
         assertThat(result).isEmpty();
     }
@@ -98,7 +98,7 @@ class AddressRepositoryIntegrationTest {
     void existsByUserIdAndIsDefaultTrue_whenDefaultExists_shouldReturnTrue() {
         saveAddress(userA, "Hà Nội", true);
 
-        boolean exists = userAddressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
+        boolean exists = addressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
 
         assertThat(exists).isTrue();
     }
@@ -108,7 +108,7 @@ class AddressRepositoryIntegrationTest {
     void existsByUserIdAndIsDefaultTrue_whenNoDefault_shouldReturnFalse() {
         saveAddress(userA, "Hà Nội", false);
 
-        boolean exists = userAddressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
+        boolean exists = addressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
 
         assertThat(exists).isFalse();
     }
@@ -118,7 +118,7 @@ class AddressRepositoryIntegrationTest {
     void existsByUserIdAndIsDefaultTrue_defaultOfOtherUser_shouldNotAffect() {
         saveAddress(userB, "TP HCM", true);
 
-        boolean exists = userAddressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
+        boolean exists = addressRepository.existsByUserIdAndIsDefaultTrue(userA.getId());
 
         assertThat(exists).isFalse();
     }
@@ -128,9 +128,9 @@ class AddressRepositoryIntegrationTest {
     @Test
     @DisplayName("save: lưu địa chỉ và tìm lại theo id thành công")
     void save_andFindById_shouldPersistAddress() {
-        UserAddress saved = saveAddress(userA, "Đà Nẵng", false);
+        Address saved = saveAddress(userA, "Đà Nẵng", false);
 
-        UserAddress found = userAddressRepository.findById(saved.getId()).orElseThrow();
+        Address found = addressRepository.findById(saved.getId()).orElseThrow();
 
         assertThat(found.getProvince()).isEqualTo("Đà Nẵng");
         assertThat(found.getRecipientName()).isEqualTo("Nguyễn Văn A");
@@ -140,24 +140,23 @@ class AddressRepositoryIntegrationTest {
     @Test
     @DisplayName("delete: xoá địa chỉ, findById trả về empty")
     void delete_shouldRemoveAddress() {
-        UserAddress saved = saveAddress(userA, "Cần Thơ", false);
+        Address saved = saveAddress(userA, "Cần Thơ", false);
 
-        userAddressRepository.delete(saved);
+        addressRepository.delete(saved);
 
-        assertThat(userAddressRepository.findById(saved.getId())).isEmpty();
+        assertThat(addressRepository.findById(saved.getId())).isEmpty();
     }
 
     // ─────────── helper ───────────
 
-    private UserAddress saveAddress(User owner, String province, boolean isDefault) {
-        return userAddressRepository.save(UserAddress.builder()
+    private Address saveAddress(User owner, String province, boolean isDefault) {
+        return addressRepository.save(Address.builder()
                 .user(owner)
                 .recipientName("Nguyễn Văn A")
                 .phone("0901234567")
                 .province(province)
-                .district("Quận 1")
                 .ward("Phường Bến Nghé")
-                .streetAddress("123 Lê Lợi")
+                .street("123 Lê Lợi")
                 .country("VN")
                 .isDefault(isDefault)
                 .build());

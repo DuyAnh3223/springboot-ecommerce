@@ -26,9 +26,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import tools.jackson.databind.ObjectMapper;
 
@@ -60,7 +60,7 @@ class AddressControllerIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserAddressRepository userAddressRepository;
+    private AddressRepository addressRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -78,7 +78,7 @@ class AddressControllerIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        userAddressRepository.deleteAll();
+        addressRepository.deleteAll();
         userRepository.deleteAll();
 
         ownerUsername = "owner_" + UUID.randomUUID();
@@ -118,8 +118,9 @@ class AddressControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /addresses: nếu user đã có địa chỉ mặc định, địa chỉ mới KHÔNG được là mặc định")
-    void createAddress_whenDefaultAlreadyExists_newAddressShouldNotBeDefault() throws Exception {
+    @DisplayName(
+            "POST /addresses: nếu user đã có địa chỉ mặc định, địa chỉ mới isDefault=true sẽ trở thành địa chỉ mặc định mới")
+    void createAddress_whenDefaultAlreadyExists_newAddressShouldBecomeDefault() throws Exception {
         // Tạo địa chỉ mặc định đầu tiên
         mockMvc.perform(post("/addresses")
                         .with(jwt().jwt(jwt -> jwt.subject(ownerUsername)))
@@ -133,7 +134,7 @@ class AddressControllerIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(buildAddressRequest("Đà Nẵng", true))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.isDefault").value(false));
+                .andExpect(jsonPath("$.result.isDefault").value(true));
     }
 
     @Test
@@ -189,7 +190,7 @@ class AddressControllerIntegrationTest {
     @Test
     @DisplayName("GET /addresses/{id}: lấy địa chỉ thành công khi là chủ sở hữu")
     void getAddress_whenOwner_shouldReturn200() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Cần Thơ", false);
+        Address address = saveAddressForUser(ownerUser, "Cần Thơ", false);
 
         mockMvc.perform(get("/addresses/{addressId}", address.getId())
                         .with(jwt().jwt(jwt -> jwt.subject(ownerUsername))))
@@ -200,7 +201,7 @@ class AddressControllerIntegrationTest {
     @Test
     @DisplayName("GET /addresses/{id}: trả về 403 khi không phải chủ sở hữu")
     void getAddress_whenNotOwner_shouldReturn403() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Hà Nội", false);
+        Address address = saveAddressForUser(ownerUser, "Hà Nội", false);
 
         mockMvc.perform(get("/addresses/{addressId}", address.getId())
                         .with(jwt().jwt(jwt -> jwt.subject(otherUsername))))
@@ -224,7 +225,7 @@ class AddressControllerIntegrationTest {
     @Test
     @DisplayName("PATCH /addresses/{id}: cập nhật thành công khi là chủ sở hữu")
     void updateAddress_whenOwner_shouldReturn200() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Hà Nội", false);
+        Address address = saveAddressForUser(ownerUser, "Hà Nội", false);
 
         AddressRequest updateRequest = buildAddressRequest("TP HCM", false);
 
@@ -239,7 +240,7 @@ class AddressControllerIntegrationTest {
     @Test
     @DisplayName("PATCH /addresses/{id}: trả về 403 khi không phải chủ sở hữu")
     void updateAddress_whenNotOwner_shouldReturn403() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Hà Nội", false);
+        Address address = saveAddressForUser(ownerUser, "Hà Nội", false);
 
         mockMvc.perform(patch("/addresses/{addressId}", address.getId())
                         .with(jwt().jwt(jwt -> jwt.subject(otherUsername)))
@@ -267,7 +268,7 @@ class AddressControllerIntegrationTest {
     @Test
     @DisplayName("DELETE /addresses/{id}: xoá thành công khi là chủ sở hữu")
     void deleteAddress_whenOwner_shouldReturn200() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Hà Nội", false);
+        Address address = saveAddressForUser(ownerUser, "Hà Nội", false);
 
         mockMvc.perform(delete("/addresses/{addressId}", address.getId())
                         .with(jwt().jwt(jwt -> jwt.subject(ownerUsername))))
@@ -275,14 +276,14 @@ class AddressControllerIntegrationTest {
                 .andExpect(jsonPath("$.code").value(1000));
 
         // Xác nhận đã bị xoá khỏi DB
-        org.assertj.core.api.Assertions.assertThat(userAddressRepository.findById(address.getId()))
+        org.assertj.core.api.Assertions.assertThat(addressRepository.findById(address.getId()))
                 .isEmpty();
     }
 
     @Test
     @DisplayName("DELETE /addresses/{id}: trả về 403 khi không phải chủ sở hữu")
     void deleteAddress_whenNotOwner_shouldReturn403() throws Exception {
-        UserAddress address = saveAddressForUser(ownerUser, "Hà Nội", false);
+        Address address = saveAddressForUser(ownerUser, "Hà Nội", false);
 
         mockMvc.perform(delete("/addresses/{addressId}", address.getId())
                         .with(jwt().jwt(jwt -> jwt.subject(otherUsername))))
@@ -306,23 +307,21 @@ class AddressControllerIntegrationTest {
                 .recipientName("Nguyễn Văn A")
                 .phone("0901234567")
                 .province(province)
-                .district("Quận 1")
                 .ward("Phường Bến Nghé")
-                .streetAddress("123 Lê Lợi")
+                .street("123 Lê Lợi")
                 .country("VN")
                 .isDefault(isDefault)
                 .build();
     }
 
-    private UserAddress saveAddressForUser(User owner, String province, boolean isDefault) {
-        return userAddressRepository.save(UserAddress.builder()
+    private Address saveAddressForUser(User owner, String province, boolean isDefault) {
+        return addressRepository.save(Address.builder()
                 .user(owner)
                 .recipientName("Nguyễn Văn A")
                 .phone("0901234567")
                 .province(province)
-                .district("Quận 1")
                 .ward("Phường Bến Nghé")
-                .streetAddress("123 Lê Lợi")
+                .street("123 Lê Lợi")
                 .country("VN")
                 .isDefault(isDefault)
                 .build());

@@ -26,8 +26,8 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-
 import org.springframework.transaction.support.TransactionTemplate;
+
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.cart.constant.CartStatus;
@@ -48,9 +48,9 @@ import spring.abtechzone.modules.order.service.OrderService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
@@ -77,7 +77,7 @@ class OrderServiceTest {
     OrderRepository orderRepository;
 
     @Mock
-    UserAddressRepository userAddressRepository;
+    AddressRepository addressRepository;
 
     @Mock
     VoucherValidator voucherValidator;
@@ -152,8 +152,8 @@ class OrderServiceTest {
                 .when(inventoryService)
                 .reserveStock(any(), anyInt(), any());
 
-        lenient().when(userAddressRepository.save(any(UserAddress.class))).thenAnswer(invocation -> {
-            UserAddress addr = invocation.getArgument(0);
+        lenient().when(addressRepository.save(any(Address.class))).thenAnswer(invocation -> {
+            Address addr = invocation.getArgument(0);
             if (addr.getId() == null) {
                 addr.setId(java.util.UUID.randomUUID());
             }
@@ -267,18 +267,17 @@ class OrderServiceTest {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            UserAddress userAddress = UserAddress.builder()
+            Address address = Address.builder()
                     .id(addressId)
                     .recipientName("Van A")
                     .phone("0909090909")
                     .province("HCM")
-                    .district("Dist 1")
                     .ward("Ben Nghe")
-                    .streetAddress("1 Le Loi")
+                    .street("1 Le Loi")
                     .user(user)
                     .build();
 
-            when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(userAddress));
+            when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
 
             when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
                 Order orderToSave = invocation.getArgument(0);
@@ -315,9 +314,8 @@ class OrderServiceTest {
                     .recipientName("Van B")
                     .phone("0808080808")
                     .province("Da Nang")
-                    .district("Hai Chau")
                     .ward("Thach Thang")
-                    .streetAddress("50 Nguyen Chi Thanh")
+                    .street("50 Nguyen Chi Thanh")
                     .saveAddress(true)
                     .build();
 
@@ -336,11 +334,11 @@ class OrderServiceTest {
 
             assertThat(response.getOrderId()).isEqualTo(888L);
 
-            ArgumentCaptor<UserAddress> addressCaptor = ArgumentCaptor.forClass(UserAddress.class);
-            verify(userAddressRepository).save(addressCaptor.capture());
-            UserAddress savedUserAddress = addressCaptor.getValue();
-            assertThat(savedUserAddress.getRecipientName()).isEqualTo("Van B");
-            assertThat(savedUserAddress.getUser().getId()).isEqualTo(userId);
+            ArgumentCaptor<Address> addressCaptor = ArgumentCaptor.forClass(Address.class);
+            verify(addressRepository).save(addressCaptor.capture());
+            Address savedAddress = addressCaptor.getValue();
+            assertThat(savedAddress.getRecipientName()).isEqualTo("Van B");
+            assertThat(savedAddress.getUser().getId()).isEqualTo(userId);
         }
 
         @Test
@@ -366,10 +364,9 @@ class OrderServiceTest {
             User otherUser = User.builder()
                     .id(java.util.UUID.fromString("22222222-2222-2222-2222-222222222222"))
                     .build();
-            UserAddress userAddress =
-                    UserAddress.builder().id(addressId).user(otherUser).build();
+            Address address = Address.builder().id(addressId).user(otherUser).build();
 
-            when(userAddressRepository.findById(addressId)).thenReturn(Optional.of(userAddress));
+            when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
 
             CreateOrderRequest request = CreateOrderRequest.builder()
                     .addressId(addressId)
