@@ -38,3 +38,10 @@ springdoc:
     operations-sorter: alpha
   api-docs:
     path: /api-docs
+
+aws:
+  region: ${AWS_REGION:ap-northeast-1}
+  access-key: ${AWS_BUCKET_ACCESS_KEY:}
+  secret-key: ${AWS_BUCKET_SECRET_KEY:${AWS_BUCKET_SERCRET_KEY:}}
+  s3:
+    bucket: ${AWS_BUCKET_NAME:aws-s3-image-management}
