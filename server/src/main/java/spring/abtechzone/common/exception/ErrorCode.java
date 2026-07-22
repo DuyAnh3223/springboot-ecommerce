@@ -71,6 +71,7 @@ public enum ErrorCode {
     PRODUCT_MUST_HAVE_ACTIVE_SKU(1059, "Published product must have at least one active SKU", HttpStatus.BAD_REQUEST),
     PRODUCT_CATEGORY_CANNOT_BE_CHANGED(
             1060, "Product category cannot be changed after creation", HttpStatus.BAD_REQUEST),
+    ACCESS_DENIED(1061, "Access denied", HttpStatus.FORBIDDEN),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

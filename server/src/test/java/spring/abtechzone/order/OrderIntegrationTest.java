@@ -18,12 +18,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
 
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
@@ -32,6 +33,8 @@ import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.repository.InventoryReservationRepository;
+import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
 import spring.abtechzone.modules.order.repository.OrderRepository;
@@ -39,9 +42,9 @@ import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
@@ -51,17 +54,20 @@ import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class OrderIntegrationTest {
 
     @Container
-    static final MySQLContainer MY_SQL_CONTAINER = new MySQLContainer("mysql:latest");
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MY_SQL_CONTAINER::getJdbcUrl);
-        registry.add("spring.datasource.username", MY_SQL_CONTAINER::getUsername);
-        registry.add("spring.datasource.password", MY_SQL_CONTAINER::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
+        registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
@@ -84,7 +90,7 @@ class OrderIntegrationTest {
     CartItemRepository cartItemRepository;
 
     @Autowired
-    UserAddressRepository userAddressRepository;
+    AddressRepository addressRepository;
 
     @Autowired
     OrderRepository orderRepository;
@@ -99,11 +105,10 @@ class OrderIntegrationTest {
     private CategoryRepository categoryRepository;
 
     @Autowired
-    private spring.abtechzone.modules.inventory.repository.InventoryReservationRepository
-            inventoryReservationRepository;
+    private InventoryReservationRepository inventoryReservationRepository;
 
     @Autowired
-    private spring.abtechzone.modules.inventory.repository.StockMovementRepository stockMovementRepository;
+    private StockMovementRepository stockMovementRepository;
 
     private User user;
     private Product product;
@@ -118,7 +123,7 @@ class OrderIntegrationTest {
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
-        userAddressRepository.deleteAll();
+        addressRepository.deleteAll();
         voucherRepository.deleteAll();
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
@@ -245,7 +250,7 @@ class OrderIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
 									{
-									"newUserAddress": {
+									"newAddress": {
 										"recipientName": "Tran Thi B",
 										"phone": "0123456789",
 										"province": "Da Nang",
@@ -272,9 +277,9 @@ class OrderIntegrationTest {
             assertThat(orderItemRepository.findAll()).hasSize(1);
 
             // Verify address was saved
-            List<UserAddress> savedUserAddresses = userAddressRepository.findByUserId(user.getId());
-            assertThat(savedUserAddresses).hasSize(1);
-            assertThat(savedUserAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
+            List<Address> savedAddresses = addressRepository.findByUserId(user.getId());
+            assertThat(savedAddresses).hasSize(1);
+            assertThat(savedAddresses.get(0).getRecipientName()).isEqualTo("Tran Thi B");
 
             // Verify stock reduced
             ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
@@ -295,13 +300,12 @@ class OrderIntegrationTest {
                     CartItem.builder().cart(cart).productSku(sku).quantity(1).build());
 
             // Setup address
-            UserAddress userAddress = userAddressRepository.save(UserAddress.builder()
+            Address address = addressRepository.save(Address.builder()
                     .recipientName("Le Van C")
                     .phone("0988888888")
                     .province("HCM")
-                    .district("Dist 3")
                     .ward("Ward 5")
-                    .streetAddress("123 Vo Van Tan")
+                    .street("123 Vo Van Tan")
                     .user(user)
                     .build());
 
@@ -313,7 +317,7 @@ class OrderIntegrationTest {
 									"addressId": "%s",
 									"paymentMethod": "BANK_TRANSFER"
 									}
-									""".formatted(userAddress.getId())))
+									""".formatted(address.getId())))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result.orderId").exists());
 

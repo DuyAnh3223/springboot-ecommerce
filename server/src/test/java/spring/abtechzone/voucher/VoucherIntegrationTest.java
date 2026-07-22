@@ -12,22 +12,23 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
+import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
 import spring.abtechzone.modules.product.entity.Product;
@@ -43,21 +44,25 @@ import spring.abtechzone.modules.voucher.dto.response.VoucherDiscountResponse;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 import spring.abtechzone.modules.voucher.service.VoucherService;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class VoucherIntegrationTest {
 
     @Container
-    static final MySQLContainer MY_SQL_CONTAINER = new MySQLContainer("mysql:latest");
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MY_SQL_CONTAINER::getJdbcUrl);
-        registry.add("spring.datasource.username", MY_SQL_CONTAINER::getUsername);
-        registry.add("spring.datasource.password", MY_SQL_CONTAINER::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
+        registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
@@ -79,9 +84,8 @@ class VoucherIntegrationTest {
     @Autowired
     private VoucherService voucherService;
 
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private ProductSku seededSku;
 
@@ -595,10 +599,9 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                spring.abtechzone.common.exception.ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
+        Assertions.assertEquals(ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
     }
 
     @Test
@@ -623,10 +626,9 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                spring.abtechzone.common.exception.ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
+        Assertions.assertEquals(ErrorCode.VOUCHER_EXPIRED, exception.getErrorCode());
     }
 
     @Test
@@ -651,10 +653,9 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(200.0))
                 .build();
 
-        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                spring.abtechzone.common.exception.ErrorCode.VOUCHER_ARE_OUT, exception.getErrorCode());
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
+        Assertions.assertEquals(ErrorCode.VOUCHER_ARE_OUT, exception.getErrorCode());
     }
 
     @Test
@@ -679,10 +680,9 @@ class VoucherIntegrationTest {
                 .totalOrder(BigDecimal.valueOf(80.0))
                 .build();
 
-        spring.abtechzone.common.exception.AppException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                spring.abtechzone.common.exception.AppException.class, () -> voucherService.calculateDiscount(req));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                spring.abtechzone.common.exception.ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID, exception.getErrorCode());
+        AppException exception =
+                Assertions.assertThrows(AppException.class, () -> voucherService.calculateDiscount(req));
+        Assertions.assertEquals(ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID, exception.getErrorCode());
     }
 
     @Test
@@ -708,12 +708,9 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(50.0).compareTo(resp.getDiscountAmount()));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(150.0).compareTo(resp.getTotalOrder()));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalPrice()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(50.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(150.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalPrice()));
     }
 
     @Test
@@ -739,12 +736,9 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(30.0).compareTo(resp.getDiscountAmount()));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(200.0).compareTo(resp.getTotalOrder()));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(170.0).compareTo(resp.getTotalPrice()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(30.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(200.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(170.0).compareTo(resp.getTotalPrice()));
     }
 
     @Test
@@ -770,10 +764,8 @@ class VoucherIntegrationTest {
                 .build();
 
         VoucherDiscountResponse resp = voucherService.calculateDiscount(req);
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getDiscountAmount()));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalOrder()));
-        org.junit.jupiter.api.Assertions.assertEquals(0, BigDecimal.valueOf(0.0).compareTo(resp.getTotalPrice()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getDiscountAmount()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(100.0).compareTo(resp.getTotalOrder()));
+        Assertions.assertEquals(0, BigDecimal.valueOf(0.0).compareTo(resp.getTotalPrice()));
     }
 }

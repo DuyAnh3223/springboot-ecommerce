@@ -55,14 +55,16 @@ public class CartService {
                 .orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
 
         // Tìm hoặc tạo Cart cho user
-        Cart cart = cartRepository.findByUserId(user.getId()).orElseGet(() -> {
-            Cart newCart = Cart.builder()
-                    .user(user)
-                    .status(CartStatus.ACTIVE)
-                    .items(new ArrayList<>())
-                    .build();
-            return cartRepository.save(newCart);
-        });
+        Cart cart = cartRepository
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .orElseGet(() -> {
+                    Cart newCart = Cart.builder()
+                            .user(user)
+                            .status(CartStatus.ACTIVE)
+                            .items(new ArrayList<>())
+                            .build();
+                    return cartRepository.save(newCart);
+                });
 
         // Kiểm tra xem ProductSku đã có trong giỏ hàng chưa
         Optional<CartItem> existingItem = cart.getItems().stream()
@@ -97,8 +99,9 @@ public class CartService {
     public CartResponse getCart() {
         User user = getAuthenticatedUser();
 
-        Cart cart =
-                cartRepository.findByUserId(user.getId()).orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
+        Cart cart = cartRepository
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         // Sync giá mới nhất từ ProductSku cho mỗi item
         for (CartItem item : cart.getItems()) {
@@ -116,8 +119,9 @@ public class CartService {
     public void removeCartItem(Long skuId) {
         User user = getAuthenticatedUser();
 
-        Cart cart =
-                cartRepository.findByUserId(user.getId()).orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
+        Cart cart = cartRepository
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
                 .findByCartIdAndProductSkuId(cart.getId(), skuId)
@@ -133,8 +137,9 @@ public class CartService {
     public CartItemResponse updateCartItemQuantity(Long skuId, UpdateQuantityRequest request) {
         User user = getAuthenticatedUser();
 
-        Cart cart =
-                cartRepository.findByUserId(user.getId()).orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
+        Cart cart = cartRepository
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
                 .findByCartIdAndProductSkuId(cart.getId(), skuId)
@@ -163,8 +168,9 @@ public class CartService {
     public void clearCart() {
         User user = getAuthenticatedUser();
 
-        Cart cart =
-                cartRepository.findByUserId(user.getId()).orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
+        Cart cart = cartRepository
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         cart.getItems().clear();
         cartRepository.save(cart);

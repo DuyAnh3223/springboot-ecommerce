@@ -10,7 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 
-import spring.abtechzone.common.dto.ApiResponse;
+import spring.abtechzone.common.dto.ApiResult;
 import spring.abtechzone.common.exception.ErrorCode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,14 +24,14 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setStatus(errorCode.getStatusCode().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
-        ApiResponse<?> apiResponse = ApiResponse.builder()
+        ApiResult<?> apiResult = ApiResult.builder()
                 .code(errorCode.getCode())
                 .message(errorCode.getMessage())
                 .build();
 
         ObjectMapper mapper = new ObjectMapper();
 
-        response.getWriter().write(mapper.writeValueAsString(apiResponse));
+        response.getWriter().write(mapper.writeValueAsString(apiResult));
         response.flushBuffer();
     }
 }

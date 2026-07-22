@@ -1,0 +1,7 @@
+jwt:
+  signerKey: "test-integration-signer-key-please-change-this-value-must-be-at-least-64-bytes-long-for-hs512-algorithm-requirement"
+
+spring:
+  data:
+    redis:
+      url: redis://localhost:6379

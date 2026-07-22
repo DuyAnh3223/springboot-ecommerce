@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.user.mapper;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -44,7 +45,7 @@ public interface UserMapper {
                                                             .name(p.getName())
                                                             .description(p.getDescription())
                                                             .build())
-                                                    .collect(java.util.stream.Collectors.toSet())
+                                                    .collect(Collectors.toSet())
                                             : null)
                             .build();
                 })
