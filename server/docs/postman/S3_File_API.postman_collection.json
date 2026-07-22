@@ -1,0 +1,150 @@
+{
+	"info": {
+		"_postman_id": "a9b8c7d6-e5f4-4321-8765-4321fedcba98",
+		"name": "ABTechZone - AWS S3 File API",
+		"description": "Postman collection for testing AWS S3 Upload, Get URL, Download, and Delete endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Upload File (POST /files/upload)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": []
+						},
+						{
+							"key": "folder",
+							"value": "products",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8080/abtechzone/files/upload",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"abtechzone",
+						"files",
+						"upload"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Get File Public URL (GET /files/url)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/abtechzone/files/url?key=products/sample.jpg",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"abtechzone",
+						"files",
+						"url"
+					],
+					"query": [
+						{
+							"key": "key",
+							"value": "products/sample.jpg"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Download File (GET /files/download)",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/abtechzone/files/download?key=products/sample.jpg",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"abtechzone",
+						"files",
+						"download"
+					],
+					"query": [
+						{
+							"key": "key",
+							"value": "products/sample.jpg"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Delete File (DELETE /files)",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{token}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/abtechzone/files?key=products/sample.jpg",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"abtechzone",
+						"files"
+					],
+					"query": [
+						{
+							"key": "key",
+							"value": "products/sample.jpg"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
