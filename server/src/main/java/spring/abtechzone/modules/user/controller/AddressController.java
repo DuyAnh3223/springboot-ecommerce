@@ -19,8 +19,6 @@ import spring.abtechzone.modules.user.dto.request.AddressSearchRequest;
 import spring.abtechzone.modules.user.dto.response.AddressResponse;
 import spring.abtechzone.modules.user.service.AddressService;
 
-import java.util.UUID;
-
 @Slf4j
 @RestController
 @RequestMapping("/addresses")
@@ -92,5 +90,4 @@ public class AddressController {
         addressService.deleteAddress(addressId);
         return ApiResult.<Void>builder().build();
     }
-
 }

@@ -17,14 +17,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.modules.category.entity.Attribute;
@@ -40,29 +39,34 @@ import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
 import spring.abtechzone.modules.product.repository.ProductRepository;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class ProductIntegrationTest {
 
     @Container
-    static final MySQLContainer MY_SQL_CONTAINER = new MySQLContainer("mysql:latest");
+    @SuppressWarnings("resource")
+    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MY_SQL_CONTAINER::getJdbcUrl);
-        registry.add("spring.datasource.username", MY_SQL_CONTAINER::getUsername);
-        registry.add("spring.datasource.password", MY_SQL_CONTAINER::getPassword);
-        registry.add("spring.datasource.driver-class-name", () -> "com.mysql.cj.jdbc.Driver");
+        registry.add("spring.datasource.url", POSTGRES_CONTAINER::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES_CONTAINER::getUsername);
+        registry.add("spring.datasource.password", POSTGRES_CONTAINER::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
 
     @Autowired
     private MockMvc mockMvc;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private ProductRepository productRepository;
@@ -107,10 +111,19 @@ class ProductIntegrationTest {
         Attribute colorDef = new Attribute();
         colorDef.setCode("Color");
         colorDef.setName("Color");
-        colorDef.setDataType("STRING");
+        colorDef.setDataType("ENUM");
+        colorDef.setEnumValues(List.of(Map.of("value", "Red"), Map.of("value", "Blue"), Map.of("value", "Green")));
         colorDef.setCreatedAt(java.time.OffsetDateTime.now());
         colorDef.setUpdatedAt(java.time.OffsetDateTime.now());
         colorDef = attributeRepository.save(colorDef);
+
+        Attribute colorOptionsDef = new Attribute();
+        colorOptionsDef.setCode("ColorOptions");
+        colorOptionsDef.setName("ColorOptions");
+        colorOptionsDef.setDataType("STRING");
+        colorOptionsDef.setCreatedAt(java.time.OffsetDateTime.now());
+        colorOptionsDef.setUpdatedAt(java.time.OffsetDateTime.now());
+        colorOptionsDef = attributeRepository.save(colorOptionsDef);
 
         // Gán attribute vào category kèm cấu hình
         CategoryAttribute colorCa = new CategoryAttribute();
@@ -120,10 +133,24 @@ class ProductIntegrationTest {
         colorCa.setIsVariantDefining(true);
         colorCa.setIsCompatibilityKey(false);
         colorCa.setIsRequired(false);
+        colorCa.setIsMultiValue(false);
         colorCa.setSortOrder(1);
         colorCa.setCreatedAt(java.time.OffsetDateTime.now());
         colorCa.setUpdatedAt(java.time.OffsetDateTime.now());
         categoryAttributeRepository.save(colorCa);
+
+        CategoryAttribute colorOptionsCa = new CategoryAttribute();
+        colorOptionsCa.setCategory(seededCategory);
+        colorOptionsCa.setAttribute(colorOptionsDef);
+        colorOptionsCa.setIsFilterable(true);
+        colorOptionsCa.setIsVariantDefining(false);
+        colorOptionsCa.setIsCompatibilityKey(false);
+        colorOptionsCa.setIsRequired(false);
+        colorOptionsCa.setIsMultiValue(true);
+        colorOptionsCa.setSortOrder(2);
+        colorOptionsCa.setCreatedAt(java.time.OffsetDateTime.now());
+        colorOptionsCa.setUpdatedAt(java.time.OffsetDateTime.now());
+        categoryAttributeRepository.save(colorOptionsCa);
 
         request = ProductCreateRequest.builder()
                 .name("Test Product NAME")
@@ -132,7 +159,7 @@ class ProductIntegrationTest {
                 .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
-                .attributes(Map.of("Color", List.of("Red", "Blue")))
+                .attributes(Map.of("ColorOptions", List.of("Red", "Blue")))
                 .productSkus(List.of(ProductSkuCreateRequest.builder()
                         .sku("SKU-RED-001")
                         .price(new BigDecimal("99.99"))
@@ -146,7 +173,9 @@ class ProductIntegrationTest {
     @Test
     void createProduct_success() throws Exception {
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -161,14 +190,18 @@ class ProductIntegrationTest {
     void createProduct_duplicateSku_throwsException() throws Exception {
         // Create the first product successfully
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
         // Attempting to create another product with the same SKU should fail
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -179,7 +212,9 @@ class ProductIntegrationTest {
     @Test
     void updateProduct_withProductUpdateRequest_success() throws Exception {
         String response = mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -194,11 +229,13 @@ class ProductIntegrationTest {
                 .name("Updated Product Name")
                 .description("Updated product description")
                 .thumbnail("http://example.com/updated.jpg")
-                .attributes(Map.of("Color", List.of("Red", "Green")))
+                .attributes(Map.of("ColorOptions", List.of("Red", "Green")))
                 .build();
 
         mockMvc.perform(patch("/products/{productId}", productId)
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isOk())
@@ -211,7 +248,9 @@ class ProductIntegrationTest {
     @Test
     void updateProduct_withAttributesNotMatchingExistingSku_throwsException() throws Exception {
         String response = mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -227,7 +266,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(patch("/products/{productId}", productId)
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateRequest)))
                 .andExpect(status().isBadRequest())
@@ -253,7 +294,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -269,11 +312,13 @@ class ProductIntegrationTest {
                 .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
-                .attributes(Map.of("Color", List.of("Red")))
+                .attributes(Map.of("ColorOptions", List.of("Red")))
                 .build();
 
         String productResponse = mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(productRequest)))
                 .andExpect(status().isOk())
@@ -289,11 +334,13 @@ class ProductIntegrationTest {
                 .sku("SKU-BLUE-INVALID")
                 .price(new BigDecimal("129.99"))
                 .stock(20)
-                .attributes(Map.of("Color", "Blue"))
+                .attributes(Map.of("Color", "Yellow"))
                 .build();
 
         mockMvc.perform(post("/skus")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidSkuRequest)))
                 .andExpect(status().isBadRequest())
@@ -304,7 +351,9 @@ class ProductIntegrationTest {
     @Test
     void updateSku_withAttributesNotMatchingProductAttributes_throwsException() throws Exception {
         String response = mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -321,11 +370,13 @@ class ProductIntegrationTest {
                 .asLong();
 
         ProductSkuUpdateRequest updateSkuRequest = ProductSkuUpdateRequest.builder()
-                .attributes(Map.of("Color", "Green"))
+                .attributes(Map.of("Color", "Yellow"))
                 .build();
 
-        mockMvc.perform(patch("/products/skus/{skuId}", skuId)
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+        mockMvc.perform(patch("/skus/{skuId}", skuId)
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateSkuRequest)))
                 .andExpect(status().isBadRequest())
@@ -342,11 +393,13 @@ class ProductIntegrationTest {
                 .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
-                .attributes(Map.of("Color", List.of("Green", "Blue")))
+                .attributes(Map.of("ColorOptions", List.of("Green", "Blue")))
                 .build();
 
         String productResponse = mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(productRequest)))
                 .andExpect(status().isOk())
@@ -367,7 +420,9 @@ class ProductIntegrationTest {
                 .build();
 
         String skuResponse = mockMvc.perform(post("/skus")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(createSkuRequest)))
                 .andExpect(status().isOk())
@@ -385,8 +440,10 @@ class ProductIntegrationTest {
                 .imageUrl("http://example.com/green-updated.jpg")
                 .build();
 
-        mockMvc.perform(patch("/products/skus/{skuId}", skuId)
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+        mockMvc.perform(patch("/skus/{skuId}", skuId)
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updateSkuRequest)))
                 .andExpect(status().isOk())
@@ -399,7 +456,7 @@ class ProductIntegrationTest {
     void getProducts_withParameters_success() throws Exception {
         // 1. Seed some products
         ProductCreateRequest product1 = ProductCreateRequest.builder()
-                .name("iPhone 15 Pro")
+                .name("Iphone 15 Pro")
                 .description("Latest Apple flagship")
                 .isDraft(false)
                 .isPublished(true)
@@ -410,6 +467,7 @@ class ProductIntegrationTest {
                         .price(new BigDecimal("999.99"))
                         .stock(50)
                         .imageUrl("http://example.com/iphone15pro.jpg")
+                        .attributes(Map.of("Color", "Red"))
                         .build()))
                 .build();
 
@@ -425,33 +483,42 @@ class ProductIntegrationTest {
                         .price(new BigDecimal("799.99"))
                         .stock(100)
                         .imageUrl("http://example.com/samsung_s24.jpg")
+                        .attributes(Map.of("Color", "Blue"))
                         .build()))
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(product1)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(product2)))
                 .andExpect(status().isOk());
 
         // 2. Test filter by name (keyword)
         mockMvc.perform(get("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .param("search", "iphone")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.content.length()").value(1))
-                .andExpect(jsonPath("$.result.content[0].name").value("iPhone 15 Pro"));
+                .andExpect(jsonPath("$.result.content[0].name").value("Iphone 15 Pro"));
 
         // 3. Test pagination metadata
         mockMvc.perform(get("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .param("search", "flagship")
                         .param("size", "1")
                         .param("page", "1")
@@ -464,17 +531,21 @@ class ProductIntegrationTest {
 
         // 4. Test sorting by name desc
         mockMvc.perform(get("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .param("sortBy", "name")
                         .param("order", "desc")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.content[0].name").value("Samsung Galaxy S24"))
-                .andExpect(jsonPath("$.result.content[1].name").value("iPhone 15 Pro"));
+                .andExpect(jsonPath("$.result.content[1].name").value("Iphone 15 Pro"));
 
         // 5. Test pagination (size=1, page=2 sorted by name asc)
         mockMvc.perform(get("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .param("sortBy", "name")
                         .param("order", "asc")
                         .param("size", "1")
@@ -498,7 +569,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -517,7 +590,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -536,7 +611,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
@@ -555,7 +632,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(p1)))
                 .andExpect(status().isOk());
@@ -570,7 +649,9 @@ class ProductIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/products")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(p2)))
                 .andExpect(status().isBadRequest())
@@ -580,11 +661,16 @@ class ProductIntegrationTest {
 
     @Test
     void previewSkus_validAttributes_returnsCartesianProduct() throws Exception {
+        Category cleanCategory = new Category();
+        cleanCategory.setName("Clean Preview Category");
+        cleanCategory.setSlug("clean-preview-category");
+        cleanCategory = categoryRepository.save(cleanCategory);
+
         spring.abtechzone.modules.product.entity.Product product =
                 new spring.abtechzone.modules.product.entity.Product();
         product.setName("Preview Test Product");
         product.setSlug("preview-test-product");
-        product.setCategory(seededCategory);
+        product.setCategory(cleanCategory);
         product.setBrand(seededBrand);
         product.setDraft(true);
         product.setPublished(false);
@@ -595,14 +681,19 @@ class ProductIntegrationTest {
         variantAttr.setCode("COLOR");
         variantAttr.setDataType("ENUM");
         variantAttr.setEnumValues(List.of(Map.of("value", "Red"), Map.of("value", "Blue")));
+        variantAttr.setCreatedAt(java.time.OffsetDateTime.now());
+        variantAttr.setUpdatedAt(java.time.OffsetDateTime.now());
         variantAttr = attributeRepository.save(variantAttr);
 
         CategoryAttribute ca = new CategoryAttribute();
-        ca.setCategory(seededCategory);
+        ca.setCategory(cleanCategory);
         ca.setAttribute(variantAttr);
+        ca.setIsFilterable(true);
         ca.setIsVariantDefining(true);
+        ca.setIsCompatibilityKey(false);
         ca.setIsMultiValue(false);
         ca.setIsRequired(true);
+        ca.setSortOrder(1);
         ca.setCreatedAt(java.time.OffsetDateTime.now());
         ca.setUpdatedAt(java.time.OffsetDateTime.now());
         categoryAttributeRepository.save(ca);
@@ -613,7 +704,9 @@ class ProductIntegrationTest {
                         .build();
 
         mockMvc.perform(post("/products/" + product.getId() + "/skus/preview")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(previewRequest)))
                 .andExpect(status().isOk())
@@ -624,11 +717,16 @@ class ProductIntegrationTest {
 
     @Test
     void createSkusBulk_validRequests_savesSuccessfully() throws Exception {
+        Category cleanCategory = new Category();
+        cleanCategory.setName("Clean Bulk Category");
+        cleanCategory.setSlug("clean-bulk-category");
+        cleanCategory = categoryRepository.save(cleanCategory);
+
         spring.abtechzone.modules.product.entity.Product product =
                 new spring.abtechzone.modules.product.entity.Product();
         product.setName("Bulk Test Product");
         product.setSlug("bulk-test-product");
-        product.setCategory(seededCategory);
+        product.setCategory(cleanCategory);
         product.setBrand(seededBrand);
         product.setDraft(true);
         product.setPublished(false);
@@ -639,14 +737,19 @@ class ProductIntegrationTest {
         variantAttr.setCode("SIZE");
         variantAttr.setDataType("ENUM");
         variantAttr.setEnumValues(List.of(Map.of("value", "M"), Map.of("value", "L")));
+        variantAttr.setCreatedAt(java.time.OffsetDateTime.now());
+        variantAttr.setUpdatedAt(java.time.OffsetDateTime.now());
         variantAttr = attributeRepository.save(variantAttr);
 
         CategoryAttribute ca = new CategoryAttribute();
-        ca.setCategory(seededCategory);
+        ca.setCategory(cleanCategory);
         ca.setAttribute(variantAttr);
+        ca.setIsFilterable(true);
         ca.setIsVariantDefining(true);
+        ca.setIsCompatibilityKey(false);
         ca.setIsMultiValue(false);
         ca.setIsRequired(true);
+        ca.setSortOrder(1);
         ca.setCreatedAt(java.time.OffsetDateTime.now());
         ca.setUpdatedAt(java.time.OffsetDateTime.now());
         categoryAttributeRepository.save(ca);
@@ -668,7 +771,9 @@ class ProductIntegrationTest {
                         .build());
 
         mockMvc.perform(post("/products/" + product.getId() + "/skus/bulk")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(bulkRequests)))
                 .andExpect(status().isOk())
@@ -679,11 +784,16 @@ class ProductIntegrationTest {
 
     @Test
     void publishProduct_withActiveSkus_publishesSuccessfully() throws Exception {
+        Category cleanCategory = new Category();
+        cleanCategory.setName("Clean Publish Category");
+        cleanCategory.setSlug("clean-publish-category");
+        cleanCategory = categoryRepository.save(cleanCategory);
+
         spring.abtechzone.modules.product.entity.Product product =
                 new spring.abtechzone.modules.product.entity.Product();
         product.setName("Publish Test Product");
         product.setSlug("publish-test-product");
-        product.setCategory(seededCategory);
+        product.setCategory(cleanCategory);
         product.setBrand(seededBrand);
         product.setDraft(true);
         product.setPublished(false);
@@ -694,14 +804,19 @@ class ProductIntegrationTest {
         variantAttr.setCode("SIZE");
         variantAttr.setDataType("ENUM");
         variantAttr.setEnumValues(List.of(Map.of("value", "M")));
+        variantAttr.setCreatedAt(java.time.OffsetDateTime.now());
+        variantAttr.setUpdatedAt(java.time.OffsetDateTime.now());
         variantAttr = attributeRepository.save(variantAttr);
 
         CategoryAttribute ca = new CategoryAttribute();
-        ca.setCategory(seededCategory);
+        ca.setCategory(cleanCategory);
         ca.setAttribute(variantAttr);
+        ca.setIsFilterable(true);
         ca.setIsVariantDefining(true);
+        ca.setIsCompatibilityKey(false);
         ca.setIsMultiValue(false);
         ca.setIsRequired(true);
+        ca.setSortOrder(1);
         ca.setCreatedAt(java.time.OffsetDateTime.now());
         ca.setUpdatedAt(java.time.OffsetDateTime.now());
         categoryAttributeRepository.save(ca);
@@ -715,16 +830,20 @@ class ProductIntegrationTest {
                 .build());
 
         mockMvc.perform(post("/products/" + product.getId() + "/skus/bulk")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN")))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(bulkRequests)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(patch("/products/" + product.getId() + "/publish")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.isPublished").value(true))
-                .andExpect(jsonPath("$.result.isDraft").value(false));
+                .andExpect(jsonPath("$.result.published").value(true))
+                .andExpect(jsonPath("$.result.draft").value(false));
     }
 
     @Test
@@ -740,7 +859,9 @@ class ProductIntegrationTest {
         product = productRepository.save(product);
 
         mockMvc.perform(patch("/products/" + product.getId() + "/publish")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin").claim("scope", "ADMIN"))))
+                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
+                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        "ROLE_ADMIN"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1059));
     }

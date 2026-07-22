@@ -40,12 +40,12 @@ public interface UserMapper {
                             .permissions(
                                     role.getPermissions() != null
                                             ? role.getPermissions().stream()
-                                            .map(p -> PermissionResponse.builder()
-                                                    .id(p.getId())
-                                                    .name(p.getName())
-                                                    .description(p.getDescription())
-                                                    .build())
-                                            .collect(Collectors.toSet())
+                                                    .map(p -> PermissionResponse.builder()
+                                                            .id(p.getId())
+                                                            .name(p.getName())
+                                                            .description(p.getDescription())
+                                                            .build())
+                                                    .collect(Collectors.toSet())
                                             : null)
                             .build();
                 })

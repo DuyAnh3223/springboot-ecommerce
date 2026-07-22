@@ -1,9 +1,9 @@
 package spring.abtechzone.modules.user.dto.response;
 
+import java.util.UUID;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -11,13 +11,13 @@ import java.util.UUID;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AddressResponse {
+    UUID id;
     UUID userId;
     String recipientName;
     String phone;
     String province;
-    String district;
     String ward;
-    String streetAddress;
+    String street;
     String country;
-    boolean isDefault;
+    Boolean isDefault;
 }

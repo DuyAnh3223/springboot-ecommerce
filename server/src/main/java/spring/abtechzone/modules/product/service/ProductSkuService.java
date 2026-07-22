@@ -70,6 +70,10 @@ public class ProductSkuService {
     public ProductSkuResponse createSku(ProductSkuCreateRequest request) {
         validateSkuForCreate(request.getSku());
 
+        if (request.getProductId() == null) {
+            throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
         Product product = productRepository
                 .findById(request.getProductId())
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));

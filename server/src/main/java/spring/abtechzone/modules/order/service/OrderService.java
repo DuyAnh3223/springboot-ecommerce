@@ -46,9 +46,9 @@ import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.entity.UserAddress;
-import spring.abtechzone.modules.user.repository.UserAddressRepository;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.entity.Voucher;
@@ -66,7 +66,7 @@ public class OrderService {
     CartRepository cartRepository;
     VoucherRepository voucherRepository;
     OrderRepository orderRepository;
-    UserAddressRepository userAddressRepository;
+    AddressRepository addressRepository;
     VoucherValidator voucherValidator;
     InventoryService inventoryService;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
@@ -234,8 +234,9 @@ public class OrderService {
         Order order = buildOrder(
                 request, user, addressInfo, processed.subtotal(), voucherInfo.discountAmount(), processed.orderItems());
 
-        // Step 6: Clear Cart items
+        // Step 6: Clear Cart items and mark as COMPLETED
         freshCart.getItems().clear();
+        freshCart.setStatus(CartStatus.COMPLETED);
         cartRepository.save(freshCart);
 
         // Step 7: Update Voucher usage
@@ -395,8 +396,7 @@ public class OrderService {
 
     private Cart getActiveCart(User user) {
         return cartRepository
-                .findByUserId(user.getId())
-                .filter(cart -> cart.getStatus() == CartStatus.ACTIVE)
+                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
     }
 
@@ -464,23 +464,17 @@ public class OrderService {
     private AddressInfo resolveAddress(CreateOrderRequest request, User user) {
         if (request.getAddressId() != null) {
             // User cũ: chọn địa chỉ đã lưu
-            UserAddress userAddress = userAddressRepository
+            Address address = addressRepository
                     .findById(request.getAddressId())
                     .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
 
-            if (!userAddress.getUser().getId().equals(user.getId())) {
+            if (!address.getUser().getId().equals(user.getId())) {
                 throw new AppException(ErrorCode.ADDRESS_NOT_BELONG_TO_USER);
             }
 
-            String fullAddress = String.join(
-                    ", ",
-                    userAddress.getStreetAddress(),
-                    userAddress.getWard(),
-                    userAddress.getDistrict(),
-                    userAddress.getProvince());
+            String fullAddress = String.join(", ", address.getStreet(), address.getWard(), address.getProvince());
 
-            return new AddressInfo(
-                    userAddress.getId(), userAddress.getRecipientName(), userAddress.getPhone(), fullAddress);
+            return new AddressInfo(address.getId(), address.getRecipientName(), address.getPhone(), fullAddress);
 
         } else if (request.getNewUserAddress() != null) {
             // User mới: nhận địa chỉ từ request
@@ -489,22 +483,20 @@ public class OrderService {
             UUID savedAddressId = null;
             // Tùy chọn lưu địa chỉ mới
             if (addr.isSaveAddress()) {
-                UserAddress newUserAddress = UserAddress.builder()
+                Address newAddress = Address.builder()
                         .recipientName(addr.getRecipientName())
                         .phone(addr.getPhone())
                         .province(addr.getProvince())
-                        .district(addr.getDistrict())
                         .ward(addr.getWard())
-                        .streetAddress(addr.getStreetAddress())
+                        .street(addr.getStreet())
                         .isDefault(false)
                         .user(user)
                         .build();
-                UserAddress saved = userAddressRepository.save(newUserAddress);
+                Address saved = addressRepository.save(newAddress);
                 savedAddressId = saved.getId();
             }
 
-            String fullAddress =
-                    String.join(", ", addr.getStreetAddress(), addr.getWard(), addr.getDistrict(), addr.getProvince());
+            String fullAddress = String.join(", ", addr.getStreet(), addr.getWard(), addr.getProvince());
 
             return new AddressInfo(savedAddressId, addr.getRecipientName(), addr.getPhone(), fullAddress);
 

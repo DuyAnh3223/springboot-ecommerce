@@ -23,7 +23,7 @@ import org.springframework.web.filter.CorsFilter;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
+        "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
     };
     private static final String[] SWAGGER_ENDPOINTS = {
         "/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/api-docs.yaml", "/swagger-resources/**", "/webjars/**"

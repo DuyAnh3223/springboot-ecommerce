@@ -30,10 +30,10 @@ const SignIn = () => {
 
     return (
       <div className="flex items-center gap-3 animate-in fade-in duration-300">
-        <div className="flex items-center gap-1.5 text-sm text-shop_dark_green font-semibold">
+        <Link href="/profile" className="flex items-center gap-1.5 text-sm text-shop_dark_green font-semibold hover:text-shop_orange transition-colors">
           <UserCheck className="size-4 text-shop_light_green" />
           <span>Chào, {displayName}</span>
-        </div>
+        </Link>
         <LogoutButton />
       </div>
     )

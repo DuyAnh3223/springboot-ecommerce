@@ -1,9 +1,9 @@
 package spring.abtechzone.modules.user.dto.request;
 
+import java.util.UUID;
+
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -15,9 +15,8 @@ public class AddressRequest {
     String recipientName;
     String phone;
     String province;
-    String district;
     String ward;
-    String streetAddress;
+    String street;
     String country;
-    boolean isDefault;
+    Boolean isDefault;
 }
