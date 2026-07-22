@@ -38,13 +38,12 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-  "newUserAddress": {
+  "newAddress": {
     "recipientName": "Nguyen Van A",
     "phone": "0987654321",
     "province": "Ha Noi",
-    "district": "Cau Giay",
     "ward": "Dich Vong",
-    "streetAddress": "123 Xuan Thuy",
+    "street": "123 Xuan Thuy",
     "saveAddress": true
   },
   "paymentMethod": "COD"
@@ -62,7 +61,7 @@ Authorization: Bearer {{token}}
   "paymentMethod": "BANK_TRANSFER"
 }
 
-### 5. Create Order with invalid inputs (No userAddress)
+### 5. Create Order with invalid inputs (No address)
 # @name createOrderInvalidAddress
 POST http://localhost:8080/abtechzone/orders
 Content-Type: application/json
