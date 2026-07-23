@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check, sleep } from "k6";
+import {check, sleep} from "k6";
 
 const TOKEN = __ENV.TOKEN || "eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJ4eHguY29tIiwic3ViIjoidXNlcjEiLCJleHAiOjE3ODQ3ODc1NTYsImlhdCI6MTc4NDcwMTE1NiwianRpIjoiOThlNDkwNDktNzgyNC00MTRhLTgxZGQtMGFhZjBiYzA4ZTlhIiwic2NvcGUiOiJST0xFX1VTRVIifQ.kaL0Z1w_rRwKBDzZQDOgX5fmWjr_yfypma-nrhLDN8DZQO1x8AGsPGpEry1fKxHvWGMqd_NlCeXPCpzFDkbDSg";
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080/abtechzone";
@@ -10,10 +10,10 @@ export const options = {
         create_order_test: {
             executor: "ramping-vus",
             stages: [
-                { duration: "10s", target: 10 },
-                { duration: "20s", target: 30 },
-                { duration: "20s", target: 50 },
-                { duration: "10s", target: 0 }
+                {duration: "10s", target: 10},
+                {duration: "20s", target: 30},
+                {duration: "20s", target: 50},
+                {duration: "10s", target: 0}
             ]
         }
     },
@@ -23,7 +23,7 @@ export const options = {
     }
 };
 
-export default function () {
+export default function k6OrderCreateTest() {
     const headers = {
         Authorization: `Bearer ${TOKEN}`,
         "Content-Type": "application/json"
@@ -36,7 +36,7 @@ export default function () {
             productSkuId: Number(SKU_ID),
             quantity: 1
         }),
-        { headers }
+        {headers}
     );
 
     // Bước 2: Thực hiện POST /orders
@@ -52,7 +52,7 @@ export default function () {
         paymentMethod: "COD"
     });
 
-    const orderRes = http.post(`${BASE_URL}/orders`, payload, { headers });
+    const orderRes = http.post(`${BASE_URL}/orders`, payload, {headers});
 
     // Kiểm tra kết quả tạo đơn hàng thành công HTTP 200
     const isSuccess = check(orderRes, {

@@ -1,7 +1,7 @@
 import http from "k6/http";
-import { check } from "k6";
+import {check} from "k6";
 
-const TOKEN = __ENV.TOKEN || "eyJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJ4eHguY29tIiwic3ViIjoidXNlcjEiLCJleHAiOjE3ODQ3ODc1NTYsImlhdCI6MTc4NDcwMTE1NiwianRpIjoiOThlNDkwNDktNzgyNC00MTRhLTgxZGQtMGFhZjBiYzA4ZTlhIiwic2NvcGUiOiJST0xFX1VTRVIifQ.kaL0Z1w_rRwKBDzZQDOgX5fmWjr_yfypma-nrhLDN8DZQO1x8AGsPGpEry1fKxHvWGMqd_NlCeXPCpzFDkbDSg";
+const TOKEN = __ENV.TOKEN;
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080/abtechzone";
 const SKU_ID = __ENV.SKU_ID || 4;
 
@@ -16,7 +16,7 @@ export const options = {
     }
 };
 
-export default function () {
+export default function k6OversellTest() {
     const headers = {
         Authorization: `Bearer ${TOKEN}`,
         "Content-Type": "application/json"
@@ -29,7 +29,7 @@ export default function () {
             productSkuId: Number(SKU_ID),
             quantity: 1
         }),
-        { headers }
+        {headers}
     );
 
     // 2. Bắn request tạo đơn hàng
@@ -45,7 +45,7 @@ export default function () {
         paymentMethod: "COD"
     });
 
-    const res = http.post(`${BASE_URL}/orders`, payload, { headers });
+    const res = http.post(`${BASE_URL}/orders`, payload, {headers});
 
     check(res, {
         "Status 200 (Success Order)": (r) => r.status === 200,
