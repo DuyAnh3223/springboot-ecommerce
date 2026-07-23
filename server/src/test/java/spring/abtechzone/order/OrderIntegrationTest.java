@@ -26,6 +26,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
@@ -51,7 +52,7 @@ import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 
-@SpringBootTest
+@SpringBootTest(classes = AbTechZoneApplication.class)
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -60,7 +61,7 @@ class OrderIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -250,13 +251,12 @@ class OrderIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
 									{
-									"newAddress": {
+									"newUserAddress": {
 										"recipientName": "Tran Thi B",
 										"phone": "0123456789",
 										"province": "Da Nang",
-										"district": "Hai Chau",
 										"ward": "Thuan Phuoc",
-										"streetAddress": "100 Le Loi",
+										"street": "100 Le Loi",
 										"saveAddress": true
 									},
 									"paymentMethod": "COD"

@@ -58,13 +58,6 @@
             <version>${mapstruct.version}</version>
         </dependency>
 
-        <!--        Database Dependencies-->
-        <!--        <dependency>-->
-        <!--            <groupId>com.mysql</groupId>-->
-        <!--            <artifactId>mysql-connector-j</artifactId>-->
-        <!--            <scope>runtime</scope>-->
-        <!--        </dependency>-->
-
         <!--        For Hibernate: map JSON(MySQL) -> Object(Java) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -169,6 +162,7 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>3.0.2</version>
         </dependency>
+        
         <!--        AWS S3-->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
@@ -309,6 +303,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <spring.profiles.active>test</spring.profiles.active>
+                        <user.timezone>Asia/Ho_Chi_Minh</user.timezone>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

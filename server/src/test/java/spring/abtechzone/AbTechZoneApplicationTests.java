@@ -17,7 +17,7 @@ class AbTechZoneApplicationTests {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {

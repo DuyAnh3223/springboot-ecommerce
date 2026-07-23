@@ -25,6 +25,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
@@ -32,7 +33,7 @@ import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest
+@SpringBootTest(classes = AbTechZoneApplication.class)
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -41,7 +42,7 @@ class AddressControllerIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {

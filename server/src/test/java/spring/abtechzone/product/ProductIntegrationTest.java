@@ -26,6 +26,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import lombok.extern.slf4j.Slf4j;
+import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.modules.category.entity.Attribute;
 import spring.abtechzone.modules.category.entity.Brand;
 import spring.abtechzone.modules.category.entity.Category;
@@ -42,7 +43,7 @@ import spring.abtechzone.modules.product.repository.ProductRepository;
 import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
-@SpringBootTest
+@SpringBootTest(classes = AbTechZoneApplication.class)
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -51,7 +52,7 @@ class ProductIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
