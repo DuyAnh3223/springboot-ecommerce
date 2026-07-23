@@ -12,8 +12,12 @@ export async function getUserSession() {
 
     const userResult = await getCurrentUser(token);
     return userResult;
-  } catch (error) {
-    console.error("Get user session error:", error);
+  } catch (error: any) {
+    // Token hết hạn hoặc không hợp lệ → xóa cookie để tự động logout ngầm
+    if (error.response?.status === 401) {
+      const cookieStore = await cookies();
+      cookieStore.delete("token");
+    }
     return null;
   }
 }
@@ -26,13 +30,19 @@ export async function getAdminSession() {
     if (!token) return null;
 
     const userResult = await getCurrentUser(token);
-    
-    const isAdmin = userResult.roles?.some((role: any) => role.name === "ADMIN");
+
+    const isAdmin = userResult.roles?.some(
+      (role: any) => role.name === "ADMIN",
+    );
     if (!isAdmin) return null;
 
     return userResult;
-  } catch (error) {
-    console.error("Get admin session error:", error);
+  } catch (error: any) {
+    // Token expired → delete cookie for auto logout
+    if (error.response?.status === 401) {
+      const cookieStore = await cookies();
+      cookieStore.delete("token");
+    }
     return null;
   }
 }

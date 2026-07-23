@@ -27,7 +27,7 @@ api.interceptors.response.use(
   (error) => {
     switch (error.response?.status) {
       case 401:
-        console.error("Unauthorized - Access token is invalid or expired");
+        // Token expired — Auto fix at get-session.action.ts
         break;
 
       case 403:
