@@ -203,8 +203,10 @@ public class OrderService {
 
             return transactionTemplate.execute(status -> doCreateOrder(request, user, initialSkuQtyMap));
 
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         } finally {
             // Step 6: Free all lock
@@ -396,7 +398,7 @@ public class OrderService {
 
     private Cart getActiveCart(User user) {
         return cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
     }
 

@@ -56,7 +56,7 @@ public class CartService {
 
         // Tìm hoặc tạo Cart cho user
         Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseGet(() -> {
                     Cart newCart = Cart.builder()
                             .user(user)
@@ -100,7 +100,7 @@ public class CartService {
         User user = getAuthenticatedUser();
 
         Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         // Sync giá mới nhất từ ProductSku cho mỗi item
@@ -120,7 +120,7 @@ public class CartService {
         User user = getAuthenticatedUser();
 
         Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
@@ -138,7 +138,7 @@ public class CartService {
         User user = getAuthenticatedUser();
 
         Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         CartItem cartItem = cartItemRepository
@@ -169,7 +169,7 @@ public class CartService {
         User user = getAuthenticatedUser();
 
         Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
+                .findFirstByUserIdAndStatusOrderByIdDesc(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         cart.getItems().clear();
