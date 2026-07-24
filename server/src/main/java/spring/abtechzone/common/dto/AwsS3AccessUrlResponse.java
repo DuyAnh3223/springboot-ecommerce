@@ -1,5 +1,7 @@
 package spring.abtechzone.common.dto;
 
+import java.time.Instant;
+
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,11 +14,8 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class AwsS3FileResponse {
-    String fileName;
-    String fileKey;
-    String fileUrl;
-    String contentType;
-    long size;
+public class AwsS3AccessUrlResponse {
+    String url;
     boolean isPublic;
+    Instant expiresAt;
 }

@@ -45,3 +45,6 @@ aws:
   secret-key: ${AWS_BUCKET_SECRET_KEY}
   s3:
     bucket: ${AWS_BUCKET_NAME}
+    public-folders: products,categories,avatars
+    presigned-url-expiration: 60
+
