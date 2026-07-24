@@ -30,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
@@ -94,6 +95,9 @@ class OrderServiceTest {
     @Mock
     TransactionTemplate transactionTemplate;
 
+    @Mock
+    AuthService authService;
+
     @Spy
     OrderMapper orderMapper = Mappers.getMapper(spring.abtechzone.modules.order.mapper.OrderMapper.class);
 
@@ -111,6 +115,7 @@ class OrderServiceTest {
     void setUp() {
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
+        lenient().when(authService.getCurrentUsername()).thenReturn("testuser");
 
         user = User.builder().id(userId).username("testuser").isActive(true).build();
 
