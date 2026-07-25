@@ -162,11 +162,18 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>3.0.2</version>
         </dependency>
-        
+
         <!--        AWS S3-->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
+            <version>2.46.17</version>
+        </dependency>
+
+        <!--        AWS Cloudfront-->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>cloudfront</artifactId>
             <version>2.46.17</version>
         </dependency>
 

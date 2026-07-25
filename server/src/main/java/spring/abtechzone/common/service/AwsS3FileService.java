@@ -1,9 +1,14 @@
 package spring.abtechzone.common.service;
 
 import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -22,14 +27,14 @@ import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.cloudfront.CloudFrontUtilities;
+import software.amazon.awssdk.services.cloudfront.model.CannedSignerRequest;
+import software.amazon.awssdk.services.cloudfront.url.SignedUrl;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import spring.abtechzone.common.dto.AwsS3AccessUrlResponse;
 import spring.abtechzone.common.dto.AwsS3FileResponse;
 import spring.abtechzone.common.exception.AppException;
@@ -42,7 +47,7 @@ import spring.abtechzone.common.exception.ErrorCode;
 public class AwsS3FileService {
 
     S3Client s3Client;
-    S3Presigner s3Presigner;
+    CloudFrontUtilities cloudFrontUtilities;
 
     @NonFinal
     @Value("${aws.s3.bucket}")
@@ -61,7 +66,18 @@ public class AwsS3FileService {
     String cloudfrontUrl;
 
     @NonFinal
+    @Value("${cloudfront.key-pair-id:}")
+    String keyPairId;
+
+    @NonFinal
+    @Value("${cloudfront.private-key:}")
+    String privateKeyContent;
+
+    @NonFinal
     Set<String> publicFolders;
+
+    @NonFinal
+    PrivateKey cachedPrivateKey;
 
     @PostConstruct
     void init() {
@@ -73,6 +89,10 @@ public class AwsS3FileService {
                     .collect(Collectors.toUnmodifiableSet());
         } else {
             this.publicFolders = Set.of("products", "categories", "avatars");
+        }
+
+        if (privateKeyContent != null && !privateKeyContent.isBlank()) {
+            this.cachedPrivateKey = parsePrivateKey();
         }
     }
 
@@ -152,7 +172,7 @@ public class AwsS3FileService {
     }
 
     /**
-     * Get access URL response (public URL or pre-signed URL depending on key)
+     * Get access URL response (public URL or CloudFront signed URL depending on key)
      */
     public AwsS3AccessUrlResponse getAccessUrl(String fileKey) {
         return getAccessUrl(fileKey, null);
@@ -187,7 +207,7 @@ public class AwsS3FileService {
     }
 
     /**
-     * Get file's public URL on S3
+     * Get file's public URL on CloudFront
      *
      * @deprecated Prefer {@link #getAccessUrl(String)} to handle both public and private objects properly.
      */
@@ -245,22 +265,74 @@ public class AwsS3FileService {
     }
 
     /**
-     * Create pre-signed URL with duration
+     * Create CloudFront Signed URL for private object with duration
      */
     public String createPreSignedUrl(String keyName, Duration duration) {
-        return createPreSignedUrl(bucket, keyName, duration);
+        if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
+            log.error("CloudFront URL is not configured (cloudfront.url is required for CloudFront signed URLs)");
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        if (keyPairId == null || keyPairId.isBlank()) {
+            log.error("CloudFront Key Pair ID is not configured (cloudfront.key-pair-id is required)");
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        PrivateKey privateKey = getPrivateKey();
+        String resourceUrl = buildPublicUrl(keyName);
+        Duration expiryDuration = (duration != null) ? duration : Duration.ofMinutes(defaultExpirationMinutes);
+        Instant expirationDate = Instant.now().plus(expiryDuration);
+
+        try {
+            CannedSignerRequest cannedSignerRequest = CannedSignerRequest.builder()
+                    .resourceUrl(resourceUrl)
+                    .keyPairId(keyPairId.trim())
+                    .privateKey(privateKey)
+                    .expirationDate(expirationDate)
+                    .build();
+
+            SignedUrl signedUrl = cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedSignerRequest);
+            return signedUrl.url();
+        } catch (Exception e) {
+            log.error("Failed to generate CloudFront signed URL for key={}: {}", keyName, e.getMessage(), e);
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    private PrivateKey getPrivateKey() {
+        if (cachedPrivateKey == null) {
+            cachedPrivateKey = parsePrivateKey();
+        }
+        return cachedPrivateKey;
     }
 
     /**
-     * Create pre-signed URL for specific bucket and key
+     * Parse CloudFront ECDSA (EC, prime256v1) Private Key from Base64 PKCS#8 string.
      */
-    public String createPreSignedUrl(String bucketName, String keyName, Duration duration) {
-        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(duration != null ? duration : Duration.ofMinutes(defaultExpirationMinutes))
-                .getObjectRequest(b -> b.bucket(bucketName).key(keyName))
-                .build();
+    private PrivateKey parsePrivateKey() {
+        if (privateKeyContent == null || privateKeyContent.isBlank()) {
+            log.error("cloudfront.private-key is not configured");
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
 
-        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
-        return presignedRequest.url().toExternalForm();
+        String cleanedKey = privateKeyContent.replaceAll("\\s+", "");
+
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(cleanedKey);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid Base64 encoding in CloudFront private key: {}", e.getMessage());
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        try {
+            KeyFactory kf = KeyFactory.getInstance("EC");
+            PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
+            log.info("Successfully loaded CloudFront ECDSA private key");
+            return privateKey;
+        } catch (GeneralSecurityException e) {
+            log.error("Failed to parse CloudFront private key as PKCS#8 EC key: {}", e.getMessage());
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
     }
 }
