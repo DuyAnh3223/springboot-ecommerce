@@ -48,3 +48,5 @@ aws:
     public-folders: products,categories,avatars
     presigned-url-expiration: 60
 
+cloudfront:
+  url: ${CLOUDFRONT_URL:}

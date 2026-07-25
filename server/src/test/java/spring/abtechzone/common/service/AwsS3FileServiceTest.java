@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import java.util.function.Consumer;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,6 +49,7 @@ class AwsS3FileServiceTest {
         ReflectionTestUtils.setField(awsS3FileService, "bucket", bucket);
         ReflectionTestUtils.setField(awsS3FileService, "publicFoldersConfig", "products,categories,avatars");
         ReflectionTestUtils.setField(awsS3FileService, "defaultExpirationMinutes", 60L);
+        ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "https://d111111abcdef8.cloudfront.net");
         ReflectionTestUtils.invokeMethod(awsS3FileService, "init");
     }
 
@@ -70,10 +69,6 @@ class AwsS3FileServiceTest {
         MockMultipartFile file =
                 new MockMultipartFile("file", "test.jpg", "image/jpeg", "test image content".getBytes());
 
-        when(s3Client.utilities()).thenReturn(s3Utilities);
-        when(s3Utilities.getUrl(any(Consumer.class)))
-                .thenReturn(new java.net.URI("https://test-bucket.s3.amazonaws.com/products/test.jpg").toURL());
-
         AwsS3FileResponse response = awsS3FileService.upload(file, "products");
 
         assertNotNull(response);
@@ -81,6 +76,7 @@ class AwsS3FileServiceTest {
         assertTrue(response.getFileKey().startsWith("products/"));
         assertEquals("image/jpeg", response.getContentType());
         assertTrue(response.isPublic());
+        assertTrue(response.getFileUrl().startsWith("https://d111111abcdef8.cloudfront.net/products/"));
         verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
 
@@ -113,16 +109,12 @@ class AwsS3FileServiceTest {
 
     @Test
     void getAccessUrl_Public_Success() throws Exception {
-        when(s3Client.utilities()).thenReturn(s3Utilities);
-        when(s3Utilities.getUrl(any(Consumer.class)))
-                .thenReturn(new java.net.URI("https://test-bucket.s3.amazonaws.com/products/test.jpg").toURL());
-
         AwsS3AccessUrlResponse response = awsS3FileService.getAccessUrl("products/test.jpg");
 
         assertNotNull(response);
         assertTrue(response.isPublic());
         assertNull(response.getExpiresAt());
-        assertTrue(response.getUrl().contains("products/test.jpg"));
+        assertEquals("https://d111111abcdef8.cloudfront.net/products/test.jpg", response.getUrl());
     }
 
     @Test
@@ -165,5 +157,24 @@ class AwsS3FileServiceTest {
         assertDoesNotThrow(() -> awsS3FileService.deleteObject("products/test.jpg"));
 
         verify(s3Client, times(1)).deleteObject(any(DeleteObjectRequest.class));
+    }
+
+    @Test
+    void getAccessUrl_PublicFolder_CloudFront_Success() {
+        ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "https://d111111abcdef8.cloudfront.net/");
+
+        AwsS3AccessUrlResponse response = awsS3FileService.getAccessUrl("products/item-1.png");
+
+        assertNotNull(response);
+        assertTrue(response.isPublic());
+        assertNull(response.getExpiresAt());
+        assertEquals("https://d111111abcdef8.cloudfront.net/products/item-1.png", response.getUrl());
+    }
+
+    @Test
+    void getAccessUrl_ThrowsException_WhenCloudFrontUrlMissing() {
+        ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "");
+
+        assertThrows(AppException.class, () -> awsS3FileService.getAccessUrl("products/item-1.png"));
     }
 }

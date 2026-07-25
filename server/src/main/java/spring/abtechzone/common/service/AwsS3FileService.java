@@ -57,6 +57,10 @@ public class AwsS3FileService {
     long defaultExpirationMinutes;
 
     @NonFinal
+    @Value("${cloudfront.url:}")
+    String cloudfrontUrl;
+
+    @NonFinal
     Set<String> publicFolders;
 
     @PostConstruct
@@ -194,7 +198,19 @@ public class AwsS3FileService {
     }
 
     private String buildPublicUrl(String fileKey) {
-        return s3Client.utilities().getUrl(b -> b.bucket(bucket).key(fileKey)).toExternalForm();
+        if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
+            log.error("CloudFront URL is not configured (cloudfront.url is required for public assets)");
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+        String baseUrl = cloudfrontUrl.trim();
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        String key = fileKey != null ? fileKey.trim() : "";
+        while (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+        return baseUrl + "/" + key;
     }
 
     /**
