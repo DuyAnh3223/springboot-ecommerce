@@ -7,16 +7,13 @@ import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,7 +32,6 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import spring.abtechzone.common.dto.AwsS3AccessUrlResponse;
 import spring.abtechzone.common.dto.AwsS3FileResponse;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
@@ -43,6 +39,7 @@ import spring.abtechzone.common.exception.ErrorCode;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AwsS3FileService {
 
@@ -52,14 +49,6 @@ public class AwsS3FileService {
     @NonFinal
     @Value("${aws.s3.bucket}")
     String bucket;
-
-    @NonFinal
-    @Value("${aws.s3.public-folders}")
-    String publicFoldersConfig;
-
-    @NonFinal
-    @Value("${aws.s3.presigned-url-expiration}")
-    long defaultExpirationMinutes;
 
     @NonFinal
     @Value("${cloudfront.url:}")
@@ -74,45 +63,78 @@ public class AwsS3FileService {
     String privateKeyContent;
 
     @NonFinal
-    Set<String> publicFolders;
+    @Value("${cloudfront.signed-url-expiration-days:7}")
+    long signedUrlExpirationDays;
 
     @NonFinal
     PrivateKey cachedPrivateKey;
 
     @PostConstruct
     void init() {
-        if (publicFoldersConfig != null && !publicFoldersConfig.isBlank()) {
-            this.publicFolders = Arrays.stream(publicFoldersConfig.split(","))
-                    .map(String::trim)
-                    .map(String::toLowerCase)
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.toUnmodifiableSet());
-        } else {
-            this.publicFolders = Set.of("products", "categories", "avatars");
-        }
-
         if (privateKeyContent != null && !privateKeyContent.isBlank()) {
             this.cachedPrivateKey = parsePrivateKey();
         }
     }
 
     /**
-     * Check if folder/key belongs to a public folder prefix
+     * Extract raw S3 file key from a key string or full URL (handling domain prefix and query params)
      */
-    public boolean isPublicFolder(String folderOrKey) {
-        if (folderOrKey == null || folderOrKey.isBlank()) {
-            return false;
+    public String extractS3Key(String thumbnailOrUrl) {
+        if (thumbnailOrUrl == null || thumbnailOrUrl.isBlank()) {
+            return null;
         }
 
-        String normalizedKey = folderOrKey.trim();
-        while (normalizedKey.startsWith("/")) {
-            normalizedKey = normalizedKey.substring(1);
+        String key = thumbnailOrUrl.trim();
+
+        if (key.startsWith("http://") || key.startsWith("https://")) {
+            try {
+                int pathStart = key.indexOf('/', key.indexOf("://") + 3);
+                if (pathStart != -1) {
+                    key = key.substring(pathStart + 1);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to extract S3 key from URL={}: {}", thumbnailOrUrl, e.getMessage());
+            }
         }
 
-        int slashIndex = normalizedKey.indexOf('/');
-        String folderName = (slashIndex != -1) ? normalizedKey.substring(0, slashIndex) : normalizedKey;
+        int queryIdx = key.indexOf('?');
+        if (queryIdx != -1) {
+            key = key.substring(0, queryIdx);
+        }
 
-        return publicFolders.contains(folderName.toLowerCase());
+        while (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+
+        if (key.isBlank()) {
+            log.warn("Extracted S3 key is blank for input={}", thumbnailOrUrl);
+            return null;
+        }
+
+        return key;
+    }
+
+    /**
+     * Dynamically resolve access URL (Signed URL via CloudFront)
+     */
+    @PreAuthorize("permitAll()")
+    public String resolveAccessUrl(String keyOrUrl) {
+        String s3Key = extractS3Key(keyOrUrl);
+        if (s3Key == null || s3Key.isBlank()) {
+            return null;
+        }
+
+        if (cachedPrivateKey == null || keyPairId == null || keyPairId.isBlank()) {
+            log.error("CloudFront private key or Key Pair ID is missing. Cannot sign access URL for key={}", s3Key);
+            return null;
+        }
+
+        try {
+            return createCloudFrontSignedUrl(s3Key, Duration.ofDays(signedUrlExpirationDays));
+        } catch (Exception e) {
+            log.error("Failed to create CloudFront signed URL for key={}: {}", s3Key, e.getMessage(), e);
+            return null;
+        }
     }
 
     /**
@@ -130,39 +152,29 @@ public class AwsS3FileService {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        String originalFilename = Objects.requireNonNullElse(file.getOriginalFilename(), "file");
-        String sanitizedFilename = originalFilename.replaceAll("[^a-zA-Z0-9.-]", "_");
         String prefix = (folderName != null && !folderName.isBlank()) ? folderName.trim() + "/" : "";
-        String fileKey = prefix + UUID.randomUUID() + "-" + sanitizedFilename;
-
-        boolean isPublic = isPublicFolder(folderName);
+        String fileKey = prefix + UUID.randomUUID();
 
         try {
-            PutObjectRequest.Builder putBuilder =
-                    PutObjectRequest.builder().bucket(bucket).key(fileKey).contentType(file.getContentType());
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(fileKey)
+                    .contentType(file.getContentType())
+                    .cacheControl("public, max-age=31536000, immutable")
+                    .build();
 
-            if (isPublic) {
-                putBuilder.cacheControl("public, max-age=31536000, immutable");
-            }
+            s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
-            s3Client.putObject(putBuilder.build(), RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            String fileUrl = resolveAccessUrl(fileKey);
 
-            String fileUrl;
-            if (isPublic) {
-                fileUrl = buildPublicUrl(fileKey);
-            } else {
-                fileUrl = createPreSignedUrl(fileKey, Duration.ofMinutes(defaultExpirationMinutes));
-            }
-
-            log.info("File uploaded successfully to S3: key={}, bucket={}, isPublic={}", fileKey, bucket, isPublic);
+            log.info("File uploaded successfully to S3: key={}, bucket={}", fileKey, bucket);
 
             return AwsS3FileResponse.builder()
-                    .fileName(sanitizedFilename)
                     .fileKey(fileKey)
                     .fileUrl(fileUrl)
                     .contentType(file.getContentType())
                     .size(file.getSize())
-                    .isPublic(isPublic)
+                    .isPublic(true)
                     .build();
 
         } catch (IOException e) {
@@ -171,53 +183,7 @@ public class AwsS3FileService {
         }
     }
 
-    /**
-     * Get access URL response (public URL or CloudFront signed URL depending on key)
-     */
-    public AwsS3AccessUrlResponse getAccessUrl(String fileKey) {
-        return getAccessUrl(fileKey, null);
-    }
-
-    /**
-     * Get access URL response with custom TTL for private objects
-     */
-    public AwsS3AccessUrlResponse getAccessUrl(String fileKey, Long ttlMinutes) {
-        boolean isPublic = isPublicFolder(fileKey);
-
-        if (isPublic) {
-            return AwsS3AccessUrlResponse.builder()
-                    .url(buildPublicUrl(fileKey))
-                    .isPublic(true)
-                    .expiresAt(null)
-                    .build();
-        } else {
-            long ttl = (ttlMinutes != null && ttlMinutes > 0) ? ttlMinutes : defaultExpirationMinutes;
-            // Cap maximum TTL at 7 days (10080 minutes)
-            ttl = Math.min(ttl, 10080);
-
-            Instant expiresAt = Instant.now().plus(Duration.ofMinutes(ttl));
-            String url = createPreSignedUrl(fileKey, Duration.ofMinutes(ttl));
-
-            return AwsS3AccessUrlResponse.builder()
-                    .url(url)
-                    .isPublic(false)
-                    .expiresAt(expiresAt)
-                    .build();
-        }
-    }
-
-    /**
-     * Get file's public URL on CloudFront
-     *
-     * @deprecated Prefer {@link #getAccessUrl(String)} to handle both public and private objects properly.
-     */
-    @Deprecated(since = "1.0.0")
-    @SuppressWarnings("java:S1133")
-    public String getFileUrl(String fileKey) {
-        return buildPublicUrl(fileKey);
-    }
-
-    private String buildPublicUrl(String fileKey) {
+    public String buildUrl(String fileKey) {
         if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
             log.error("CloudFront URL is not configured (cloudfront.url is required for public assets)");
             throw new AppException(ErrorCode.SYSTEM_ERROR);
@@ -231,6 +197,43 @@ public class AwsS3FileService {
             key = key.substring(1);
         }
         return baseUrl + "/" + key;
+    }
+
+    /**
+     * Create CloudFront Signed URL for object with duration
+     */
+    public String createCloudFrontSignedUrl(String s3Key, Duration validity) {
+        if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        if (keyPairId == null || keyPairId.isBlank()) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        PrivateKey privateKey = getPrivateKey();
+        if (privateKey == null) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        String resourceUrl = buildUrl(s3Key);
+        Duration expiryDuration = (validity != null) ? validity : Duration.ofDays(signedUrlExpirationDays);
+        Instant expirationDate = Instant.now().plus(expiryDuration);
+
+        try {
+            CannedSignerRequest cannedSignerRequest = CannedSignerRequest.builder()
+                    .resourceUrl(resourceUrl)
+                    .keyPairId(keyPairId.trim())
+                    .privateKey(privateKey)
+                    .expirationDate(expirationDate)
+                    .build();
+
+            SignedUrl signedUrl = cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedSignerRequest);
+            return signedUrl.url();
+        } catch (Exception e) {
+            log.error("Failed to generate CloudFront signed URL for key={}: {}", s3Key, e.getMessage(), e);
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
     }
 
     /**
@@ -264,41 +267,6 @@ public class AwsS3FileService {
         }
     }
 
-    /**
-     * Create CloudFront Signed URL for private object with duration
-     */
-    public String createPreSignedUrl(String keyName, Duration duration) {
-        if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
-            log.error("CloudFront URL is not configured (cloudfront.url is required for CloudFront signed URLs)");
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
-        }
-
-        if (keyPairId == null || keyPairId.isBlank()) {
-            log.error("CloudFront Key Pair ID is not configured (cloudfront.key-pair-id is required)");
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
-        }
-
-        PrivateKey privateKey = getPrivateKey();
-        String resourceUrl = buildPublicUrl(keyName);
-        Duration expiryDuration = (duration != null) ? duration : Duration.ofMinutes(defaultExpirationMinutes);
-        Instant expirationDate = Instant.now().plus(expiryDuration);
-
-        try {
-            CannedSignerRequest cannedSignerRequest = CannedSignerRequest.builder()
-                    .resourceUrl(resourceUrl)
-                    .keyPairId(keyPairId.trim())
-                    .privateKey(privateKey)
-                    .expirationDate(expirationDate)
-                    .build();
-
-            SignedUrl signedUrl = cloudFrontUtilities.getSignedUrlWithCannedPolicy(cannedSignerRequest);
-            return signedUrl.url();
-        } catch (Exception e) {
-            log.error("Failed to generate CloudFront signed URL for key={}: {}", keyName, e.getMessage(), e);
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
-        }
-    }
-
     private PrivateKey getPrivateKey() {
         if (cachedPrivateKey == null) {
             cachedPrivateKey = parsePrivateKey();
@@ -307,12 +275,11 @@ public class AwsS3FileService {
     }
 
     /**
-     * Parse CloudFront ECDSA (EC, prime256v1) Private Key from Base64 PKCS#8 string.
+     * Parse CloudFront Private Key from Base64 PKCS#8 string (supports RSA and EC)
      */
     private PrivateKey parsePrivateKey() {
         if (privateKeyContent == null || privateKeyContent.isBlank()) {
-            log.error("cloudfront.private-key is not configured");
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
+            return null;
         }
 
         String cleanedKey = privateKeyContent.replaceAll("\\s+", "");
@@ -322,17 +289,21 @@ public class AwsS3FileService {
             keyBytes = Base64.getDecoder().decode(cleanedKey);
         } catch (IllegalArgumentException e) {
             log.error("Invalid Base64 encoding in CloudFront private key: {}", e.getMessage());
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
+            return null;
         }
 
-        try {
-            KeyFactory kf = KeyFactory.getInstance("EC");
-            PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
-            log.info("Successfully loaded CloudFront ECDSA private key");
-            return privateKey;
-        } catch (GeneralSecurityException e) {
-            log.error("Failed to parse CloudFront private key as PKCS#8 EC key: {}", e.getMessage());
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        for (String algo : new String[] {"RSA", "EC"}) {
+            try {
+                KeyFactory kf = KeyFactory.getInstance(algo);
+                PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
+                log.info("Successfully loaded CloudFront {} private key", algo);
+                return privateKey;
+            } catch (GeneralSecurityException ignored) {
+                // Try next algorithm
+            }
         }
+
+        log.error("Failed to parse CloudFront private key as RSA or EC PKCS#8 key");
+        return null;
     }
 }

@@ -17,10 +17,8 @@ import lombok.experimental.FieldDefaults;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import spring.abtechzone.common.dto.ApiResult;
-import spring.abtechzone.common.dto.AwsS3AccessUrlResponse;
 import spring.abtechzone.common.dto.AwsS3FileResponse;
 import spring.abtechzone.common.service.AwsS3FileService;
-import spring.abtechzone.modules.auth.service.AuthService;
 
 @RestController
 @RequestMapping("/files")
@@ -29,7 +27,6 @@ import spring.abtechzone.modules.auth.service.AuthService;
 public class AwsS3FileController {
 
     AwsS3FileService awsS3FileService;
-    AuthService authService;
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<AwsS3FileResponse> upload(
@@ -37,32 +34,6 @@ public class AwsS3FileController {
             @RequestParam(value = "folder", required = false, defaultValue = "uploads") String folder) {
         return ApiResult.<AwsS3FileResponse>builder()
                 .result(awsS3FileService.upload(file, folder))
-                .build();
-    }
-
-    /**
-     * Get access URL (public Object URL or pre-signed URL depending on folder prefix)
-     */
-    @GetMapping("/access-url")
-    public ApiResult<AwsS3AccessUrlResponse> getAccessUrl(
-            @RequestParam("key") String fileKey, @RequestParam(value = "ttl", required = false) Long ttlMinutes) {
-        if (!awsS3FileService.isPublicFolder(fileKey)) {
-            authService.validateAuthenticated();
-        }
-        return ApiResult.<AwsS3AccessUrlResponse>builder()
-                .result(awsS3FileService.getAccessUrl(fileKey, ttlMinutes))
-                .build();
-    }
-
-    /**
-     * @deprecated Use {@link #getAccessUrl(String, Long)} instead.
-     */
-    @Deprecated(since = "1.0.0")
-    @SuppressWarnings("java:S1133")
-    @GetMapping("/url")
-    public ApiResult<String> getFileUrl(@RequestParam("key") String fileKey) {
-        return ApiResult.<String>builder()
-                .result(awsS3FileService.getFileUrl(fileKey))
                 .build();
     }
 

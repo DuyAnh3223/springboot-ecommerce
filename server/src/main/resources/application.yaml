@@ -45,10 +45,9 @@ aws:
   secret-key: ${AWS_BUCKET_SECRET_KEY}
   s3:
     bucket: ${AWS_BUCKET_NAME}
-    public-folders: products,categories,avatars
-    presigned-url-expiration: 60
 
 cloudfront:
   url: ${CLOUDFRONT_URL:}
   key-pair-id: ${CLOUDFRONT_KEY_PAIR_ID:}
   private-key: ${CLOUDFRONT_PRIVATE_KEY:}
+  signed-url-expiration-days: 7
