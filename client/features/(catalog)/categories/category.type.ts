@@ -5,7 +5,8 @@ export interface CategoryResponse {
   name: string;
   slug: string;
   thumbnail: string | null;
-  active: boolean;
+  thumbnailUrl?: string | null;
+  isActive: boolean;
   parentId?: number;
 }
 

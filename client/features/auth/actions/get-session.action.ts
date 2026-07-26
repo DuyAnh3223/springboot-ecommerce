@@ -13,11 +13,6 @@ export async function getUserSession() {
     const userResult = await getCurrentUser(token);
     return userResult;
   } catch (error: any) {
-    // Token hết hạn hoặc không hợp lệ → xóa cookie để tự động logout ngầm
-    if (error.response?.status === 401) {
-      const cookieStore = await cookies();
-      cookieStore.delete("token");
-    }
     return null;
   }
 }
@@ -38,11 +33,6 @@ export async function getAdminSession() {
 
     return userResult;
   } catch (error: any) {
-    // Token expired → delete cookie for auto logout
-    if (error.response?.status === 401) {
-      const cookieStore = await cookies();
-      cookieStore.delete("token");
-    }
     return null;
   }
 }
