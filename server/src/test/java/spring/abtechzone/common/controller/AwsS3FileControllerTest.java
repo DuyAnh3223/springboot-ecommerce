@@ -67,8 +67,8 @@ class AwsS3FileControllerTest {
 
         mockMvc.perform(multipart("/files/upload").file(file))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.fileName").value("test.jpg"))
-                .andExpect(jsonPath("$.result.fileKey").value("uploads/test.jpg"));
+                .andExpect(jsonPath("$.result.fileKey").value("uploads/test.jpg"))
+                .andExpect(jsonPath("$.result.fileUrl").value("https://bucket.s3.amazonaws.com/uploads/test.jpg"));
     }
 
     @Test

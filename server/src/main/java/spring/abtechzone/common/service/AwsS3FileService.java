@@ -39,7 +39,6 @@ import spring.abtechzone.common.exception.ErrorCode;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class AwsS3FileService {
 
@@ -79,6 +78,7 @@ public class AwsS3FileService {
     /**
      * Extract raw S3 file key from a key string or full URL (handling domain prefix and query params)
      */
+    @PreAuthorize("permitAll()")
     public String extractS3Key(String thumbnailOrUrl) {
         if (thumbnailOrUrl == null || thumbnailOrUrl.isBlank()) {
             return null;
@@ -140,6 +140,7 @@ public class AwsS3FileService {
     /**
      * Upload file to S3 at default folder (uploads/)
      */
+    @PreAuthorize("isAuthenticated()")
     public AwsS3FileResponse upload(MultipartFile file) {
         return upload(file, "uploads");
     }
@@ -147,6 +148,7 @@ public class AwsS3FileService {
     /**
      * Upload file to S3 by folder (products, categories, avatars, etc.)
      */
+    @PreAuthorize("isAuthenticated()")
     public AwsS3FileResponse upload(MultipartFile file, String folderName) {
         if (file == null || file.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_KEY);
@@ -183,6 +185,7 @@ public class AwsS3FileService {
         }
     }
 
+    @PreAuthorize("permitAll()")
     public String buildUrl(String fileKey) {
         if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
             log.error("CloudFront URL is not configured (cloudfront.url is required for public assets)");
@@ -202,6 +205,7 @@ public class AwsS3FileService {
     /**
      * Create CloudFront Signed URL for object with duration
      */
+    @PreAuthorize("permitAll()")
     public String createCloudFrontSignedUrl(String s3Key, Duration validity) {
         if (cloudfrontUrl == null || cloudfrontUrl.isBlank()) {
             throw new AppException(ErrorCode.SYSTEM_ERROR);
@@ -239,6 +243,7 @@ public class AwsS3FileService {
     /**
      * GetObject file on S3 under byte array
      */
+    @PreAuthorize("isAuthenticated()")
     public ResponseBytes<GetObjectResponse> getObject(String fileKey) {
         try {
             GetObjectRequest getObjectRequest =
@@ -254,6 +259,7 @@ public class AwsS3FileService {
     /**
      * DeleteObject file from S3
      */
+    @PreAuthorize("isAuthenticated()")
     public void deleteObject(String fileKey) {
         try {
             DeleteObjectRequest deleteObjectRequest =
