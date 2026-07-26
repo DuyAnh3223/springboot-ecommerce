@@ -12,7 +12,6 @@ import java.util.Base64;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -25,7 +24,6 @@ import software.amazon.awssdk.services.cloudfront.model.CannedSignerRequest;
 import software.amazon.awssdk.services.cloudfront.url.SignedUrl;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
-import spring.abtechzone.common.dto.AwsS3AccessUrlResponse;
 import spring.abtechzone.common.dto.AwsS3FileResponse;
 import spring.abtechzone.common.exception.AppException;
 
@@ -42,19 +40,24 @@ class AwsS3FileServiceTest {
 
     private final String bucket = "test-bucket";
     private String ecPrivateKeyBase64;
+    private String rsaPrivateKeyBase64;
 
     @BeforeEach
     void setUp() throws Exception {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
-        kpg.initialize(new ECGenParameterSpec("secp256r1"));
-        KeyPair keyPair = kpg.generateKeyPair();
-        byte[] encoded = keyPair.getPrivate().getEncoded();
-        ecPrivateKeyBase64 = Base64.getEncoder().encodeToString(encoded);
+        KeyPairGenerator ecKpg = KeyPairGenerator.getInstance("EC");
+        ecKpg.initialize(new ECGenParameterSpec("secp256r1"));
+        KeyPair ecKeyPair = ecKpg.generateKeyPair();
+        ecPrivateKeyBase64 =
+                Base64.getEncoder().encodeToString(ecKeyPair.getPrivate().getEncoded());
+
+        KeyPairGenerator rsaKpg = KeyPairGenerator.getInstance("RSA");
+        rsaKpg.initialize(2048);
+        KeyPair rsaKeyPair = rsaKpg.generateKeyPair();
+        rsaPrivateKeyBase64 =
+                Base64.getEncoder().encodeToString(rsaKeyPair.getPrivate().getEncoded());
 
         awsS3FileService = new AwsS3FileService(s3Client, cloudFrontUtilities);
         ReflectionTestUtils.setField(awsS3FileService, "bucket", bucket);
-        ReflectionTestUtils.setField(awsS3FileService, "publicFoldersConfig", "products,categories,avatars");
-        ReflectionTestUtils.setField(awsS3FileService, "defaultExpirationMinutes", 60L);
         ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "https://d111111abcdef8.cloudfront.net");
         ReflectionTestUtils.setField(awsS3FileService, "keyPairId", "K2JC0ABCDEFG123");
         ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", ecPrivateKeyBase64);
@@ -62,51 +65,73 @@ class AwsS3FileServiceTest {
     }
 
     @Test
-    void isPublicFolder_Tests() {
-        assertTrue(awsS3FileService.isPublicFolder("products"));
-        assertTrue(awsS3FileService.isPublicFolder("products/subfolder/file.jpg"));
-        assertTrue(awsS3FileService.isPublicFolder("/categories/cat.png"));
-        assertFalse(awsS3FileService.isPublicFolder("documents/secret.pdf"));
-        assertFalse(awsS3FileService.isPublicFolder("documentsX/secret.pdf"));
-        assertFalse(awsS3FileService.isPublicFolder(null));
-        assertFalse(awsS3FileService.isPublicFolder(""));
+    void parsePrivateKey_SupportsECAndRSA() throws Exception {
+        ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", ecPrivateKeyBase64);
+        Object ecKey = ReflectionTestUtils.invokeMethod(awsS3FileService, "parsePrivateKey");
+        assertNotNull(ecKey);
+
+        ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", rsaPrivateKeyBase64);
+        Object rsaKey = ReflectionTestUtils.invokeMethod(awsS3FileService, "parsePrivateKey");
+        assertNotNull(rsaKey);
     }
 
     @Test
-    void upload_PublicFolder_Success() throws Exception {
+    void extractS3Key_Tests() {
+        assertEquals("categories/cat1.png", awsS3FileService.extractS3Key("categories/cat1.png"));
+        assertEquals(
+                "categories/cat1.png",
+                awsS3FileService.extractS3Key(
+                        "https://d111111abcdef8.cloudfront.net/categories/cat1.png?Expires=123&Signature=abc"));
+        assertNull(awsS3FileService.extractS3Key(null));
+        assertNull(awsS3FileService.extractS3Key("   "));
+    }
+
+    @Test
+    void resolveAccessUrl_WithPrivateKey_ReturnsSignedUrl() throws Exception {
+        String expectedSignedUrl =
+                "https://d111111abcdef8.cloudfront.net/categories/cat1.png?Key-Pair-Id=K2JC0ABCDEFG123&Signature=sig";
+        SignedUrl signedUrlMock = mock(SignedUrl.class);
+        when(signedUrlMock.url()).thenReturn(expectedSignedUrl);
+        when(cloudFrontUtilities.getSignedUrlWithCannedPolicy(any(CannedSignerRequest.class)))
+                .thenReturn(signedUrlMock);
+
+        String result = awsS3FileService.resolveAccessUrl("categories/cat1.png");
+
+        assertNotNull(result);
+        assertEquals(expectedSignedUrl, result);
+    }
+
+    @Test
+    void resolveAccessUrl_MissingPrivateKey_ReturnsNull() {
+        ReflectionTestUtils.setField(awsS3FileService, "cachedPrivateKey", null);
+        ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", "");
+
+        String result = awsS3FileService.resolveAccessUrl("categories/cat1.png");
+
+        assertNull(result);
+    }
+
+    @Test
+    void resolveAccessUrl_ExceptionOccurs_ReturnsNull() throws Exception {
+        when(cloudFrontUtilities.getSignedUrlWithCannedPolicy(any(CannedSignerRequest.class)))
+                .thenThrow(new RuntimeException("Signing failure"));
+
+        String result = awsS3FileService.resolveAccessUrl("categories/cat1.png");
+
+        assertNull(result);
+    }
+
+    @Test
+    void upload_Success() throws Exception {
         MockMultipartFile file =
                 new MockMultipartFile("file", "test.jpg", "image/jpeg", "test image content".getBytes());
 
         AwsS3FileResponse response = awsS3FileService.upload(file, "products");
 
         assertNotNull(response);
-        assertEquals("test.jpg", response.getFileName());
         assertTrue(response.getFileKey().startsWith("products/"));
         assertEquals("image/jpeg", response.getContentType());
         assertTrue(response.isPublic());
-        assertTrue(response.getFileUrl().startsWith("https://d111111abcdef8.cloudfront.net/products/"));
-        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-    }
-
-    @Test
-    void upload_PrivateFolder_CloudFrontSignedUrl_Success() throws Exception {
-        MockMultipartFile file =
-                new MockMultipartFile("file", "invoice.pdf", "application/pdf", "pdf content".getBytes());
-
-        String signedUrlString =
-                "https://d111111abcdef8.cloudfront.net/documents/invoice.pdf?Key-Pair-Id=K2JC0ABCDEFG123&Signature=xyz&Expires=9999";
-        SignedUrl signedUrlMock = mock(SignedUrl.class);
-        when(signedUrlMock.url()).thenReturn(signedUrlString);
-        when(cloudFrontUtilities.getSignedUrlWithCannedPolicy(any(CannedSignerRequest.class)))
-                .thenReturn(signedUrlMock);
-
-        AwsS3FileResponse response = awsS3FileService.upload(file, "documents");
-
-        assertNotNull(response);
-        assertEquals("invoice.pdf", response.getFileName());
-        assertTrue(response.getFileKey().startsWith("documents/"));
-        assertFalse(response.isPublic());
-        assertTrue(response.getFileUrl().contains("Key-Pair-Id=K2JC0ABCDEFG123"));
         verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
 
@@ -115,69 +140,6 @@ class AwsS3FileServiceTest {
         MockMultipartFile emptyFile = new MockMultipartFile("file", "", "image/jpeg", new byte[0]);
 
         assertThrows(AppException.class, () -> awsS3FileService.upload(emptyFile));
-    }
-
-    @Test
-    void getAccessUrl_Public_Success() throws Exception {
-        AwsS3AccessUrlResponse response = awsS3FileService.getAccessUrl("products/test.jpg");
-
-        assertNotNull(response);
-        assertTrue(response.isPublic());
-        assertNull(response.getExpiresAt());
-        assertEquals("https://d111111abcdef8.cloudfront.net/products/test.jpg", response.getUrl());
-    }
-
-    @Test
-    void getAccessUrl_Private_CloudFrontECDSA_Success() throws Exception {
-        String expectedSignedUrl =
-                "https://d111111abcdef8.cloudfront.net/documents/invoice.pdf?Key-Pair-Id=K2JC0ABCDEFG123&Signature=abc123sig&Expires=1234567";
-        SignedUrl signedUrlMock = mock(SignedUrl.class);
-        when(signedUrlMock.url()).thenReturn(expectedSignedUrl);
-
-        ArgumentCaptor<CannedSignerRequest> requestCaptor = ArgumentCaptor.forClass(CannedSignerRequest.class);
-        when(cloudFrontUtilities.getSignedUrlWithCannedPolicy(requestCaptor.capture()))
-                .thenReturn(signedUrlMock);
-
-        AwsS3AccessUrlResponse response = awsS3FileService.getAccessUrl("documents/invoice.pdf", 30L);
-
-        assertNotNull(response);
-        assertFalse(response.isPublic());
-        assertNotNull(response.getExpiresAt());
-        assertEquals(expectedSignedUrl, response.getUrl());
-
-        CannedSignerRequest capturedRequest = requestCaptor.getValue();
-        assertNotNull(capturedRequest);
-        assertEquals("K2JC0ABCDEFG123", capturedRequest.keyPairId());
-        assertEquals("EC", capturedRequest.privateKey().getAlgorithm());
-    }
-
-    @Test
-    void getAccessUrl_Private_MissingKeyPairId_ThrowsException() {
-        ReflectionTestUtils.setField(awsS3FileService, "keyPairId", "");
-
-        assertThrows(AppException.class, () -> awsS3FileService.getAccessUrl("documents/invoice.pdf", 30L));
-    }
-
-    @Test
-    void getAccessUrl_Private_InvalidPrivateKey_ThrowsException() {
-        ReflectionTestUtils.setField(awsS3FileService, "cachedPrivateKey", null);
-        ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", "INVALID_BASE64_$%#");
-
-        assertThrows(AppException.class, () -> awsS3FileService.getAccessUrl("documents/invoice.pdf", 30L));
-    }
-
-    @Test
-    void getAccessUrl_Private_RsaPrivateKey_ThrowsException() throws Exception {
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
-        kpg.initialize(2048);
-        KeyPair keyPair = kpg.generateKeyPair();
-        String rsaPrivateKeyBase64 =
-                Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-
-        ReflectionTestUtils.setField(awsS3FileService, "cachedPrivateKey", null);
-        ReflectionTestUtils.setField(awsS3FileService, "privateKeyContent", rsaPrivateKeyBase64);
-
-        assertThrows(AppException.class, () -> awsS3FileService.getAccessUrl("documents/invoice.pdf", 30L));
     }
 
     @Test
@@ -205,24 +167,5 @@ class AwsS3FileServiceTest {
         assertDoesNotThrow(() -> awsS3FileService.deleteObject("products/test.jpg"));
 
         verify(s3Client, times(1)).deleteObject(any(DeleteObjectRequest.class));
-    }
-
-    @Test
-    void getAccessUrl_PublicFolder_CloudFront_Success() {
-        ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "https://d111111abcdef8.cloudfront.net/");
-
-        AwsS3AccessUrlResponse response = awsS3FileService.getAccessUrl("products/item-1.png");
-
-        assertNotNull(response);
-        assertTrue(response.isPublic());
-        assertNull(response.getExpiresAt());
-        assertEquals("https://d111111abcdef8.cloudfront.net/products/item-1.png", response.getUrl());
-    }
-
-    @Test
-    void getAccessUrl_ThrowsException_WhenCloudFrontUrlMissing() {
-        ReflectionTestUtils.setField(awsS3FileService, "cloudfrontUrl", "");
-
-        assertThrows(AppException.class, () -> awsS3FileService.getAccessUrl("products/item-1.png"));
     }
 }
