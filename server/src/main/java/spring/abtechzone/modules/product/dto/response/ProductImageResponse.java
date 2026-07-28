@@ -17,5 +17,4 @@ public class ProductImageResponse {
     Integer sortOrder;
 
     Boolean primary;
-
 }

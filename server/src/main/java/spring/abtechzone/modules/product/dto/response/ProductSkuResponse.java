@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.product.dto.response;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 import lombok.*;
@@ -20,6 +21,7 @@ public class ProductSkuResponse {
     BigDecimal price;
     Integer stock;
     String imageUrl;
+    List<ProductImageResponse> images;
     Boolean isActive;
     Map<String, Object> attributes;
 }
