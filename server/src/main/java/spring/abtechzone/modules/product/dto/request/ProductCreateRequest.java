@@ -19,11 +19,11 @@ public class ProductCreateRequest {
     @NotBlank(message = "PRODUCT_NAME_INVALID")
     String name;
 
-    String thumbnail;
     String description;
 
-    Boolean isDraft;
-    Boolean isPublished;
+    Boolean draft;
+
+    Boolean published;
 
     Long categoryId;
     Long brandId;
@@ -32,5 +32,5 @@ public class ProductCreateRequest {
     Map<String, Object> attributes;
 
     @Valid
-    List<ProductSkuCreateRequest> productSkus;
+    List<ProductSkuCreateRequest> skus;
 }
