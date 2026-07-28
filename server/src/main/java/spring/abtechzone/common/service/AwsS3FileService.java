@@ -87,13 +87,19 @@ public class AwsS3FileService {
         String key = thumbnailOrUrl.trim();
 
         if (key.startsWith("http://") || key.startsWith("https://")) {
-            try {
-                int pathStart = key.indexOf('/', key.indexOf("://") + 3);
-                if (pathStart != -1) {
-                    key = key.substring(pathStart + 1);
+            boolean isOurDomain = (cloudfrontUrl != null && !cloudfrontUrl.isBlank() && key.contains(cloudfrontUrl))
+                    || (bucket != null && !bucket.isBlank() && key.contains(bucket));
+            if (isOurDomain) {
+                try {
+                    int pathStart = key.indexOf('/', key.indexOf("://") + 3);
+                    if (pathStart != -1) {
+                        key = key.substring(pathStart + 1);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to extract S3 key from URL={}: {}", thumbnailOrUrl, e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("Failed to extract S3 key from URL={}: {}", thumbnailOrUrl, e.getMessage());
+            } else {
+                return null;
             }
         }
 
@@ -119,6 +125,10 @@ public class AwsS3FileService {
      */
     @PreAuthorize("permitAll()")
     public String resolveAccessUrl(String keyOrUrl) {
+        if (keyOrUrl == null || keyOrUrl.isBlank()) {
+            return null;
+        }
+
         String s3Key = extractS3Key(keyOrUrl);
         if (s3Key == null || s3Key.isBlank()) {
             return null;
@@ -137,24 +147,14 @@ public class AwsS3FileService {
         }
     }
 
-    /**
-     * Upload file to S3 at default folder (uploads/)
-     */
-    @PreAuthorize("isAuthenticated()")
-    public AwsS3FileResponse upload(MultipartFile file) {
-        return upload(file, "uploads");
-    }
-
-    /**
-     * Upload file to S3 by folder (products, categories, avatars, etc.)
-     */
+    /** Upload a file to {@code folderName/<uuid>}. */
     @PreAuthorize("isAuthenticated()")
     public AwsS3FileResponse upload(MultipartFile file, String folderName) {
         if (file == null || file.isEmpty()) {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        String prefix = (folderName != null && !folderName.isBlank()) ? folderName.trim() + "/" : "";
+        String prefix = (folderName != null && !folderName.isBlank()) ? folderName.trim() + "/" : "uploads/";
         String fileKey = prefix + UUID.randomUUID();
 
         try {

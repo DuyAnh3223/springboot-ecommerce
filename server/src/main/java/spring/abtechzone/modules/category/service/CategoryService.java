@@ -5,8 +5,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.common.service.AwsS3FileService;
+import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.dto.request.CategoryRequest;
 import spring.abtechzone.modules.category.dto.request.CategorySearchRequest;
 import spring.abtechzone.modules.category.dto.response.CategoryResponse;
@@ -33,6 +32,7 @@ public class CategoryService {
     CategoryRepository categoryRepository;
     CategoryMapper categoryMapper;
     AwsS3FileService awsS3FileService;
+    S3ObjectLifecycleHelper s3ObjectLifecycleHelper;
 
     public CategoryResponse create(CategoryRequest request) {
         Boolean existedCategory = categoryRepository.existsByName(request.getName());
@@ -74,7 +74,7 @@ public class CategoryService {
         String newThumbnail = awsS3FileService.extractS3Key(request.getThumbnail());
 
         if (oldThumbnail != null && !oldThumbnail.isBlank() && !oldThumbnail.equals(newThumbnail)) {
-            deleteS3ObjectAfterCommit(oldThumbnail);
+            s3ObjectLifecycleHelper.deleteAfterCommit(oldThumbnail);
         }
 
         category.setName(request.getName());
@@ -92,36 +92,11 @@ public class CategoryService {
 
         String oldThumbnail = category.getThumbnail();
         if (oldThumbnail != null && !oldThumbnail.isBlank()) {
-            deleteS3ObjectAfterCommit(oldThumbnail);
+            s3ObjectLifecycleHelper.deleteAfterCommit(oldThumbnail);
             category.setThumbnail(null);
         }
 
         category.setIsActive(false);
         categoryRepository.save(category);
-    }
-
-    private void deleteS3ObjectAfterCommit(String thumbnail) {
-        String s3Key = awsS3FileService.extractS3Key(thumbnail);
-        if (s3Key == null || s3Key.isBlank()) {
-            return;
-        }
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        awsS3FileService.deleteObject(s3Key);
-                    } catch (Exception e) {
-                        log.error("Failed to delete S3 object after commit for key {}: {}", s3Key, e.getMessage(), e);
-                    }
-                }
-            });
-        } else {
-            try {
-                awsS3FileService.deleteObject(s3Key);
-            } catch (Exception e) {
-                log.error("Failed to delete S3 object for key {}: {}", s3Key, e.getMessage(), e);
-            }
-        }
     }
 }
