@@ -82,6 +82,7 @@ public class Product {
     Map<String, Object> attributes = new HashMap<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    @OrderBy("id ASC")
     List<ProductSku> skus;
 
     @NotNull

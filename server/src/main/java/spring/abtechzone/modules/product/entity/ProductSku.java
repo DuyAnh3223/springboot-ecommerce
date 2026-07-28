@@ -2,7 +2,9 @@ package spring.abtechzone.modules.product.entity;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.persistence.*;
@@ -44,6 +46,11 @@ public class ProductSku {
 
     @JdbcTypeCode(SqlTypes.JSON)
     Map<String, Object> attributes = new HashMap<>();
+
+    @OneToMany(mappedBy = "sku", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC, id ASC")
+    @Builder.Default
+    List<ProductImage> images = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
