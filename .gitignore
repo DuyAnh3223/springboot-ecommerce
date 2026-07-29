@@ -3,6 +3,8 @@ my docs/
 plan/
 target/
 .mvn/wrapper/maven-wrapper.jar
+.ua
+docs/
 !**/src/main/**/target/
 !**/src/test/**/target/
 

@@ -5,7 +5,7 @@ import { headerData } from '@/constants/data';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SocialMedia from './SocialMedia';
-import { useOutsideClick } from '@/hooks';
+import { useOutsideClick } from '@/shared/hooks';
 interface SidebarProps{
     isOpen: boolean;
     onClose:()=>void;

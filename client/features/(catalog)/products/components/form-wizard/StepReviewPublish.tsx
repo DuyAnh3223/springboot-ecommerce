@@ -4,13 +4,13 @@ import React from "react";
 import { CategoryAttributeResponse } from "@/features/(catalog)/attributes/attribute.type";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Package } from "lucide-react";
+import { CheckCircle, Package, Images } from "lucide-react";
+import { SkuGalleryItem } from "../SkuGalleryDialog";
 
 interface StepReviewPublishProps {
   productName: string;
   productSlug: string;
   selectedCategoryName: string;
-  productThumbnail: string;
   productDescription: string;
   categoryAttributes: CategoryAttributeResponse[];
   nonVariantValues: Record<string, any>;
@@ -21,7 +21,6 @@ export function StepReviewPublish({
   productName,
   productSlug,
   selectedCategoryName,
-  productThumbnail,
   productDescription,
   categoryAttributes,
   nonVariantValues,
@@ -77,19 +76,6 @@ export function StepReviewPublish({
 
                 <div className="text-slate-400 font-medium">Danh mục:</div>
                 <div className="col-span-2 text-slate-800 font-semibold">{selectedCategoryName}</div>
-
-                <div className="text-slate-400 font-medium">Ảnh đại diện:</div>
-                <div className="col-span-2">
-                  {productThumbnail ? (
-                    <img
-                      src={productThumbnail}
-                      alt="Cover Thumbnail"
-                      className="h-14 object-contain rounded border bg-white p-1"
-                    />
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </div>
               </div>
             </div>
 
@@ -145,31 +131,37 @@ export function StepReviewPublish({
               <p className="text-[10px] text-slate-400 italic text-center py-6">Chưa cấu hình biến thể.</p>
             ) : (
               <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
-                {skuFields.map((s) => (
-                  <div key={s.id} className="flex gap-3 p-3 bg-white border rounded-xl shadow-3xs items-center">
-                    <div className="shrink-0 size-10 rounded-md border flex items-center justify-center bg-slate-50">
-                      {s.imageUrl ? (
-                        <img src={s.imageUrl} alt={s.sku} className="size-full object-cover rounded-md" />
-                      ) : (
-                        <Package className="size-4.5 text-slate-350" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-bold text-slate-800 font-mono block truncate">{s.sku}</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {Object.entries(s.attributes).map(([k, v]) => (
-                          <Badge key={k} variant="outline" className="bg-slate-50 text-[9px] border-slate-200 text-slate-500 py-0 px-1">
-                            {k}: {String(v)}
-                          </Badge>
-                        ))}
+                {skuFields.map((s) => {
+                  const gallery: SkuGalleryItem[] = s.galleryItems || [];
+                  const primaryImg = gallery.find((it) => it.isPrimary) || gallery[0];
+                  const preview = primaryImg?.previewUrl;
+
+                  return (
+                    <div key={s.id || s.sku} className="flex gap-3 p-3 bg-white border rounded-xl shadow-3xs items-center">
+                      <div className="shrink-0 size-10 rounded-md border flex items-center justify-center bg-slate-50 overflow-hidden">
+                        {preview ? (
+                          <img src={preview} alt={s.sku} className="size-full object-cover rounded-md" />
+                        ) : (
+                          <Package className="size-4.5 text-slate-350" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold text-slate-800 font-mono block truncate">{s.sku}</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {Object.entries(s.attributes || {}).map(([k, v]) => (
+                            <Badge key={k} variant="outline" className="bg-slate-50 text-[9px] border-slate-200 text-slate-500 py-0 px-1">
+                              {k}: {String(v)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-extrabold text-slate-900 block">{(s.price || 0).toLocaleString("vi-VN")}đ</span>
+                        <span className="text-[10px] text-slate-455 font-medium block mt-0.5">Tồn: {s.stock}</span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-xs font-extrabold text-slate-900 block">{(s.price).toLocaleString("vi-VN")}đ</span>
-                      <span className="text-[10px] text-slate-455 font-medium block mt-0.5">Tồn: {s.stock}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

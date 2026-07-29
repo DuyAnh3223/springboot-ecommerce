@@ -4,7 +4,7 @@ import {
   GetAddressesParams,
   AddressRequest,
 } from "../address.type";
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 
 export async function getAddress(addressId: string): Promise<AddressResponse> {
   const response = await api.get(`/addresses/${addressId}`);
@@ -36,4 +36,3 @@ export async function updateAddress(
 export async function deleteAddress(addressId: string): Promise<void> {
   await api.delete(`/addresses/${addressId}`);
 }
-

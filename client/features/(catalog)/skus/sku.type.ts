@@ -1,3 +1,21 @@
+export interface ProductImage {
+  id: number;
+  url: string;
+  accessUrl?: string | null;
+  sortOrder: number;
+  primary: boolean;
+  altText: string | null;
+}
+
+export interface ProductImageRequest {
+  id?: number;
+  url?: string;
+  sortOrder?: number;
+  primary?: boolean;
+  altText?: string | null;
+  mimeType?: string;
+}
+
 export interface SkuResponse {
   id: number;
   productId: number;
@@ -6,6 +24,7 @@ export interface SkuResponse {
   price: number;
   stock: number;
   imageUrl: string | null;
+  images: ProductImage[];
   isActive?: boolean;
   attributes: Record<string, any>;
 }
@@ -17,7 +36,7 @@ export interface SkuRequest {
   stock: number;
   currency?: string;
   weightGram?: number;
-  imageUrl?: string | null;
+  images?: ProductImageRequest[];
   attributes?: Record<string, any> | null;
 }
 
@@ -27,7 +46,7 @@ export interface SkuUpdateRequest {
   stock?: number;
   currency?: string;
   weightGram?: number;
-  imageUrl?: string | null;
+  images?: ProductImageRequest[];
   isActive?: boolean;
   attributes?: Record<string, any> | null;
 }
