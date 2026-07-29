@@ -122,7 +122,7 @@ class OrderServiceTest {
         Product product = Product.builder()
                 .id(1L)
                 .name("iPhone 15 Pro Max")
-                .isPublished(true)
+                .published(true)
                 .build();
 
         sku = ProductSku.builder()

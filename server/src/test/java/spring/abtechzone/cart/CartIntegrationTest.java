@@ -117,8 +117,8 @@ class CartIntegrationTest {
         product = productRepository.save(Product.builder()
                 .name("iPhone 15 Pro Max")
                 .slug("iphone-15-pro-max")
-                .isPublished(true)
-                .isDraft(false)
+                .published(true)
+                .draft(false)
                 .category(category)
                 .build());
 

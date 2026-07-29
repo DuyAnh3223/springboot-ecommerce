@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import spring.abtechzone.common.service.AwsS3FileService;
+import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.dto.request.CategoryRequest;
 import spring.abtechzone.modules.category.dto.request.CategorySearchRequest;
 import spring.abtechzone.modules.category.dto.response.CategoryResponse;
@@ -42,7 +43,9 @@ class CategoryServiceTest {
 
     @BeforeEach
     void setUp() {
-        categoryService = new CategoryService(categoryRepository, categoryMapper, awsS3FileService);
+        S3ObjectLifecycleHelper s3ObjectLifecycleHelper = new S3ObjectLifecycleHelper(awsS3FileService);
+        categoryService =
+                new CategoryService(categoryRepository, categoryMapper, awsS3FileService, s3ObjectLifecycleHelper);
     }
 
     @Test

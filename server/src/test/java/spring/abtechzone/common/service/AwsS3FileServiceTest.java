@@ -84,6 +84,12 @@ class AwsS3FileServiceTest {
                         "https://d111111abcdef8.cloudfront.net/categories/cat1.png?Expires=123&Signature=abc"));
         assertNull(awsS3FileService.extractS3Key(null));
         assertNull(awsS3FileService.extractS3Key("   "));
+        assertNull(awsS3FileService.extractS3Key("https://external-domain.com/image.png"));
+    }
+
+    @Test
+    void resolveAccessUrl_ExternalUrl_ReturnsNull() {
+        assertNull(awsS3FileService.resolveAccessUrl("https://external-domain.com/image.png"));
     }
 
     @Test
@@ -139,7 +145,7 @@ class AwsS3FileServiceTest {
     void upload_EmptyFile_ThrowsException() {
         MockMultipartFile emptyFile = new MockMultipartFile("file", "", "image/jpeg", new byte[0]);
 
-        assertThrows(AppException.class, () -> awsS3FileService.upload(emptyFile));
+        assertThrows(AppException.class, () -> awsS3FileService.upload(emptyFile, "uploads"));
     }
 
     @Test

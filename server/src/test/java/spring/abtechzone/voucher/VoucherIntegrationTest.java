@@ -107,8 +107,8 @@ class VoucherIntegrationTest {
         // Seed a product and sku
         Product product = Product.builder()
                 .name("iPhone 15")
-                .isDraft(false)
-                .isPublished(true)
+                .draft(false)
+                .published(true)
                 .category(category)
                 .build();
         product = productRepository.save(product);
