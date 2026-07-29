@@ -1,4 +1,4 @@
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 
 export interface AttributeResponse {
   id: number;

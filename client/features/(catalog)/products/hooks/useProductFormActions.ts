@@ -1,15 +1,38 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAttributesAction } from "@/features/(catalog)/attributes/actions";
+import { uploadFileAction, deleteFileAction } from "@/shared/actions/file.action";
 import {
   createProductAction,
   updateProductAction,
   createSkusBulkAction,
+  updateSkuAction,
   publishProductAction,
 } from "../actions";
 import { useProductWizardStore } from "../stores/product-wizard.store";
 import { formatAttributesForSubmit } from "../utils/format-attributes";
 import { ProductResponse } from "../product.type";
+import { SkuGalleryItem } from "../components/SkuGalleryDialog";
+function canonicalStringify(obj: any): string {
+  if (obj === null || typeof obj !== "object") {
+    return JSON.stringify(obj);
+  }
+  if (Array.isArray(obj)) {
+    return "[" + obj.map(canonicalStringify).join(",") + "]";
+  }
+  const keys = Object.keys(obj).sort();
+  const sortedPairs = keys.map(
+    (k) => `${JSON.stringify(k)}:${canonicalStringify(obj[k])}`
+  );
+  return "{" + sortedPairs.join(",") + "}";
+}
+
+function isAttributesEqual(
+  a: Record<string, any> = {},
+  b: Record<string, any> = {}
+): boolean {
+  return canonicalStringify(a || {}) === canonicalStringify(b || {});
+}
 
 interface UseProductFormActionsParams {
   product?: ProductResponse | null;
@@ -22,7 +45,6 @@ interface UseProductFormActionsParams {
   productName: string;
   selectedCategoryId: number;
   productSlug: string;
-  productThumbnail?: string;
   productDescription?: string;
   setValue: any;
 }
@@ -33,7 +55,6 @@ export function useProductFormActions({
   productName,
   selectedCategoryId,
   productSlug,
-  productThumbnail,
   productDescription,
   setValue,
 }: UseProductFormActionsParams) {
@@ -123,12 +144,11 @@ export function useProductFormActions({
     const payload = {
       name: productName,
       slug: productSlug,
-      thumbnail: productThumbnail || null,
       description: productDescription || null,
       categoryId: selectedCategoryId,
       attributes: formattedAttributes,
-      isDraft: true,
-      isPublished: false,
+      draft: true,
+      published: false,
     };
 
     const currentId = wizard.savedProductId || product?.id;
@@ -152,14 +172,132 @@ export function useProductFormActions({
     }
   };
 
+  const processAndSaveSkus = async (productId: number, skuFields: any[]) => {
+    if (skuFields.length === 0) return true;
+
+    const pendingUploadedKeys = new Set<string>();
+
+    try {
+      // 1. Process files & build gallery payloads per SKU
+      const processedSkus = [];
+      for (const field of skuFields) {
+        const galleryItems: SkuGalleryItem[] = field.galleryItems || [];
+        const imagesPayload = [];
+        const uploadedKeysForThisSku: string[] = [];
+
+        for (const item of galleryItems) {
+          let fileKey = item.url;
+          if (item.file) {
+            const formData = new FormData();
+            formData.append("file", item.file);
+            formData.append("folder", "products");
+
+            const uploadRes = await uploadFileAction(formData);
+            if (uploadRes.error || !uploadRes.data) {
+              throw new Error(uploadRes.error || `Tải ảnh cho SKU ${field.sku} thất bại.`);
+            }
+            fileKey = uploadRes.data.fileKey;
+            pendingUploadedKeys.add(fileKey);
+            uploadedKeysForThisSku.push(fileKey);
+          }
+
+          imagesPayload.push({
+            id: item.id,
+            url: fileKey,
+            sortOrder: item.sortOrder,
+            primary: item.isPrimary,
+          });
+        }
+
+        processedSkus.push({
+          ...field,
+          imagesPayload,
+          uploadedKeysForThisSku,
+        });
+      }
+
+      // 2. Separate into NEW SKUs vs EXISTING SKUs
+      const isExistingSku = (s: any) =>
+        (typeof s.skuId === "number" && s.skuId > 0) ||
+        (typeof s.id === "number" && s.id > 0);
+
+      const newSkus = processedSkus.filter((s) => !isExistingSku(s));
+      const existingSkus = processedSkus.filter((s) => isExistingSku(s));
+
+      // 3. Bulk Create New SKUs
+      if (newSkus.length > 0) {
+        const bulkPayload = newSkus.map((s) => ({
+          productId,
+          sku: s.sku,
+          price: s.price,
+          stock: s.stock,
+          attributes: s.attributes,
+          images: s.imagesPayload,
+        }));
+
+        const resBulk = await createSkusBulkAction(productId, bulkPayload);
+        if (resBulk.error) {
+          throw new Error(resBulk.error);
+        }
+
+        // On success, remove uploaded keys of new SKUs from pending
+        newSkus.forEach((s) => {
+          s.uploadedKeysForThisSku.forEach((k: string) => pendingUploadedKeys.delete(k));
+        });
+      }
+
+      // 4. Update Existing SKUs individually via PATCH (only if changed)
+      for (const existingSku of existingSkus) {
+        const targetSkuId = typeof existingSku.skuId === "number" ? existingSku.skuId : (existingSku.id as number);
+        const originalSku = product?.skus?.find((s) => s.id === targetSkuId);
+
+        const isSkuCodeChanged = originalSku ? existingSku.sku !== originalSku.sku : true;
+        const isPriceChanged = originalSku ? Number(existingSku.price) !== Number(originalSku.price) : true;
+        const isStockChanged = originalSku ? Number(existingSku.stock) !== Number(originalSku.stock) : true;
+        const isAttrsChanged = originalSku ? !isAttributesEqual(existingSku.attributes, originalSku.attributes) : true;
+        const isGalleryDirty = Boolean(existingSku.isGalleryDirty);
+
+        const hasChanges = isSkuCodeChanged || isPriceChanged || isStockChanged || isAttrsChanged || isGalleryDirty;
+
+        if (!hasChanges) {
+          continue;
+        }
+
+        const updatePayload: any = {
+          sku: existingSku.sku,
+          price: existingSku.price,
+          stock: existingSku.stock,
+          attributes: existingSku.attributes,
+        };
+
+        if (isGalleryDirty) {
+          updatePayload.images = existingSku.imagesPayload;
+        }
+
+        const resPatch = await updateSkuAction(targetSkuId, updatePayload);
+        if (resPatch.error) {
+          throw new Error(resPatch.error);
+        }
+
+        // On success, remove uploaded keys of this SKU from pending
+        existingSku.uploadedKeysForThisSku.forEach((k: string) => pendingUploadedKeys.delete(k));
+      }
+
+      return true;
+    } catch (err: any) {
+      // Cleanup orphan uploaded S3 keys on failure
+      for (const key of Array.from(pendingUploadedKeys)) {
+        await deleteFileAction(key);
+      }
+      wizard.setError(err.message || "Lỗi khi lưu các biến thể SKU.");
+      return false;
+    }
+  };
+
   const handleSaveProductDraft = async (skuFields: any[]) => {
     wizard.setError(null);
     setIsSavingSkus(true);
     try {
-      const savedProd = await saveProductDraftSilent();
-      if (!savedProd) return;
-      const currentId = savedProd.id;
-
       if (skuFields.length > 0) {
         const invalidSku = skuFields.find((s) => !s.sku || s.price < 0 || s.stock < 0);
         if (invalidSku) {
@@ -167,22 +305,14 @@ export function useProductFormActions({
           scrollToSection(3);
           return;
         }
-
-        const skusPayload = skuFields.map((s) => ({
-          productId: currentId,
-          sku: s.sku,
-          price: s.price,
-          stock: s.stock,
-          imageUrl: s.imageUrl || null,
-          attributes: s.attributes,
-        }));
-
-        const resSku = await createSkusBulkAction(currentId, skusPayload);
-        if (resSku.error) {
-          wizard.setError(resSku.error);
-          return;
-        }
       }
+
+      const savedProd = await saveProductDraftSilent();
+      if (!savedProd) return;
+      const currentId = savedProd.id;
+
+      const ok = await processAndSaveSkus(currentId, skuFields);
+      if (!ok) return;
 
       showSuccessBanner("Đã lưu nháp sản phẩm và SKU thành công!");
       setTimeout(() => {
@@ -200,10 +330,6 @@ export function useProductFormActions({
     wizard.setError(null);
     setIsPublishing(true);
     try {
-      const savedProd = await saveProductDraftSilent();
-      if (!savedProd) return;
-      const currentId = savedProd.id;
-
       if (skuFields.length === 0) {
         wizard.setError("Sản phẩm bắt buộc phải có ít nhất 1 SKU biến thể để xuất bản.");
         scrollToSection(3);
@@ -217,20 +343,12 @@ export function useProductFormActions({
         return;
       }
 
-      const skusPayload = skuFields.map((s) => ({
-        productId: currentId,
-        sku: s.sku,
-        price: s.price,
-        stock: s.stock,
-        imageUrl: s.imageUrl || null,
-        attributes: s.attributes,
-      }));
+      const savedProd = await saveProductDraftSilent();
+      if (!savedProd) return;
+      const currentId = savedProd.id;
 
-      const resSku = await createSkusBulkAction(currentId, skusPayload);
-      if (resSku.error) {
-        wizard.setError(resSku.error);
-        return;
-      }
+      const ok = await processAndSaveSkus(currentId, skuFields);
+      if (!ok) return;
 
       const resPub = await publishProductAction(currentId);
       if (resPub.error) {

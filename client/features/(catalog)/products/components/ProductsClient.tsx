@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Package, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductResponse } from "../product.type";
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
 import { useProductFilters } from "../hooks/useProductFilters";
 import { ProductFilters } from "./ProductFilters";
