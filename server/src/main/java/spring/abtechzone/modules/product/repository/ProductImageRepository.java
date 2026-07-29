@@ -26,7 +26,7 @@ public interface ProductImageRepository extends JpaRepository<ProductImage, Long
 		SELECT i.product.id AS productId, i.url AS url
 		FROM ProductImage i
 		WHERE i.product.id IN :productIds
-		AND i.isPrimary = true
+		AND i.primary = true
 		ORDER BY i.sku.id ASC, i.sortOrder ASC, i.id ASC
 	""")
     List<ProductPrimaryImageProjection> findPrimaryImagesByProductIds(@Param("productIds") List<Long> productIds);

@@ -15,6 +15,5 @@ public class ProductImageResponse {
     String url;
     String accessUrl;
     Integer sortOrder;
-
-    Boolean primary;
+    boolean primary;
 }

@@ -48,7 +48,7 @@ public class ProductImage {
     @ColumnDefault("false")
     @Column(name = "is_primary", nullable = false)
     @Builder.Default
-    Boolean isPrimary = false;
+    boolean primary = false;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP")
@@ -66,9 +66,6 @@ public class ProductImage {
     public void onPrePersist() {
         if (sortOrder == null) {
             sortOrder = 0;
-        }
-        if (isPrimary == null) {
-            isPrimary = false;
         }
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();

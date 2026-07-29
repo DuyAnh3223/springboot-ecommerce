@@ -18,5 +18,5 @@ public class ProductImageRequest {
     String url;
     Integer sortOrder;
 
-    Boolean primary;
+    boolean primary;
 }
