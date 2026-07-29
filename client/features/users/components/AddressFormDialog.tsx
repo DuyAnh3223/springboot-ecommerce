@@ -3,7 +3,7 @@
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAsyncAction } from "@/hooks";
+import { useAsyncAction } from "@/shared/hooks";
 import { createAddressAction, updateAddressAction } from "../actions";
 import { AddressResponse } from "../address.type";
 import { addressSchema, AddressInput } from "../schemas/address.schema";

@@ -1,7 +1,7 @@
 import { api } from "@/lib/axios";
 import { UserResponse, GetUsersParams, UserUpdateRequest } from "../user.type";
 
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 
 export async function getUser(userId: string): Promise<UserResponse> {
   const response = await api.get(`/users/${userId}`);

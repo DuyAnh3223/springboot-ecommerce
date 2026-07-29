@@ -6,7 +6,7 @@ import {
   AssignAttributeRequest,
   GetAttributesParams,
 } from "../attribute.type";
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 
 export async function createAttribute(
   values: AttributeRequest,

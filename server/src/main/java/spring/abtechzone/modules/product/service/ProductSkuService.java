@@ -2,8 +2,6 @@ package spring.abtechzone.modules.product.service;
 
 import java.util.*;
 
-import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,18 +14,23 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.category.entity.Attribute;
+import spring.abtechzone.common.service.AwsS3FileService;
+import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuSearchRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.request.SkuPreviewRequest;
+import spring.abtechzone.modules.product.dto.response.ProductImageResponse;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.dto.response.SkuPreviewResponse;
 import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductImage;
 import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.mapper.ProductImageMapper;
 import spring.abtechzone.modules.product.mapper.ProductSkuMapper;
+import spring.abtechzone.modules.product.repository.ProductImageRepository;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.product.repository.specification.ProductSkuSpecifications;
@@ -44,8 +47,14 @@ public class ProductSkuService {
     ProductSkuRepository productSkuRepository;
     ProductRepository productRepository;
     ProductSkuMapper productSkuMapper;
+    ProductImageMapper productImageMapper;
+    ProductImageRepository productImageRepository;
+    AwsS3FileService awsS3FileService;
+    S3ObjectLifecycleHelper s3ObjectLifecycleHelper;
     ProductAttributeValidator productAttributeValidator;
     CategoryAttributeRepository categoryAttributeRepository;
+    SkuImageService skuImageService;
+    SkuVariantPreviewCalculator skuVariantPreviewCalculator = new SkuVariantPreviewCalculator();
 
     @Transactional(readOnly = true)
     @PreAuthorize("permitAll()")
@@ -55,7 +64,7 @@ public class ProductSkuService {
                 .and(ProductSkuSpecifications.hasMinPrice(request.getMinPrice()))
                 .and(ProductSkuSpecifications.hasMaxPrice(request.getMaxPrice()));
 
-        return productSkuRepository.findAll(spec, request.toPageable()).map(productSkuMapper::toProductSkuResponse);
+        return productSkuRepository.findAll(spec, request.toPageable()).map(this::toSkuResponse);
     }
 
     @Transactional(readOnly = true)
@@ -63,13 +72,11 @@ public class ProductSkuService {
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
-        return productSkuMapper.toProductSkuResponse(sku);
+        return toSkuResponse(sku);
     }
 
     @Transactional
     public ProductSkuResponse createSku(ProductSkuCreateRequest request) {
-        validateSkuForCreate(request.getSku());
-
         if (request.getProductId() == null) {
             throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
         }
@@ -78,24 +85,8 @@ public class ProductSkuService {
                 .findById(request.getProductId())
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        ProductSku sku = productSkuMapper.toProductSku(request);
-        sku.setProduct(product);
-        productAttributeValidator.validateSkuAttributes(product, sku.getAttributes());
-
-        // Validate SKU duplicate variant combination
-        productAttributeValidator.validateSkuNotDuplicate(product, product.getSkus(), sku.getAttributes());
-
-        try {
-            sku = productSkuRepository.save(sku);
-        } catch (DataIntegrityViolationException ex) {
-            if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_sku_sku_active_uq".equals(cve.getConstraintName())) {
-                throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
-            }
-            throw ex;
-        }
-
-        return productSkuMapper.toProductSkuResponse(sku);
+        ProductSku sku = createSingleSkuInternal(product, request, product.getSkus());
+        return toSkuResponse(sku);
     }
 
     @Transactional
@@ -119,17 +110,13 @@ public class ProductSkuService {
 
         productSkuMapper.updateProductSku(sku, request);
 
-        try {
-            sku = productSkuRepository.save(sku);
-        } catch (DataIntegrityViolationException ex) {
-            if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_sku_sku_active_uq".equals(cve.getConstraintName())) {
-                throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
-            }
-            throw ex;
+        sku = productSkuRepository.save(sku);
+
+        if (request.getImages() != null) {
+            skuImageService.syncSkuImages(sku, request.getImages());
         }
 
-        return productSkuMapper.toProductSkuResponse(sku);
+        return toSkuResponse(sku);
     }
 
     @Transactional
@@ -140,15 +127,93 @@ public class ProductSkuService {
         Product product = sku.getProduct();
         if (product.isPublished()) {
             long remainingActive = product.getSkus().stream()
-                    .filter(s -> !s.getId().equals(skuId) && Boolean.TRUE.equals(s.getIsActive()))
+                    .filter(s -> !s.getId().equals(skuId) && s.isActive())
                     .count();
             if (remainingActive == 0) {
                 throw new AppException(ErrorCode.PRODUCT_MUST_HAVE_ACTIVE_SKU);
             }
         }
 
+        List<ProductImage> galleryImages = productImageRepository.findBySkuIdOrderBySortOrderAsc(skuId);
+        for (ProductImage img : galleryImages) {
+            s3ObjectLifecycleHelper.deleteAfterCommit(img.getUrl());
+        }
+        productImageRepository.deleteBySkuId(skuId);
+
+        sku.setImageUrl(null);
         sku.softDelete();
         productSkuRepository.save(sku);
+    }
+
+    @PreAuthorize("permitAll()")
+    public ProductSkuResponse toSkuResponse(ProductSku sku) {
+        if (sku == null) {
+            return null;
+        }
+
+        ProductSkuResponse response = productSkuMapper.toProductSkuResponse(sku);
+
+        String rawImageUrl = sku.getImageUrl();
+        if ((rawImageUrl == null || rawImageUrl.isBlank())
+                && sku.getImages() != null
+                && !sku.getImages().isEmpty()) {
+            rawImageUrl = sku.getImages().stream()
+                    .filter(ProductImage::isPrimary)
+                    .findFirst()
+                    .map(ProductImage::getUrl)
+                    .orElse(sku.getImages().getFirst().getUrl());
+        }
+
+        if (rawImageUrl != null && !rawImageUrl.isBlank()) {
+            String resolved = awsS3FileService.resolveAccessUrl(rawImageUrl);
+            response.setImageUrl(resolved != null ? resolved : rawImageUrl);
+        }
+
+        if (sku.getImages() != null && !sku.getImages().isEmpty()) {
+            List<ProductImageResponse> imageResponses =
+                    sku.getImages().stream().map(this::toProductImageResponse).toList();
+            response.setImages(imageResponses);
+        }
+
+        return response;
+    }
+
+    @PreAuthorize("permitAll()")
+    public List<ProductSkuResponse> toSkuResponseList(List<ProductSku> skus) {
+        if (skus == null) {
+            return Collections.emptyList();
+        }
+        return skus.stream().map(this::toSkuResponse).toList();
+    }
+
+    private ProductImageResponse toProductImageResponse(ProductImage image) {
+        if (image == null) {
+            return null;
+        }
+        ProductImageResponse response = productImageMapper.toProductImageResponse(image);
+        if (image.getUrl() != null && !image.getUrl().isBlank()) {
+            String resolved = awsS3FileService.resolveAccessUrl(image.getUrl());
+            response.setAccessUrl(resolved != null ? resolved : image.getUrl());
+        }
+        return response;
+    }
+
+    private ProductSku createSingleSkuInternal(
+            Product product, ProductSkuCreateRequest request, List<ProductSku> currentSkus) {
+        validateSkuForCreate(request.getSku());
+
+        ProductSku sku = productSkuMapper.toProductSku(request);
+        sku.setProduct(product);
+        productAttributeValidator.validateSkuAttributes(product, sku.getAttributes());
+        productAttributeValidator.validateSkuNotDuplicate(product, currentSkus, sku.getAttributes());
+
+        sku = productSkuRepository.save(sku);
+
+        if (request.getImages() != null) {
+            skuImageService.syncSkuImages(sku, request.getImages());
+        }
+
+        return sku;
     }
 
     private void validateSkuForCreate(String sku) {
@@ -186,45 +251,10 @@ public class ProductSkuService {
                         .filter(ca -> Boolean.TRUE.equals(ca.getIsVariantDefining()))
                         .toList();
 
-        if (variantDefs.isEmpty()) {
-            return Collections.emptyList();
-        }
-
         Map<String, List<Object>> inputAttrs =
                 request.getAttributes() == null ? Collections.emptyMap() : request.getAttributes();
 
-        for (CategoryAttribute def : variantDefs) {
-            String code = def.getAttribute().getCode();
-            List<Object> values = inputAttrs.get(code);
-            if (values == null || values.isEmpty()) {
-                throw new AppException(ErrorCode.PRODUCT_SKU_VARIANT_ATTRIBUTES_MISSING);
-            }
-
-            if ("ENUM".equalsIgnoreCase(def.getAttribute().getDataType())) {
-                List<Object> options = def.getAttribute().getEnumValues();
-                if (options != null && !options.isEmpty()) {
-                    Set<Object> allowedValues = allowedEnumValues(def.getAttribute());
-                    for (Object val : values) {
-                        if (!allowedValues.contains(val)) {
-                            throw new AppException(ErrorCode.ATTRIBUTE_VALUE_INVALID);
-                        }
-                    }
-                } else {
-                    for (Object val : values) {
-                        if (!(val instanceof String) || ((String) val).isBlank()) {
-                            throw new AppException(ErrorCode.ATTRIBUTE_VALUE_INVALID);
-                        }
-                    }
-                }
-            } else {
-                throw new AppException(ErrorCode.VARIANT_ATTRIBUTE_MUST_BE_ENUM);
-            }
-        }
-
-        List<Map<String, Object>> combinations = generateCartesianProduct(inputAttrs);
-        return combinations.stream()
-                .map(comb -> SkuPreviewResponse.builder().attributes(comb).build())
-                .toList();
+        return skuVariantPreviewCalculator.calculatePreview(variantDefs, inputAttrs);
     }
 
     @Transactional
@@ -236,82 +266,10 @@ public class ProductSkuService {
         List<ProductSkuResponse> savedResponses = new ArrayList<>();
 
         for (ProductSkuCreateRequest skuRequest : requests) {
-            validateSkuForCreate(skuRequest.getSku());
-
-            ProductSku sku = productSkuMapper.toProductSku(skuRequest);
-            sku.setProduct(product);
-
-            productAttributeValidator.validateSkuAttributes(product, sku.getAttributes());
-            productAttributeValidator.validateSkuNotDuplicate(product, currentSkus, sku.getAttributes());
-
-            try {
-                sku = productSkuRepository.save(sku);
-            } catch (DataIntegrityViolationException ex) {
-                if (ex.getCause() instanceof ConstraintViolationException cve
-                        && "product_sku_sku_active_uq".equals(cve.getConstraintName())) {
-                    throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
-                }
-                throw ex;
-            }
-
+            ProductSku sku = createSingleSkuInternal(product, skuRequest, currentSkus);
             currentSkus.add(sku);
-            savedResponses.add(productSkuMapper.toProductSkuResponse(sku));
+            savedResponses.add(toSkuResponse(sku));
         }
         return savedResponses;
-    }
-
-    private Set<Object> allowedEnumValues(Attribute def) {
-        List<Object> options = def.getEnumValues();
-        if (options == null || options.isEmpty()) {
-            throw new AppException(ErrorCode.ATTRIBUTE_ENUM_VALUES_MISSING);
-        }
-
-        Set<Object> allowed = new HashSet<>();
-        for (Object opt : options) {
-            if (opt instanceof Map) {
-                Object v = ((Map<?, ?>) opt).get("value");
-                if (v != null) {
-                    allowed.add(v);
-                }
-            } else {
-                allowed.add(opt);
-            }
-        }
-        return allowed;
-    }
-
-    private List<Map<String, Object>> generateCartesianProduct(Map<String, List<Object>> input) {
-        List<Map<String, Object>> result = new ArrayList<>();
-        if (input == null || input.isEmpty()) {
-            return result;
-        }
-
-        List<String> keys = new ArrayList<>(input.keySet());
-        generateCombinations(input, keys, 0, new HashMap<>(), result);
-        return result;
-    }
-
-    private void generateCombinations(
-            Map<String, List<Object>> input,
-            List<String> keys,
-            int depth,
-            Map<String, Object> current,
-            List<Map<String, Object>> result) {
-        if (depth == keys.size()) {
-            result.add(new HashMap<>(current));
-            return;
-        }
-
-        String key = keys.get(depth);
-        List<Object> values = input.get(key);
-        if (values == null || values.isEmpty()) {
-            generateCombinations(input, keys, depth + 1, current, result);
-        } else {
-            for (Object val : values) {
-                current.put(key, val);
-                generateCombinations(input, keys, depth + 1, current, result);
-                current.remove(key);
-            }
-        }
     }
 }

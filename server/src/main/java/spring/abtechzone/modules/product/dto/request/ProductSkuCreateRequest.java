@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.product.dto.request;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.validation.constraints.NotBlank;
@@ -34,6 +35,6 @@ public class ProductSkuCreateRequest {
 
     Integer weightGram;
 
-    String imageUrl;
+    List<ProductImageRequest> images;
     Map<String, Object> attributes;
 }

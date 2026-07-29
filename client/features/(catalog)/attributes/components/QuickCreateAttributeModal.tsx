@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Loader2, Plus, Sliders, X } from "lucide-react";
-import { useAsyncAction, useTagInput } from "@/hooks";
+import { useAsyncAction, useTagInput } from "@/shared/hooks";
 import { slugify } from "@/lib/slugify";
 
 interface QuickCreateAttributeModalProps {

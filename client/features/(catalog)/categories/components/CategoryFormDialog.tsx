@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { categorySchema, CategoryFormValues } from "../schemas/category.schema";
 import { CategoryResponse } from "../category.type";
-import { createCategoryAction, updateCategoryAction } from "../actions";
+import { useCategoryFormDialog } from "../hooks/useCategoryFormDialog";
+import { CategoryThumbnailField } from "./CategoryThumbnailField";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +18,6 @@ import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2, LayoutGrid } from "lucide-react";
 
 interface CategoryFormDialogProps {
-  /** null = Create mode, CategoryResponse = Edit mode */
   category: CategoryResponse | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,75 +30,24 @@ export function CategoryFormDialog({
   onOpenChange,
   onSuccess,
 }: CategoryFormDialogProps) {
-  const isEdit = !!category;
-  const [error, setError] = useState<string | null>(null);
-
   const {
+    isEdit,
+    error,
+    uploadError,
+    previewUrl,
+    uploadMode,
     register,
+    errors,
+    isSubmitting,
+    handleModeChange,
+    handleFileChange,
+    handleRemoveImage,
     handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<CategoryFormValues>({
-    resolver: zodResolver(categorySchema),
-    defaultValues: { name: "", slug: "", thumbnail: "" },
-  });
-
-  // Auto-generate slug from name (only in create mode)
-  const nameValue = watch("name");
-  useEffect(() => {
-    if (!isEdit && nameValue) {
-      const slug = nameValue
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d")
-        .replace(/[^a-z0-9\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-      setValue("slug", slug, { shouldValidate: false });
-    }
-  }, [nameValue, isEdit, setValue]);
-
-  // Populate form when editing
-  useEffect(() => {
-    if (category) {
-      reset({
-        name: category.name,
-        slug: category.slug,
-        thumbnail: category.thumbnail ?? "",
-      });
-    } else {
-      reset({ name: "", slug: "", thumbnail: "" });
-    }
-    setError(null);
-  }, [category, open, reset]);
-
-  const onSubmit = async (values: CategoryFormValues) => {
-    setError(null);
-    const payload = {
-      name: values.name,
-      slug: values.slug,
-      thumbnail: values.thumbnail || undefined,
-    };
-
-    const result = isEdit
-      ? await updateCategoryAction(category!.id, payload)
-      : await createCategoryAction(payload);
-
-    if (result.error) {
-      setError(result.error);
-      return;
-    }
-
-    onSuccess();
-    onOpenChange(false);
-  };
+  } = useCategoryFormDialog({ category, open, onOpenChange, onSuccess });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LayoutGrid className="size-5 text-slate-600" />
@@ -122,7 +67,7 @@ export function CategoryFormDialog({
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-1">
+        <form onSubmit={handleSubmit} className="space-y-4 py-1">
           {/* Name */}
           <div className="space-y-1.5">
             <Label htmlFor="cat-name">
@@ -155,22 +100,18 @@ export function CategoryFormDialog({
             )}
           </div>
 
-          {/* Thumbnail */}
-          <div className="space-y-1.5">
-            <Label htmlFor="cat-thumbnail">URL ảnh thumbnail</Label>
-            <Input
-              id="cat-thumbnail"
-              type="url"
-              placeholder="https://example.com/image.jpg"
-              className="border-slate-200 focus-visible:ring-slate-400/20"
-              {...register("thumbnail")}
-            />
-            {errors.thumbnail?.message && (
-              <p className="text-xs text-destructive">
-                {errors.thumbnail.message}
-              </p>
-            )}
-          </div>
+          {/* Thumbnail Section */}
+          <CategoryThumbnailField
+            uploadMode={uploadMode}
+            previewUrl={previewUrl}
+            uploadError={uploadError}
+            errors={errors}
+            isSubmitting={isSubmitting}
+            register={register}
+            onModeChange={handleModeChange}
+            onFileChange={handleFileChange}
+            onRemoveImage={handleRemoveImage}
+          />
 
           <DialogFooter className="pt-2">
             <DialogClose
@@ -192,7 +133,7 @@ export function CategoryFormDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang lưu...
+                  Đang tải ảnh và lưu...
                 </>
               ) : isEdit ? (
                 "Lưu thay đổi"

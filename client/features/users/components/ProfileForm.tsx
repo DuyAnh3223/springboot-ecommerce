@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useAsyncAction } from "@/hooks";
+import { useAsyncAction } from "@/shared/hooks";
 import { updateUserAction } from "../actions";
 import { UserResponse } from "../user.type";
 
