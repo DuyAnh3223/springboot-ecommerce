@@ -8,7 +8,7 @@
 |---|---|---|---|
 | **auth** | `AuthService` | `User`, `Role`, `Permission`, `UserRole`, `UserRoleId`, `InvalidatedToken` | JWT issuing (HS512), introspection, token invalidation, authentication context helper methods |
 | **user** | `UserService`, `AddressService` | `User`, `Address` | User CRUD, profile retrieval, shipping address management with ownership validation |
-| **product** | `ProductService`, `ProductSkuService` | `Product`, `ProductSku` | Catalog management, dynamic variant SKU generation, price & stock aggregation |
+| **product** | `ProductService`, `ProductSkuService`, `SkuImageService`, `SkuVariantPreviewCalculator`, `ProductAttributeValidator` | `Product`, `ProductSku`, `ProductImage`, `AttributeUtils` | Catalog management, dynamic variant SKU generation, price & stock aggregation, S3 gallery sync |
 | **category** | `CategoryService`, `AttributeService` | `Category`, `Attribute`, `CategoryAttribute` | Parent-child taxonomy, category-attribute mapping, slug generation |
 | **cart** | `CartService` | `Cart`, `CartItem` | Active cart management (`findByUserIdAndStatus`), quantity accumulation, price sync |
 | **order** | `OrderService` | `Order`, `OrderItem`, `OrderStatusHistory` | Checkout execution, Redisson lock coordination, status transition lifecycle |
@@ -41,7 +41,13 @@
 - **`ProductService` & `ProductSkuService`**:
   - `Product`: Aggregates `skuCount`, `activeSkuCount`, `totalStock`, `priceMin`, `priceMax`.
   - `ProductSku`: Unique SKU code, price, stock, attributes (JSON/Map), `isActive`.
-  - `ProductAttributeValidator`: Validates variant combinations against assigned category attributes.
+  - `SkuImageService`: Public service handling SKU multi-image gallery synchronization (`syncSkuImages`), enforcing PATCH semantics, and invoking `s3ObjectLifecycleHelper.deleteAfterCommit(...)` for obsolete gallery images. Explicitly flushes deletes and non-primary updates before saving new images to prevent PostgreSQL partial unique constraint violations (`idx_product_image_sku_primary`).
+  - `SkuVariantPreviewCalculator`: Public helper encapsulating ENUM attribute validation and Cartesian-product SKU preview generation.
+  - MapStruct Mappers (`ProductMapper`, `ProductSkuMapper`, `ProductImageMapper`): Pure DTO/entity mappers. `ProductService` and `ProductSkuService` resolve S3 access URLs directly using `AwsS3FileService.resolveAccessUrl(...)`.
+  - `ProductAttributeValidator`: Validates variant combinations against assigned category attributes. Modularized with Java 16+ pattern matching and type-specific scalar validators (`validateStringScalar`, `validateNumberScalar`, `validateBooleanScalar`, `validateEnumScalar`).
+  - `AttributeUtils`: Utility class (`spring.abtechzone.modules.product.util.AttributeUtils`) providing `extractAllowedEnumValues(Attribute)` to share allowed ENUM value extraction across validators and calculators.
+  - Product JSON contract uses `draft`, `published`, and `skus`; legacy `isDraft`, `isPublished`, and `productSkus` keys are not accepted or returned.
+  - `ProductSkuUpdateRequest.images` is PATCH-aware without `JsonNullable`: omit it to preserve the gallery, send `[]` to clear it, or send the final image list to synchronize it. Explicit JSON `null` is rejected.
 
 ### 2.4 Category Module (`spring.abtechzone.modules.category`)
 - **`CategoryService`**:
@@ -71,6 +77,7 @@
 
 ### 2.9 Common Package (`spring.abtechzone.common`)
 - **`AwsS3FileService`**:
+  - Upload API: `upload(MultipartFile file, String folderName)` is the sole upload method and stores at `${folderName}/${uuid}`.
   - Public Folders Config: Read from property key `aws.s3.public-folders` (fallback defaults: `products`, `categories`, `avatars`).
   - Expiration Config: Read from property key `aws.s3.presigned-url-expiration` (default `60` minutes).
   - CloudFront CDN & Signing Config:
