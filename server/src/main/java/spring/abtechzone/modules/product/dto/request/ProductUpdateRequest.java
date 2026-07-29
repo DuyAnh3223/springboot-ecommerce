@@ -15,10 +15,11 @@ import lombok.experimental.FieldDefaults;
 public class ProductUpdateRequest {
 
     String name;
+    String thumbnail;
     String description;
 
-    Boolean draft;
-    Boolean published;
+    Boolean isDraft;
+    Boolean isPublished;
 
     Long categoryId;
     Long brandId;

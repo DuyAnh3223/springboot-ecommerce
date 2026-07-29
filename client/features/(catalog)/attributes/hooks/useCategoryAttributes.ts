@@ -1,15 +1,12 @@
 import { useEffect, useState, useTransition } from "react";
 import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
-import {
-  AttributeResponse,
-  CategoryAttributeResponse,
-} from "@/features/(catalog)/attributes/attribute.type";
+import { AttributeResponse, CategoryAttributeResponse } from "@/features/(catalog)/attributes/attribute.type";
 import { getAttributesAction } from "@/features/(catalog)/attributes/actions/get-attributes.action";
 import { getGlobalAttributesAction } from "@/features/(catalog)/attributes/actions/get-global-attributes.action";
 import { assignCategoryAttributesAction } from "@/features/(catalog)/attributes/actions/assign-attributes.action";
 import { updateCategoryAttributeAction } from "@/features/(catalog)/attributes/actions/update-category-attribute.action";
 import { removeCategoryAttributeAction } from "@/features/(catalog)/attributes/actions/remove-category-attribute.action";
-import { useAsyncAction } from "@/shared/hooks";
+import { useAsyncAction } from "@/hooks";
 
 export interface SelectedAttributeItem {
   id?: number; // PK of category_attribute table
@@ -31,17 +28,11 @@ export interface SelectedAttributeItem {
 export function useCategoryAttributes(
   category: CategoryResponse,
   open: boolean,
-  onOpenChange: (open: boolean) => void,
+  onOpenChange: (open: boolean) => void
 ) {
-  const [originalAttributes, setOriginalAttributes] = useState<
-    CategoryAttributeResponse[]
-  >([]);
-  const [selectedItems, setSelectedItems] = useState<SelectedAttributeItem[]>(
-    [],
-  );
-  const [globalAttributes, setGlobalAttributes] = useState<AttributeResponse[]>(
-    [],
-  );
+  const [originalAttributes, setOriginalAttributes] = useState<CategoryAttributeResponse[]>([]);
+  const [selectedItems, setSelectedItems] = useState<SelectedAttributeItem[]>([]);
+  const [globalAttributes, setGlobalAttributes] = useState<AttributeResponse[]>([]);
   const [isPending, startTransition] = useTransition();
 
   // Modal control
@@ -83,7 +74,7 @@ export function useCategoryAttributes(
           isMultiValue: attr.isMultiValue,
           sortOrder: attr.sortOrder,
           isNew: false,
-        })),
+        }))
       );
 
       if (globalResult.data) {
@@ -122,11 +113,7 @@ export function useCategoryAttributes(
 
   const handleToggleCheckbox = (
     code: string,
-    field:
-      | "isFilterable"
-      | "isVariantDefining"
-      | "isCompatibilityKey"
-      | "isMultiValue",
+    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isMultiValue"
   ) => {
     setSelectedItems((prev) =>
       prev.map((item) => {
@@ -142,7 +129,7 @@ export function useCategoryAttributes(
           return updated;
         }
         return item;
-      }),
+      })
     );
   };
 
@@ -160,14 +147,10 @@ export function useCategoryAttributes(
       try {
         // 1. Items to unassign (present originally but removed now)
         const toUnassign = originalAttributes.filter(
-          (orig) =>
-            !selectedItems.some((sel) => sel.attributeId === orig.attributeId),
+          (orig) => !selectedItems.some((sel) => sel.attributeId === orig.attributeId)
         );
         for (const item of toUnassign) {
-          const res = await removeCategoryAttributeAction(
-            category.id,
-            item.attributeId,
-          );
+          const res = await removeCategoryAttributeAction(category.id, item.attributeId);
           if (res.error) {
             setError(res.error);
             return;
@@ -186,10 +169,7 @@ export function useCategoryAttributes(
             isMultiValue: item.isMultiValue,
             sortOrder: item.sortOrder,
           }));
-          const res = await assignCategoryAttributesAction(
-            category.id,
-            assignRequests,
-          );
+          const res = await assignCategoryAttributesAction(category.id, assignRequests);
           if (res.error) {
             setError(res.error);
             return;
@@ -211,19 +191,15 @@ export function useCategoryAttributes(
           );
         });
         for (const item of toUpdate) {
-          const res = await updateCategoryAttributeAction(
-            category.id,
-            item.id!,
-            {
-              attributeId: item.attributeId,
-              isFilterable: item.isFilterable,
-              isVariantDefining: item.isVariantDefining,
-              isCompatibilityKey: item.isCompatibilityKey,
-              isRequired: item.isRequired,
-              isMultiValue: item.isMultiValue,
-              sortOrder: item.sortOrder,
-            },
-          );
+          const res = await updateCategoryAttributeAction(category.id, item.id!, {
+            attributeId: item.attributeId,
+            isFilterable: item.isFilterable,
+            isVariantDefining: item.isVariantDefining,
+            isCompatibilityKey: item.isCompatibilityKey,
+            isRequired: item.isRequired,
+            isMultiValue: item.isMultiValue,
+            sortOrder: item.sortOrder,
+          });
           if (res.error) {
             setError(res.error);
             return;

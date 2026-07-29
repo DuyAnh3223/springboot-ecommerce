@@ -132,9 +132,9 @@ const DataTable = ({
                     <div className="flex items-center gap-3">
                       {/* Image Thumbnail */}
                       <div className="shrink-0">
-                        {cat.thumbnailUrl || cat.thumbnail ? (
+                        {cat.thumbnail ? (
                           <img
-                            src={cat.thumbnailUrl || cat.thumbnail || ""}
+                            src={cat.thumbnail}
                             alt={cat.name}
                             className="size-8.5 rounded-md object-cover border border-slate-100 shadow-xs"
                             onError={(e) => {
@@ -163,7 +163,7 @@ const DataTable = ({
 
                   {/* Status badge */}
                   <TableCell className="text-center py-2">
-                    {cat.isActive ? (
+                    {cat.active ? (
                       <Badge className="bg-emerald-50 hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold px-2 py-0.5 shadow-none rounded-md">
                         Hoạt động
                       </Badge>

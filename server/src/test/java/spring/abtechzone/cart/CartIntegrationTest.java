@@ -24,7 +24,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
@@ -39,7 +38,7 @@ import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
-@SpringBootTest(classes = AbTechZoneApplication.class)
+@SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -48,7 +47,7 @@ class CartIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -117,8 +116,8 @@ class CartIntegrationTest {
         product = productRepository.save(Product.builder()
                 .name("iPhone 15 Pro Max")
                 .slug("iphone-15-pro-max")
-                .published(true)
-                .draft(false)
+                .isPublished(true)
+                .isDraft(false)
                 .category(category)
                 .build());
 

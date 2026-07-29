@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
-import { PageResponse } from "@/shared/types/page.type";
+import { PageResponse } from "@/types/page.type";
 import { deleteCategoryAction } from "@/features/(catalog)/categories/actions";
 import { CategoryFormDialog } from "@/features/(catalog)/categories/components/CategoryFormDialog";
 import Header from "@/features/(catalog)/categories/components/Header";

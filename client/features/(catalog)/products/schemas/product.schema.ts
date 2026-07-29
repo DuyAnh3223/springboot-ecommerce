@@ -11,6 +11,11 @@ export const ProductSchema = z.object({
     ),
   categoryId: z.number().min(1, "Vui lòng chọn danh mục"),
   description: z.string().optional().or(z.literal("")),
+  thumbnail: z
+    .string()
+    .url("URL ảnh không hợp lệ")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type ProductFormValues = z.infer<typeof ProductSchema>;

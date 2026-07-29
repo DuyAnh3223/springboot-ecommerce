@@ -2,9 +2,7 @@ package spring.abtechzone.modules.product.entity;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import jakarta.persistence.*;
@@ -47,11 +45,6 @@ public class ProductSku {
     @JdbcTypeCode(SqlTypes.JSON)
     Map<String, Object> attributes = new HashMap<>();
 
-    @OneToMany(mappedBy = "sku", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("sortOrder ASC, id ASC")
-    @Builder.Default
-    List<ProductImage> images = new ArrayList<>();
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     Product product;
@@ -61,36 +54,39 @@ public class ProductSku {
     @ColumnDefault("'VND'")
     @Column(name = "currency", nullable = false, length = 3)
     @Builder.Default
-    String currency = "VND";
+    private String currency = "VND";
 
     @Column(name = "weight_gram")
-    Integer weightGram;
+    private Integer weightGram;
 
     @NotNull
     @ColumnDefault("true")
     @Column(name = "is_active", nullable = false)
     @Builder.Default
-    boolean active = true;
+    private Boolean isActive = true;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-    OffsetDateTime createdAt = OffsetDateTime.now();
+    private OffsetDateTime createdAt = OffsetDateTime.now();
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
-    OffsetDateTime updatedAt = OffsetDateTime.now();
+    private OffsetDateTime updatedAt = OffsetDateTime.now();
 
     @Column(name = "deleted_at")
-    OffsetDateTime deletedAt;
+    private OffsetDateTime deletedAt;
 
     @PrePersist
     public void onPrePersist() {
         if (currency == null) {
             currency = "VND";
+        }
+        if (isActive == null) {
+            isActive = true;
         }
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
@@ -105,6 +101,6 @@ public class ProductSku {
 
     public void softDelete() {
         this.deletedAt = OffsetDateTime.now();
-        this.active = false;
+        this.isActive = false;
     }
 }

@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,7 +26,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
@@ -72,7 +72,6 @@ public class OrderService {
     OrderStatusHistoryRepository orderStatusHistoryRepository;
     ProductSkuRepository productSkuRepository;
     OrderMapper orderMapper;
-    AuthService authService;
 
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
@@ -204,13 +203,8 @@ public class OrderService {
 
             return transactionTemplate.execute(status -> doCreateOrder(request, user, initialSkuQtyMap));
 
-        } catch (Exception e) {
-            if (e instanceof AppException appException) {
-                throw appException;
-            }
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         } finally {
             // Step 6: Free all lock
@@ -395,7 +389,8 @@ public class OrderService {
     // ════════════════════════════════════════════════════════
 
     private User getAuthenticatedUser() {
-        String username = authService.getCurrentUsername();
+        var context = SecurityContextHolder.getContext();
+        String username = context.getAuthentication().getName();
         return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 

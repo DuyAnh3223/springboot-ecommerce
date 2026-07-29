@@ -25,7 +25,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
@@ -65,9 +64,6 @@ class CartServiceTest {
     @Mock
     CartMapper cartMapper;
 
-    @Mock
-    AuthService authService;
-
     @InjectMocks
     CartService cartService;
 
@@ -83,7 +79,6 @@ class CartServiceTest {
         // Set up SecurityContext — giả lập user đã đăng nhập
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
-        lenient().when(authService.getCurrentUsername()).thenReturn("testuser");
 
         // Shared fixtures
         user = User.builder().id(userId).username("testuser").build();

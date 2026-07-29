@@ -126,7 +126,7 @@ public class ProductController {
                 .build();
     }
 
-    @GetMapping("/{slug:(?!\\d+$)[a-zA-Z0-9\\-_]+}")
+    @GetMapping("/{slug:[a-zA-Z0-9\\-_]+}")
     @Operation(
             summary = "Get product by slug (Public)",
             description = "Retrieve a published product by its URL-friendly slug")

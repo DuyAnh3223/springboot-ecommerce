@@ -1,12 +1,11 @@
-import { PageResponse } from "@/shared/types/page.type";
+import { PageResponse } from "@/types/page.type";
 
 export interface CategoryResponse {
   id: number;
   name: string;
   slug: string;
   thumbnail: string | null;
-  thumbnailUrl?: string | null;
-  isActive: boolean;
+  active: boolean;
   parentId?: number;
 }
 
