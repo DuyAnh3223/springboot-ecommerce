@@ -14,6 +14,7 @@ import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
+import spring.abtechzone.modules.product.util.AttributeUtils;
 
 @Component
 @RequiredArgsConstructor
@@ -177,11 +178,7 @@ public class ProductAttributeValidator {
         boolean multi = Boolean.TRUE.equals(def.getIsMultiValue());
 
         if (multi) {
-            if (!(value instanceof Collection)) {
-                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-            }
-            Collection<?> col = (Collection<?>) value;
-            if (col.isEmpty()) {
+            if (!(value instanceof Collection<?> col) || col.isEmpty()) {
                 throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
             }
             Set<Object> seen = new HashSet<>();
@@ -200,7 +197,7 @@ public class ProductAttributeValidator {
     }
 
     /**
-     * Validate 1 unique scalar value of dataType .
+     * Validate 1 unique scalar value of dataType.
      */
     private void validateScalarByType(Attribute def, Object value) {
         if (value == null) {
@@ -208,87 +205,80 @@ public class ProductAttributeValidator {
         }
 
         String dataType = def.getDataType();
-
         if ("STRING".equalsIgnoreCase(dataType)) {
-            if (!(value instanceof String) || ((String) value).isBlank()) {
-                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-            }
-            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
-                if (!allowedEnumValues(def).contains(value)) {
-                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-                }
-            }
+            validateStringScalar(def, value);
         } else if ("NUMBER".equalsIgnoreCase(dataType)) {
-            if (!(value instanceof Number)) {
-                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-            }
-            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
-                boolean matched = false;
-                double valDouble = ((Number) value).doubleValue();
-                for (Object allowed : allowedEnumValues(def)) {
-                    if (allowed instanceof Number) {
-                        if (((Number) allowed).doubleValue() == valDouble) {
-                            matched = true;
-                            break;
-                        }
-                    } else if (allowed instanceof String) {
-                        try {
-                            double allowedDouble = Double.parseDouble((String) allowed);
-                            if (allowedDouble == valDouble) {
-                                matched = true;
-                                break;
-                            }
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                    if (allowed.toString().equals(value.toString())) {
-                        matched = true;
-                        break;
-                    }
-                }
-                if (!matched) {
-                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-                }
-            }
+            validateNumberScalar(def, value);
         } else if ("BOOLEAN".equalsIgnoreCase(dataType)) {
-            if (!(value instanceof Boolean)) {
-                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-            }
+            validateBooleanScalar(value);
         } else if ("ENUM".equalsIgnoreCase(dataType)) {
-            if (def.getEnumValues() != null && !def.getEnumValues().isEmpty()) {
-                if (!allowedEnumValues(def).contains(value)) {
-                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-                }
-            } else {
-                if (!(value instanceof String) || ((String) value).isBlank()) {
-                    throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
-                }
-            }
+            validateEnumScalar(def, value);
         } else {
             throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
         }
     }
 
-    /**
-     * get allowed  Attribute.enumValues.
-     */
-    private Set<Object> allowedEnumValues(Attribute def) {
-        List<Object> options = def.getEnumValues();
-        if (options == null || options.isEmpty()) {
-            throw new AppException(ErrorCode.ATTRIBUTE_ENUM_VALUES_MISSING);
+    private void validateStringScalar(Attribute def, Object value) {
+        if (!(value instanceof String str) || str.isBlank()) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
         }
+        if (hasEnumValues(def) && !AttributeUtils.extractAllowedEnumValues(def).contains(value)) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        }
+    }
 
-        Set<Object> allowed = new HashSet<>();
-        for (Object opt : options) {
-            if (opt instanceof Map) {
-                Object v = ((Map<?, ?>) opt).get("value");
-                if (v != null) {
-                    allowed.add(v);
-                }
-            } else {
-                allowed.add(opt);
+    private void validateBooleanScalar(Object value) {
+        if (!(value instanceof Boolean)) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        }
+    }
+
+    private void validateEnumScalar(Attribute def, Object value) {
+        if (hasEnumValues(def)) {
+            if (!AttributeUtils.extractAllowedEnumValues(def).contains(value)) {
+                throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+            }
+        } else if (!(value instanceof String str) || str.isBlank()) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        }
+    }
+
+    private void validateNumberScalar(Attribute def, Object value) {
+        if (!(value instanceof Number numberValue)) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        }
+        if (hasEnumValues(def) && !isNumberValueAllowed(def, numberValue)) {
+            throw new AppException(ErrorCode.PRODUCT_ATTRIBUTES_INVALID);
+        }
+    }
+
+    private boolean isNumberValueAllowed(Attribute def, Number value) {
+        double valDouble = value.doubleValue();
+        for (Object allowed : AttributeUtils.extractAllowedEnumValues(def)) {
+            if (matchesNumberValue(allowed, valDouble, value)) {
+                return true;
             }
         }
-        return allowed;
+        return false;
+    }
+
+    private boolean matchesNumberValue(Object allowed, double valDouble, Object value) {
+        if (allowed instanceof Number allowedNum) {
+            return allowedNum.doubleValue() == valDouble;
+        }
+        if (allowed instanceof String allowedStr) {
+            try {
+                if (Double.parseDouble(allowedStr) == valDouble) {
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                // Expected when allowed enum value string is non-numeric
+            }
+        }
+        return allowed.toString().equals(value.toString());
+    }
+
+    private boolean hasEnumValues(Attribute def) {
+        return def.getEnumValues() != null && !def.getEnumValues().isEmpty();
     }
 }

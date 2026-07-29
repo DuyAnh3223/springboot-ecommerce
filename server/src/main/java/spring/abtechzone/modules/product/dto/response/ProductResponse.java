@@ -1,5 +1,6 @@
 package spring.abtechzone.modules.product.dto.response;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -8,7 +9,8 @@ import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.category.dto.response.BrandResponse;
 import spring.abtechzone.modules.category.dto.response.CategoryResponse;
 
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -18,22 +20,24 @@ public class ProductResponse {
     Long id;
     String name;
     String slug;
-    String thumbnail;
+    String primaryImageUrl;
     String description;
 
     Double rating;
-    boolean isDraft;
-    boolean isPublished;
+
+    boolean draft;
+    boolean published;
 
     Integer skuCount;
     Integer activeSkuCount;
     Integer totalStock;
-    java.math.BigDecimal priceMin;
-    java.math.BigDecimal priceMax;
+    BigDecimal priceMin;
+    BigDecimal priceMax;
 
     CategoryResponse category;
     BrandResponse brand;
 
     Map<String, Object> attributes;
-    List<ProductSkuResponse> productSkus;
+
+    List<ProductSkuResponse> skus;
 }

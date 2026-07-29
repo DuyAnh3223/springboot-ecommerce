@@ -5,7 +5,7 @@ import { CategoryResponse } from "@/features/(catalog)/categories/category.type"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Info, Package } from "lucide-react";
+import { Info } from "lucide-react";
 import { CategoryTreeSelector } from "./CategoryTreeSelector";
 import { MarkdownEditor } from "./MarkdownEditor";
 
@@ -17,7 +17,6 @@ interface StepBasicInfoProps {
   selectedCategoryId: number;
   setValue: any;
   setError: (err: string | null) => void;
-  productThumbnail: string;
   productDescription: string;
   onCategorySelect: (id: number) => void;
 }
@@ -30,7 +29,6 @@ export function StepBasicInfo({
   selectedCategoryId,
   setValue,
   setError,
-  productThumbnail,
   productDescription,
   onCategorySelect,
 }: StepBasicInfoProps) {
@@ -88,45 +86,6 @@ export function StepBasicInfo({
             />
             {errors.categoryId && (
               <p className="text-rose-500 text-2xs font-semibold">{errors.categoryId.message}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Cover/Thumbnail Image URL & Live Preview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-2">
-            <Label className="text-slate-750 font-bold text-xs">Ảnh đại diện sản phẩm (Thumbnail URL)</Label>
-            <Input
-              type="text"
-              {...register("thumbnail")}
-              placeholder="Nhập đường dẫn ảnh sản phẩm (ví dụ: http://image-service/my-phone.jpg)"
-              className="border-slate-200 h-10 focus-visible:ring-shop_dark_green/10"
-            />
-            {errors.thumbnail && (
-              <p className="text-rose-500 text-2xs font-semibold">{errors.thumbnail.message}</p>
-            )}
-          </div>
-          <div className="flex flex-col items-center justify-center border border-dashed border-slate-200 rounded-xl p-3 bg-slate-50/50">
-            {productThumbnail ? (
-              <div className="relative group">
-                <img
-                  src={productThumbnail}
-                  alt="Product Cover Preview"
-                  className="h-16 w-auto object-contain rounded-lg border shadow-2xs bg-white"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      "https://images.unsplash.com/photo-1531403009284-440f080d1e12?w=150";
-                  }}
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block text-center">Ảnh xem trước</span>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="size-10 bg-white border border-slate-150 flex items-center justify-center rounded-lg mx-auto mb-1 text-slate-400">
-                  <Package className="size-5" />
-                </div>
-                <span className="text-[10px] text-slate-450">Chưa có ảnh</span>
-              </div>
             )}
           </div>
         </div>

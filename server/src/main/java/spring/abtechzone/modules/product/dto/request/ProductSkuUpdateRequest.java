@@ -1,9 +1,12 @@
 package spring.abtechzone.modules.product.dto.request;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.validation.constraints.PositiveOrZero;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -13,6 +16,7 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductSkuUpdateRequest {
 
     String sku;
@@ -27,7 +31,8 @@ public class ProductSkuUpdateRequest {
 
     Integer weightGram;
 
-    String imageUrl;
-    Boolean isActive;
+    List<ProductImageRequest> images;
+
+    Boolean active;
     Map<String, Object> attributes;
 }

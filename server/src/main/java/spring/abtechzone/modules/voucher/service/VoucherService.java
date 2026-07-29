@@ -18,8 +18,8 @@ import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.product.mapper.ProductSkuMapper;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.product.service.ProductSkuService;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
@@ -44,7 +44,7 @@ public class VoucherService {
     ProductSkuRepository productSkuRepository;
     VoucherMapper voucherMapper;
     VoucherValidator voucherValidator;
-    ProductSkuMapper productSkuMapper;
+    ProductSkuService productSkuService;
 
     @Transactional
     public VoucherResponse create(VoucherCreateRequest request) {
@@ -129,7 +129,7 @@ public class VoucherService {
             skus = List.copyOf(voucher.getProductSkus());
         }
 
-        return skus.stream().map(productSkuMapper::toProductSkuResponse).toList();
+        return productSkuService.toSkuResponseList(skus);
     }
 
     public VoucherDiscountResponse calculateDiscount(VoucherDiscountRequest request) {

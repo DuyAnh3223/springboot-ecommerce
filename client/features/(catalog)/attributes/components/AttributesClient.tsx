@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { AttributeResponse } from "@/features/(catalog)/attributes/attribute.type";
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 import { deleteAttributeAction } from "@/features/(catalog)/attributes/actions";
 import AttributesTable from "./AttributesTable";
 import AttributeFormDialog from "./AttributeFormDialog";

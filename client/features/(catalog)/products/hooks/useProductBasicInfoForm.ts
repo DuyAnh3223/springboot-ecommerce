@@ -8,7 +8,7 @@ import { slugify } from "@/lib/slugify";
 export function useProductBasicInfoForm(product?: ProductResponse | null) {
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(ProductSchema),
-    defaultValues: { name: "", slug: "", thumbnail: "", categoryId: 0, description: "" },
+    defaultValues: { name: "", slug: "", categoryId: 0, description: "" },
   });
 
   const { register, watch, setValue, formState: { errors }, reset } = form;
@@ -16,7 +16,6 @@ export function useProductBasicInfoForm(product?: ProductResponse | null) {
   const selectedCategoryId = watch("categoryId");
   const productName = watch("name");
   const productSlug = watch("slug");
-  const productThumbnail = watch("thumbnail");
   const productDescription = watch("description");
 
   const isEdit = !!product;
@@ -38,7 +37,6 @@ export function useProductBasicInfoForm(product?: ProductResponse | null) {
     isEdit,
     productName,
     productSlug,
-    productThumbnail,
     productDescription,
     selectedCategoryId,
   };
