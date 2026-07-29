@@ -2,10 +2,11 @@ package spring.abtechzone.modules.product.service;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.common.service.AwsS3FileService;
 import spring.abtechzone.modules.category.entity.Brand;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.BrandRepository;
@@ -28,7 +30,10 @@ import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
 import spring.abtechzone.modules.product.dto.response.ProductResponse;
 import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductImage;
+import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.mapper.ProductMapper;
+import spring.abtechzone.modules.product.repository.ProductImageRepository;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.product.repository.specification.ProductSpecifications;
@@ -43,10 +48,13 @@ import spring.abtechzone.modules.product.validator.ProductAttributeValidator;
 public class ProductService {
     ProductRepository productRepository;
     ProductSkuRepository productSkuRepository;
+    ProductImageRepository productImageRepository;
     ProductMapper productMapper;
+    ProductSkuService productSkuService;
     ProductAttributeValidator productAttributeValidator;
     CategoryRepository categoryRepository;
     BrandRepository brandRepository;
+    AwsS3FileService awsS3FileService;
 
     @Transactional
     public ProductResponse create(ProductCreateRequest request) {
@@ -64,7 +72,9 @@ public class ProductService {
         product.setCategory(category);
 
         if (request.getBrandId() != null) {
-            Brand brand = brandRepository.findById(request.getBrandId()).orElse(null);
+            Brand brand = brandRepository
+                    .findById(request.getBrandId())
+                    .orElseThrow(() -> new AppException(ErrorCode.BRAND_NOT_FOUND));
             product.setBrand(brand);
         }
 
@@ -77,17 +87,9 @@ public class ProductService {
         productAttributeValidator.validateProductAttributes(product);
         productAttributeValidator.validateProductSkus(product);
 
-        try {
-            product = productRepository.save(product);
-        } catch (DataIntegrityViolationException ex) {
-            if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_slug_active_uq".equals(cve.getConstraintName())) {
-                throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
-            }
-            throw ex;
-        }
+        product = productRepository.save(product);
 
-        return productMapper.toProductResponse(product);
+        return toDetailResponse(product);
     }
 
     private Product findProductById(Long id) {
@@ -96,7 +98,7 @@ public class ProductService {
 
     @PreAuthorize("permitAll()")
     public ProductResponse getProduct(Long id) {
-        return productMapper.toProductResponse(findProductById(id));
+        return toDetailResponse(findProductById(id));
     }
 
     @PreAuthorize("permitAll()")
@@ -104,17 +106,17 @@ public class ProductService {
         Product product =
                 productRepository.findBySlug(slug).orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
-        if (Boolean.TRUE.equals(product.isDraft()) || !Boolean.TRUE.equals(product.isPublished())) {
+        if (product.isDraft() || !product.isPublished()) {
             throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
         }
 
-        ProductResponse response = productMapper.toProductResponse(product);
-        if (response.getProductSkus() != null) {
+        ProductResponse response = toDetailResponse(product);
+        if (response.getSkus() != null) {
             List<spring.abtechzone.modules.product.dto.response.ProductSkuResponse> activeSkus =
-                    response.getProductSkus().stream()
-                            .filter(sku -> Boolean.TRUE.equals(sku.getIsActive()))
+                    response.getSkus().stream()
+                            .filter(spring.abtechzone.modules.product.dto.response.ProductSkuResponse::isActive)
                             .toList();
-            response.setProductSkus(activeSkus);
+            response.setSkus(activeSkus);
         }
         return response;
     }
@@ -127,7 +129,7 @@ public class ProductService {
 
         Page<Product> productsPage = productRepository.findAll(spec, request.toPageable());
 
-        return productsPage.map(productMapper::toProductResponse);
+        return mapProductsPageWithPrimaryImages(productsPage);
     }
 
     @Transactional
@@ -142,7 +144,9 @@ public class ProductService {
         }
 
         if (request.getBrandId() != null) {
-            Brand brand = brandRepository.findById(request.getBrandId()).orElse(null);
+            Brand brand = brandRepository
+                    .findById(request.getBrandId())
+                    .orElseThrow(() -> new AppException(ErrorCode.BRAND_NOT_FOUND));
             product.setBrand(brand);
         }
 
@@ -162,17 +166,9 @@ public class ProductService {
         productAttributeValidator.validateProductAttributes(product);
         productAttributeValidator.validateProductSkus(product);
 
-        try {
-            product = productRepository.save(product);
-        } catch (DataIntegrityViolationException ex) {
-            if (ex.getCause() instanceof ConstraintViolationException cve
-                    && "product_slug_active_uq".equals(cve.getConstraintName())) {
-                throw new AppException(ErrorCode.PRODUCT_SLUG_EXISTS);
-            }
-            throw ex;
-        }
+        product = productRepository.save(product);
 
-        return productMapper.toProductResponse(product);
+        return toDetailResponse(product);
     }
 
     @Transactional
@@ -189,12 +185,12 @@ public class ProductService {
     }
 
     private void validateSkusForCreate(ProductCreateRequest request) {
-        if (request.getProductSkus() == null) {
+        if (request.getSkus() == null) {
             return;
         }
 
         Set<String> skus = new HashSet<>();
-        for (ProductSkuCreateRequest skuRequest : request.getProductSkus()) {
+        for (ProductSkuCreateRequest skuRequest : request.getSkus()) {
             if (skuRequest.getSku() == null || skuRequest.getSku().isBlank()) {
                 throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
             }
@@ -213,20 +209,45 @@ public class ProductService {
 
         Page<Product> productsPage = productRepository.findAll(spec, request.toPageable());
 
-        return productsPage.map(product -> {
-            ProductResponse response = productMapper.toProductResponse(product);
-            response.setProductSkus(null); // Do not return SKU details for list API
-            return response;
-        });
+        return mapProductsPageWithPrimaryImages(productsPage);
+    }
+
+    private Page<ProductResponse> mapProductsPageWithPrimaryImages(Page<Product> productsPage) {
+        List<Long> productIds =
+                productsPage.getContent().stream().map(Product::getId).toList();
+        Map<Long, String> primaryImageUrlsMap = fetchPrimaryImageUrlsMap(productIds);
+        return productsPage.map(product -> toSummaryResponse(product, primaryImageUrlsMap.get(product.getId())));
+    }
+
+    private Map<Long, String> fetchPrimaryImageUrlsMap(List<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return productImageRepository.findPrimaryImagesByProductIds(productIds).stream()
+                .collect(Collectors.toMap(
+                        ProductImageRepository.ProductPrimaryImageProjection::getProductId,
+                        proj -> resolveImageUrl(proj.getUrl()),
+                        (existing, replacement) -> existing));
+    }
+
+    private String resolveImageUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            return rawUrl;
+        }
+        if (awsS3FileService == null) {
+            return rawUrl;
+        }
+        String resolved = awsS3FileService.resolveAccessUrl(rawUrl);
+        return resolved != null ? resolved : rawUrl;
     }
 
     @Transactional
     public ProductResponse publishProduct(Long id) {
         Product product = findProductById(id);
 
-        long activeSkus = product.getSkus().stream()
-                .filter(sku -> Boolean.TRUE.equals(sku.getIsActive()))
-                .count();
+        long activeSkus =
+                product.getSkus().stream().filter(ProductSku::isActive).count();
 
         if (activeSkus == 0) {
             throw new AppException(ErrorCode.PRODUCT_MUST_HAVE_ACTIVE_SKU);
@@ -235,7 +256,7 @@ public class ProductService {
         product.setDraft(false);
         product.setPublished(true);
         product = productRepository.save(product);
-        return productMapper.toProductResponse(product);
+        return toDetailResponse(product);
     }
 
     @Transactional
@@ -244,6 +265,52 @@ public class ProductService {
         product.setDraft(false);
         product.setPublished(false);
         product = productRepository.save(product);
-        return productMapper.toProductResponse(product);
+        return toDetailResponse(product);
+    }
+
+    public ProductResponse toDetailResponse(Product product) {
+        if (product == null) {
+            return null;
+        }
+
+        ProductResponse response = productMapper.toProductResponse(product);
+
+        if (product.getSkus() != null && !product.getSkus().isEmpty()) {
+            response.setSkus(productSkuService.toSkuResponseList(product.getSkus()));
+        }
+
+        String primaryRawKey = findPrimaryImageKey(product);
+        if (primaryRawKey != null && !primaryRawKey.isBlank()) {
+            String resolved = awsS3FileService.resolveAccessUrl(primaryRawKey);
+            response.setPrimaryImageUrl(resolved != null ? resolved : primaryRawKey);
+        }
+
+        return response;
+    }
+
+    public ProductResponse toSummaryResponse(Product product, String resolvedPrimaryImageUrl) {
+        if (product == null) {
+            return null;
+        }
+
+        ProductResponse response = productMapper.toProductResponseSummary(product);
+        response.setPrimaryImageUrl(resolvedPrimaryImageUrl);
+        return response;
+    }
+
+    private String findPrimaryImageKey(Product product) {
+        if (product.getSkus() == null) {
+            return null;
+        }
+
+        return product.getSkus().stream()
+                .map(ProductSku::getImages)
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .filter(img ->
+                        img.isPrimary() && img.getUrl() != null && !img.getUrl().isBlank())
+                .map(ProductImage::getUrl)
+                .findFirst()
+                .orElse(null);
     }
 }

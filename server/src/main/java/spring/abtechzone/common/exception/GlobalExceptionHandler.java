@@ -1,6 +1,7 @@
 package spring.abtechzone.common.exception;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -30,6 +31,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(apiResult);
     }
 
+    @ExceptionHandler(value = HttpMessageNotReadableException.class)
+    ResponseEntity<ApiResult> handlingHttpMessageNotReadableException(HttpMessageNotReadableException exception) {
+        ErrorCode errorCode = ErrorCode.INVALID_KEY;
+        ApiResult apiResult = ApiResult.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+        return ResponseEntity.badRequest().body(apiResult);
+    }
+
     @ExceptionHandler(value = AppException.class)
     ResponseEntity<ApiResult> handlingAppException(AppException exception) {
         ErrorCode errorCode = exception.getErrorCode();
@@ -43,6 +54,7 @@ public class GlobalExceptionHandler {
     // Nếu có exception khác ngoài các exception
     @ExceptionHandler(value = Exception.class)
     ResponseEntity<ApiResult> handlingRuntimeException(Exception exception) {
+        org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class).error("Uncategorized exception", exception);
         ApiResult apiResult = new ApiResult();
         apiResult.setCode(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode());
         apiResult.setMessage(ErrorCode.UNCATEGORIZED_EXCEPTION.getMessage());

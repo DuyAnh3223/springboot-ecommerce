@@ -5,7 +5,7 @@ import {
   CategoryUpdateRequest,
   GetCategoriesParams,
 } from "../category.type";
-import { PageResponse } from "@/types/page.type";
+import { PageResponse } from "@/shared/types/page.type";
 
 export async function createCategory(
   values: CategoryRequest,
