@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +25,6 @@ import spring.abtechzone.modules.auth.entity.Role;
 import spring.abtechzone.modules.auth.entity.UserRole;
 import spring.abtechzone.modules.auth.entity.UserRoleId;
 import spring.abtechzone.modules.auth.repository.RoleRepository;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.user.dto.request.UserCreationRequest;
 import spring.abtechzone.modules.user.dto.request.UserSearchRequest;
 import spring.abtechzone.modules.user.dto.request.UserUpdateRequest;
@@ -43,7 +43,6 @@ public class UserService {
     RoleRepository roleRepository;
     UserMapper userMapper;
     PasswordEncoder passwordEncoder;
-    AuthService authService;
 
     public UserResponse createUser(UserCreationRequest request) {
 
@@ -77,7 +76,8 @@ public class UserService {
     }
 
     public UserResponse getMyInfo() {
-        String name = authService.getCurrentUsername();
+        var context = SecurityContextHolder.getContext();
+        String name = context.getAuthentication().getName();
 
         User user = userRepository.findByUsername(name).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
@@ -139,7 +139,7 @@ public class UserService {
     }
 
     public User getCurrentUser() {
-        String username = authService.getCurrentUsername();
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 

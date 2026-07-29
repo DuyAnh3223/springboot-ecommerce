@@ -12,7 +12,8 @@ export async function getUserSession() {
 
     const userResult = await getCurrentUser(token);
     return userResult;
-  } catch (error: any) {
+  } catch (error) {
+    console.error("Get user session error:", error);
     return null;
   }
 }
@@ -25,14 +26,13 @@ export async function getAdminSession() {
     if (!token) return null;
 
     const userResult = await getCurrentUser(token);
-
-    const isAdmin = userResult.roles?.some(
-      (role: any) => role.name === "ADMIN",
-    );
+    
+    const isAdmin = userResult.roles?.some((role: any) => role.name === "ADMIN");
     if (!isAdmin) return null;
 
     return userResult;
-  } catch (error: any) {
+  } catch (error) {
+    console.error("Get admin session error:", error);
     return null;
   }
 }

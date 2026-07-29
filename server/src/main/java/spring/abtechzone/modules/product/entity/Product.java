@@ -50,11 +50,9 @@ public class Product {
     @DecimalMax("5.0")
     Double rating;
 
-    @Column(name = "is_draft", nullable = false)
-    boolean draft;
+    boolean isDraft;
 
-    @Column(name = "is_published", nullable = false)
-    boolean published;
+    boolean isPublished;
 
     @NotNull
     @ColumnDefault("0")
@@ -84,7 +82,6 @@ public class Product {
     Map<String, Object> attributes = new HashMap<>();
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
-    @OrderBy("id ASC")
     List<ProductSku> skus;
 
     @NotNull
@@ -161,16 +158,15 @@ public class Product {
         // Normalize and remove accents
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
         Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
-        String cleaned = pattern.matcher(normalized).replaceAll("");
+        String slug = pattern.matcher(normalized).replaceAll("");
 
         // Handle Vietnamese specific characters 'Đ' and 'đ'
-        cleaned = cleaned.replace("đ", "d").replace("Đ", "D");
+        slug = slug.replace("đ", "d").replace("Đ", "D");
 
-        return cleaned.toLowerCase(Locale.ENGLISH)
-                .replaceAll("[^-a-z0-9\\s]", "") // Remove special characters
+        return slug.toLowerCase(Locale.ENGLISH)
+                .replaceAll("[^a-z0-9\\s-]", "") // Remove special characters
                 .replaceAll("\\s+", "-") // Replace spaces with hyphens
                 .replaceAll("-+", "-") // Remove duplicate hyphens
-                .replaceAll("^-+", "") // Remove leading hyphens
-                .replaceAll("-+$", ""); // Remove trailing hyphens
+                .replaceAll("^-|-$", ""); // Remove leading/trailing hyphens
     }
 }

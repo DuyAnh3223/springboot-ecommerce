@@ -6,4 +6,3 @@ export * from "./preview-skus.action";
 export * from "./create-skus-bulk.action";
 export * from "./unpublish-product.action";
 export * from "./get-product.action";
-export { updateSkuAction } from "@/features/(catalog)/skus/actions";

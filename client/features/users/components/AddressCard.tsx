@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AddressResponse } from "../address.type";
-import { useAsyncAction } from "@/shared/hooks";
+import { useAsyncAction } from "@/hooks";
 import { deleteAddressAction, updateAddressAction } from "../actions";
 
 interface AddressCardProps {

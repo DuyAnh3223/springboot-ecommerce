@@ -5,9 +5,11 @@ import {
   SkuUpdateRequest,
   GetSkusParams,
 } from "../sku.type";
-import { PageResponse } from "@/shared/types/page.type";
+import { PageResponse } from "@/types/page.type";
 
-export async function createSku(values: SkuRequest): Promise<SkuResponse> {
+export async function createSku(
+  values: SkuRequest,
+): Promise<SkuResponse> {
   const response = await api.post("/skus", values);
   return response.data.result;
 }

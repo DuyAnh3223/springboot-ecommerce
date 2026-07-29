@@ -25,10 +25,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.extern.slf4j.Slf4j;
-import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.modules.category.entity.Attribute;
 import spring.abtechzone.modules.category.entity.Brand;
 import spring.abtechzone.modules.category.entity.Category;
@@ -38,14 +35,14 @@ import spring.abtechzone.modules.category.repository.BrandRepository;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
 import spring.abtechzone.modules.product.dto.request.ProductCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductImageRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
 import spring.abtechzone.modules.product.repository.ProductRepository;
+import tools.jackson.databind.ObjectMapper;
 
 @Slf4j
-@SpringBootTest(classes = AbTechZoneApplication.class)
+@SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -54,7 +51,7 @@ class ProductIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -68,7 +65,8 @@ class ProductIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private ProductRepository productRepository;
@@ -85,16 +83,12 @@ class ProductIntegrationTest {
     @Autowired
     private CategoryAttributeRepository categoryAttributeRepository;
 
-    @Autowired
-    private spring.abtechzone.modules.product.repository.ProductImageRepository productImageRepository;
-
     private ProductCreateRequest request;
     private Category seededCategory;
     private Brand seededBrand;
 
     @BeforeEach
     void initData() {
-        productImageRepository.deleteAll();
         productRepository.deleteAll();
         categoryAttributeRepository.deleteAll();
         attributeRepository.deleteAll();
@@ -161,15 +155,16 @@ class ProductIntegrationTest {
         request = ProductCreateRequest.builder()
                 .name("Test Product NAME")
                 .description("Test Product DISCRIPTION")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("ColorOptions", List.of("Red", "Blue")))
-                .skus(List.of(ProductSkuCreateRequest.builder()
+                .productSkus(List.of(ProductSkuCreateRequest.builder()
                         .sku("SKU-RED-001")
                         .price(new BigDecimal("99.99"))
                         .stock(100)
+                        .imageUrl("http://example.com/red.jpg")
                         .attributes(Map.of("Color", "Red"))
                         .build()))
                 .build();
@@ -188,7 +183,7 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.result.name").value("Test Product NAME"))
                 .andExpect(jsonPath("$.result.slug").value("test-product-name"))
                 .andExpect(jsonPath("$.result.description").value("Test Product DISCRIPTION"))
-                .andExpect(jsonPath("$.result.skus[0].sku").value("SKU-RED-001"));
+                .andExpect(jsonPath("$.result.productSkus[0].sku").value("SKU-RED-001"));
     }
 
     @Test
@@ -233,6 +228,7 @@ class ProductIntegrationTest {
         ProductUpdateRequest updateRequest = ProductUpdateRequest.builder()
                 .name("Updated Product Name")
                 .description("Updated product description")
+                .thumbnail("http://example.com/updated.jpg")
                 .attributes(Map.of("ColorOptions", List.of("Red", "Green")))
                 .build();
 
@@ -245,7 +241,8 @@ class ProductIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.name").value("Updated Product Name"))
                 .andExpect(jsonPath("$.result.description").value("Updated product description"))
-                .andExpect(jsonPath("$.result.skus[0].sku").value("SKU-RED-001"));
+                .andExpect(jsonPath("$.result.thumbnail").value("http://example.com/updated.jpg"))
+                .andExpect(jsonPath("$.result.productSkus[0].sku").value("SKU-RED-001"));
     }
 
     @Test
@@ -283,12 +280,12 @@ class ProductIntegrationTest {
     void createProduct_withSkuAttributesNotMatchingProductAttributes_throwsException() throws Exception {
         ProductCreateRequest invalidRequest = ProductCreateRequest.builder()
                 .name("Invalid Product Attributes")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("Color", List.of("Red")))
-                .skus(List.of(ProductSkuCreateRequest.builder()
+                .productSkus(List.of(ProductSkuCreateRequest.builder()
                         .sku("SKU-GREEN-INVALID")
                         .price(new BigDecimal("99.99"))
                         .stock(10)
@@ -311,8 +308,8 @@ class ProductIntegrationTest {
     void createSku_withAttributesNotMatchingProductAttributes_throwsException() throws Exception {
         ProductCreateRequest productRequest = ProductCreateRequest.builder()
                 .name("Product For Invalid SKU")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("ColorOptions", List.of("Red")))
@@ -353,28 +350,12 @@ class ProductIntegrationTest {
 
     @Test
     void updateSku_withAttributesNotMatchingProductAttributes_throwsException() throws Exception {
-        ProductCreateRequest uniqueReq = ProductCreateRequest.builder()
-                .name("Test Product UPDATE ATTR TEST")
-                .description("Test Product DISCRIPTION")
-                .draft(false)
-                .published(true)
-                .categoryId(seededCategory.getId())
-                .brandId(seededBrand.getId())
-                .attributes(Map.of("ColorOptions", List.of("Red", "Blue")))
-                .skus(List.of(ProductSkuCreateRequest.builder()
-                        .sku("SKU-UPDATE-ATTR-001")
-                        .price(new BigDecimal("99.99"))
-                        .stock(100)
-                        .attributes(Map.of("Color", "Red"))
-                        .build()))
-                .build();
-
         String response = mockMvc.perform(post("/products")
                         .with(jwt().jwt(jwt -> jwt.subject("admin"))
                                 .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
                                         "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(uniqueReq)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
@@ -383,19 +364,24 @@ class ProductIntegrationTest {
         Long skuId = objectMapper
                 .readTree(response)
                 .path("result")
-                .path("skus")
+                .path("productSkus")
                 .get(0)
                 .path("id")
                 .asLong();
+
+        ProductSkuUpdateRequest updateSkuRequest = ProductSkuUpdateRequest.builder()
+                .attributes(Map.of("Color", "Yellow"))
+                .build();
 
         mockMvc.perform(patch("/skus/{skuId}", skuId)
                         .with(jwt().jwt(jwt -> jwt.subject("admin"))
                                 .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
                                         "ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"active\":true,\"attributes\":{\"Color\":\"Yellow\"}}"))
+                        .content(objectMapper.writeValueAsString(updateSkuRequest)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(1011));
+                .andExpect(jsonPath("$.code").value(1011))
+                .andExpect(jsonPath("$.message").value("Product attributes do not match existing SKUs"));
     }
 
     @Test
@@ -403,8 +389,8 @@ class ProductIntegrationTest {
         ProductCreateRequest productRequest = ProductCreateRequest.builder()
                 .name("Product Without SKU")
                 .description("Product used for SKU endpoint test")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("ColorOptions", List.of("Green", "Blue")))
@@ -429,6 +415,7 @@ class ProductIntegrationTest {
                 .sku("SKU-GREEN-001")
                 .price(new BigDecimal("129.99"))
                 .stock(20)
+                .imageUrl("http://example.com/green.jpg")
                 .attributes(Map.of("Color", "Green"))
                 .build();
 
@@ -450,10 +437,7 @@ class ProductIntegrationTest {
 
         ProductSkuUpdateRequest updateSkuRequest = ProductSkuUpdateRequest.builder()
                 .stock(15)
-                .images(List.of(ProductImageRequest.builder()
-                        .url("products/green-updated.jpg")
-                        .primary(true)
-                        .build()))
+                .imageUrl("http://example.com/green-updated.jpg")
                 .build();
 
         mockMvc.perform(patch("/skus/{skuId}", skuId)
@@ -465,7 +449,7 @@ class ProductIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.sku").value("SKU-GREEN-001"))
                 .andExpect(jsonPath("$.result.stock").value(15))
-                .andExpect(jsonPath("$.result.imageUrl").value("products/green-updated.jpg"));
+                .andExpect(jsonPath("$.result.imageUrl").value("http://example.com/green-updated.jpg"));
     }
 
     @Test
@@ -474,14 +458,15 @@ class ProductIntegrationTest {
         ProductCreateRequest product1 = ProductCreateRequest.builder()
                 .name("Iphone 15 Pro")
                 .description("Latest Apple flagship")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
-                .skus(List.of(ProductSkuCreateRequest.builder()
+                .productSkus(List.of(ProductSkuCreateRequest.builder()
                         .sku("IPHONE15PRO-128")
                         .price(new BigDecimal("999.99"))
                         .stock(50)
+                        .imageUrl("http://example.com/iphone15pro.jpg")
                         .attributes(Map.of("Color", "Red"))
                         .build()))
                 .build();
@@ -489,14 +474,15 @@ class ProductIntegrationTest {
         ProductCreateRequest product2 = ProductCreateRequest.builder()
                 .name("Samsung Galaxy S24")
                 .description("Latest Samsung flagship")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
-                .skus(List.of(ProductSkuCreateRequest.builder()
+                .productSkus(List.of(ProductSkuCreateRequest.builder()
                         .sku("SAMSUNG-S24-128")
                         .price(new BigDecimal("799.99"))
                         .stock(100)
+                        .imageUrl("http://example.com/samsung_s24.jpg")
                         .attributes(Map.of("Color", "Blue"))
                         .build()))
                 .build();
@@ -575,8 +561,8 @@ class ProductIntegrationTest {
     void createProduct_withAttributeNotDefinedInCategory_throwsException() throws Exception {
         ProductCreateRequest invalidRequest = ProductCreateRequest.builder()
                 .name("Invalid Attribute Category")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("UndefinedAttributeKey", List.of("Red")))
@@ -596,8 +582,8 @@ class ProductIntegrationTest {
     void createProduct_withDuplicateAttributeValues_throwsException() throws Exception {
         ProductCreateRequest invalidRequest = ProductCreateRequest.builder()
                 .name("Invalid Product Duplicate Values")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of("Color", List.of("Red", "Red")))
@@ -617,8 +603,8 @@ class ProductIntegrationTest {
     void createProduct_withBlankAttributeName_throwsException() throws Exception {
         ProductCreateRequest invalidRequest = ProductCreateRequest.builder()
                 .name("Invalid Product Blank Name")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .attributes(Map.of(" ", List.of("Red")))
@@ -639,8 +625,8 @@ class ProductIntegrationTest {
         // Create first product
         ProductCreateRequest p1 = ProductCreateRequest.builder()
                 .name("Same Product Name")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .build();
@@ -656,8 +642,8 @@ class ProductIntegrationTest {
         // Attempt second product with same name (generates duplicate slug)
         ProductCreateRequest p2 = ProductCreateRequest.builder()
                 .name("Same Product Name")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .categoryId(seededCategory.getId())
                 .brandId(seededBrand.getId())
                 .build();
@@ -878,49 +864,5 @@ class ProductIntegrationTest {
                                         "ROLE_ADMIN"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1059));
-    }
-
-    @Test
-    void getProduct_returnsPrimaryImageUrl_andNoThumbnail() throws Exception {
-        spring.abtechzone.modules.product.entity.Product product =
-                new spring.abtechzone.modules.product.entity.Product();
-        product.setName("Gallery Test Product");
-        product.setSlug("gallery-test-product");
-        product.setCategory(seededCategory);
-        product.setBrand(seededBrand);
-        product.setDraft(false);
-        product.setPublished(true);
-        product = productRepository.save(product);
-
-        List<ProductSkuCreateRequest> bulkRequests = List.of(ProductSkuCreateRequest.builder()
-                .productId(product.getId())
-                .sku("GAL-SKU-1")
-                .price(BigDecimal.valueOf(100))
-                .stock(10)
-                .attributes(Map.of("Color", "Red"))
-                .images(List.of(ProductImageRequest.builder()
-                        .url("products/img1.jpg")
-                        .primary(true)
-                        .sortOrder(0)
-                        .build()))
-                .build());
-
-        mockMvc.perform(post("/products/" + product.getId() + "/skus/bulk")
-                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
-                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
-                                        "ROLE_ADMIN")))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(bulkRequests)))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(get("/products/" + product.getId())
-                        .with(jwt().jwt(jwt -> jwt.subject("admin"))
-                                .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority(
-                                        "ROLE_ADMIN"))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.thumbnail").doesNotExist())
-                .andExpect(jsonPath("$.result.primaryImageUrl").value("products/img1.jpg"))
-                .andExpect(jsonPath("$.result.skus[0].images[0].url").value("products/img1.jpg"))
-                .andExpect(jsonPath("$.result.skus[0].images[0].accessUrl").value("products/img1.jpg"));
     }
 }

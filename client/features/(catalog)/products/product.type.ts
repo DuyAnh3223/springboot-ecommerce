@@ -12,15 +12,15 @@ export interface ProductResponse {
   id: number;
   name: string;
   slug: string;
-  primaryImageUrl: string | null;
+  thumbnail: string | null;
   description: string | null;
   rating: number | null;
-  draft: boolean;
-  published: boolean;
+  isDraft: boolean;
+  isPublished: boolean;
   category: CategoryResponse | null;
   brand: BrandResponse | null;
   attributes: Record<string, any>;
-  skus?: SkuResponse[];
+  productSkus?: SkuResponse[];
   skuCount?: number;
   activeSkuCount?: number;
   totalStock?: number;
@@ -30,9 +30,10 @@ export interface ProductResponse {
 
 export interface ProductRequest {
   name: string;
+  thumbnail?: string | null;
   description?: string | null;
-  draft?: boolean;
-  published?: boolean;
+  isDraft?: boolean;
+  isPublished?: boolean;
   categoryId?: number | null;
   brandId?: number | null;
   attributes?: Record<string, any> | null;
@@ -40,9 +41,10 @@ export interface ProductRequest {
 
 export interface ProductUpdateRequest {
   name?: string;
+  thumbnail?: string | null;
   description?: string | null;
-  draft?: boolean;
-  published?: boolean;
+  isDraft?: boolean;
+  isPublished?: boolean;
   categoryId?: number | null;
   brandId?: number | null;
   attributes?: Record<string, any> | null;

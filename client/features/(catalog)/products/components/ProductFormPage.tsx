@@ -30,6 +30,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
 
   const {
     activeStep,
+    savedProductId,
     categoryAttributes,
     loadingAttributes,
     error,
@@ -65,6 +66,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
     isEdit,
     productName,
     productSlug,
+    productThumbnail,
     productDescription,
     selectedCategoryId,
   } = basicInfo;
@@ -76,6 +78,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
     productName,
     selectedCategoryId,
     productSlug,
+    productThumbnail,
     productDescription,
     setValue,
   });
@@ -108,6 +111,8 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
     setBulkPrice,
     bulkStock,
     setBulkStock,
+    bulkImage,
+    setBulkImage,
     handleBulkApply,
   } = matrix;
 
@@ -119,6 +124,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
       basicInfo.reset({
         name: product.name,
         slug: product.slug,
+        thumbnail: product.thumbnail ?? "",
         categoryId: product.category?.id ?? 0,
         description: product.description ?? "",
       });
@@ -136,8 +142,8 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
                 .filter((ca) => ca.isVariantDefining)
                 .map((ca) => ca.code);
 
-              if (product.skus && product.skus.length > 0) {
-                product.skus.forEach((sku) => {
+              if (product.productSkus && product.productSkus.length > 0) {
+                product.productSkus.forEach((sku) => {
                   const sAttrs = sku.attributes || {};
                   Object.entries(sAttrs).forEach(([key, val]) => {
                     if (variantCodes.includes(key)) {
@@ -149,6 +155,16 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
                   });
                 });
                 setSelectedVariants(vInit);
+
+                matrix.replaceSkus(
+                  product.productSkus.map((s) => ({
+                    attributes: s.attributes || {},
+                    sku: s.sku,
+                    price: s.price,
+                    stock: s.stock,
+                    imageUrl: s.imageUrl || "",
+                  }))
+                );
               } else {
                 attrs.forEach((a) => {
                   if (a.isVariantDefining) {
@@ -252,6 +268,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
             selectedCategoryId={selectedCategoryId}
             setValue={setValue}
             setError={setError}
+            productThumbnail={productThumbnail || ""}
             productDescription={productDescription || ""}
             onCategorySelect={handleCategorySelect}
           />
@@ -282,6 +299,8 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
             setBulkPrice={setBulkPrice}
             bulkStock={bulkStock}
             setBulkStock={setBulkStock}
+            bulkImage={bulkImage}
+            setBulkImage={setBulkImage}
             handleBulkApply={handleBulkApply}
           />
         </div>
@@ -292,6 +311,7 @@ export function ProductFormPage({ product, categories }: ProductFormPageProps) {
             productName={productName}
             productSlug={productSlug}
             selectedCategoryName={selectedCategoryName}
+            productThumbnail={productThumbnail || ""}
             productDescription={productDescription || ""}
             categoryAttributes={categoryAttributes}
             nonVariantValues={nonVariantValues}

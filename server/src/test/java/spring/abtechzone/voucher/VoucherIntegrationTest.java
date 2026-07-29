@@ -27,7 +27,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import spring.abtechzone.AbTechZoneApplication;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.category.entity.Category;
@@ -47,7 +46,7 @@ import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 import spring.abtechzone.modules.voucher.service.VoucherService;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(classes = AbTechZoneApplication.class)
+@SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
 @ActiveProfiles("test")
@@ -56,7 +55,7 @@ class VoucherIntegrationTest {
     @Container
     @SuppressWarnings("resource")
     static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
+            new PostgreSQLContainer<>("postgres:16-alpine").withInitScript("db/init-extensions.sql");
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -107,8 +106,8 @@ class VoucherIntegrationTest {
         // Seed a product and sku
         Product product = Product.builder()
                 .name("iPhone 15")
-                .draft(false)
-                .published(true)
+                .isDraft(false)
+                .isPublished(true)
                 .category(category)
                 .build();
         product = productRepository.save(product);

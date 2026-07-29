@@ -3,6 +3,7 @@ package spring.abtechzone.modules.cart.service;
 import java.util.ArrayList;
 import java.util.Optional;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,7 +13,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
@@ -41,7 +41,6 @@ public class CartService {
     ProductSkuRepository productSkuRepository;
     CartItemMapper cartItemMapper;
     CartMapper cartMapper;
-    AuthService authService;
 
     // ────────────────────────────────────────────────────────
     // POST /cart/add — Thêm sản phẩm vào giỏ
@@ -181,7 +180,8 @@ public class CartService {
     // Helper: Lấy User từ SecurityContext
     // ────────────────────────────────────────────────────────
     private User getAuthenticatedUser() {
-        String username = authService.getCurrentUsername();
+        var context = SecurityContextHolder.getContext();
+        String username = context.getAuthentication().getName();
         return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 }

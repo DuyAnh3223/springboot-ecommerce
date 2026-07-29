@@ -35,7 +35,7 @@ export function ProductDetailRow({ productId, loading, detail }: ProductDetailRo
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail?.skus?.map((sku) => (
+                {detail?.productSkus?.map((sku) => (
                   <TableRow key={sku.id} className="hover:bg-slate-50/30">
                     <TableCell className="py-1">
                       {sku.imageUrl ? (

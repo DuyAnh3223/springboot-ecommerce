@@ -35,9 +35,9 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
         )}
       </TableCell>
       <TableCell>
-        {product.primaryImageUrl ? (
+        {product.thumbnail ? (
           <img
-            src={product.primaryImageUrl}
+            src={product.thumbnail}
             alt={product.name}
             className="size-10 object-cover rounded-md border border-slate-150"
           />
@@ -77,7 +77,7 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
         )}
       </TableCell>
       <TableCell>
-        {product.published ? (
+        {product.isPublished ? (
           <Badge className="bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100">
             Đang bán
           </Badge>
@@ -91,7 +91,7 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
         {product.activeSkuCount ?? 0} / {skusCount}
       </TableCell>
       <TableCell className="text-right pr-4 space-x-1.5">
-        {product.published ? (
+        {product.isPublished ? (
           <Button
             variant="outline"
             size="sm"

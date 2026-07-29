@@ -8,8 +8,6 @@ import java.util.StringJoiner;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -53,46 +51,15 @@ public class AuthService {
 
     @NonFinal
     @Value("${jwt.signerKey}")
-    protected String signerKey;
+    protected String SIGNER_KEY;
 
     @NonFinal
     @Value("${jwt.valid-duration}")
-    protected Long validDuration;
+    protected Long VALID_DURATION;
 
     @NonFinal
     @Value("${jwt.refreshable-duration}")
-    protected Long refreshableDuration;
-
-    /**
-     * Check if current user is authenticated
-     */
-    public boolean isAuthenticated() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null
-                && authentication.isAuthenticated()
-                && !"anonymousUser".equals(authentication.getPrincipal());
-    }
-
-    /**
-     * Validate that current user is authenticated; throws AppException(ErrorCode.UNAUTHENTICATED) if not
-     */
-    public void validateAuthenticated() {
-        if (!isAuthenticated()) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
-        }
-    }
-
-    /**
-     * Get username of current authenticated user
-     */
-    public String getCurrentUsername() {
-        validateAuthenticated();
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            throw new AppException(ErrorCode.UNAUTHENTICATED);
-        }
-        return authentication.getName();
-    }
+    protected Long REFRESHABLE_DURATION;
 
     public IntrospectResponse introspect(IntrospectRequest request) throws ParseException, JOSEException {
         var token = request.getToken();
@@ -160,7 +127,7 @@ public class AuthService {
     }
 
     private SignedJWT verifyToken(String token, boolean isRefresh) throws JOSEException, ParseException {
-        JWSVerifier verifier = new MACVerifier(signerKey.getBytes());
+        JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
 
         SignedJWT signedJWT = SignedJWT.parse(token);
 
@@ -169,7 +136,7 @@ public class AuthService {
                         .getJWTClaimsSet()
                         .getIssueTime()
                         .toInstant()
-                        .plus(refreshableDuration, ChronoUnit.SECONDS)
+                        .plus(REFRESHABLE_DURATION, ChronoUnit.SECONDS)
                         .toEpochMilli())
                 : signedJWT.getJWTClaimsSet().getExpirationTime();
 
@@ -191,7 +158,7 @@ public class AuthService {
                 .issuer("xxx.com")
                 .issueTime(new Date())
                 .expirationTime(new Date(
-                        Instant.now().plus(validDuration, ChronoUnit.SECONDS).toEpochMilli()))
+                        Instant.now().plus(VALID_DURATION, ChronoUnit.SECONDS).toEpochMilli()))
                 .jwtID(UUID.randomUUID().toString())
                 .claim("scope", buildScope(user))
                 .build();
@@ -201,11 +168,11 @@ public class AuthService {
         JWSObject jwsObject = new JWSObject(header, payload);
 
         try {
-            jwsObject.sign(new MACSigner(signerKey.getBytes()));
+            jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
             return jwsObject.serialize();
         } catch (JOSEException e) {
             log.error("Cannot create token", e);
-            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+            throw new RuntimeException(e);
         }
     }
 

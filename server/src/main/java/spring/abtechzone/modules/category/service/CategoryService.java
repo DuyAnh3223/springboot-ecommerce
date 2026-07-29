@@ -12,8 +12,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.common.service.AwsS3FileService;
-import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.dto.request.CategoryRequest;
 import spring.abtechzone.modules.category.dto.request.CategorySearchRequest;
 import spring.abtechzone.modules.category.dto.response.CategoryResponse;
@@ -31,8 +29,6 @@ public class CategoryService {
 
     CategoryRepository categoryRepository;
     CategoryMapper categoryMapper;
-    AwsS3FileService awsS3FileService;
-    S3ObjectLifecycleHelper s3ObjectLifecycleHelper;
 
     public CategoryResponse create(CategoryRequest request) {
         Boolean existedCategory = categoryRepository.existsByName(request.getName());
@@ -40,10 +36,9 @@ public class CategoryService {
             throw new AppException(ErrorCode.CATEGORY_EXISTED);
         }
         Category category = categoryMapper.toCategory(request);
-        category.setThumbnail(awsS3FileService.extractS3Key(request.getThumbnail()));
         categoryRepository.save(category);
 
-        return categoryMapper.toCategoryResponse(category, awsS3FileService);
+        return categoryMapper.toCategoryResponse(category);
     }
 
     @PreAuthorize("permitAll()")
@@ -53,49 +48,28 @@ public class CategoryService {
                 .and(CategorySpecifications.isActive(request.getIsActive()))
                 .and(CategorySpecifications.hasParent(request.getParentId()));
 
-        return categoryRepository
-                .findAll(spec, request.toPageable())
-                .map(category -> categoryMapper.toCategoryResponse(category, awsS3FileService));
+        return categoryRepository.findAll(spec, request.toPageable()).map(categoryMapper::toCategoryResponse);
     }
 
     @PreAuthorize("permitAll()")
     public CategoryResponse getCategory(Long id) {
-        Category category =
-                categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-        return categoryMapper.toCategoryResponse(category, awsS3FileService);
+        return categoryMapper.toCategoryResponse(
+                categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND)));
     }
 
-    @Transactional
     public CategoryResponse updateCategory(Long id, CategoryRequest request) {
         Category category =
                 categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-
-        String oldThumbnail = category.getThumbnail();
-        String newThumbnail = awsS3FileService.extractS3Key(request.getThumbnail());
-
-        if (oldThumbnail != null && !oldThumbnail.isBlank() && !oldThumbnail.equals(newThumbnail)) {
-            s3ObjectLifecycleHelper.deleteAfterCommit(oldThumbnail);
-        }
-
         category.setName(request.getName());
         category.setSlug(request.getSlug());
-        category.setThumbnail(newThumbnail);
+        category.setThumbnail(request.getThumbnail());
         categoryRepository.save(category);
-
-        return categoryMapper.toCategoryResponse(category, awsS3FileService);
+        return categoryMapper.toCategoryResponse(category);
     }
 
-    @Transactional
     public void deleteCategory(Long id) {
         Category category =
                 categoryRepository.findById(id).orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
-
-        String oldThumbnail = category.getThumbnail();
-        if (oldThumbnail != null && !oldThumbnail.isBlank()) {
-            s3ObjectLifecycleHelper.deleteAfterCommit(oldThumbnail);
-            category.setThumbnail(null);
-        }
-
         category.setIsActive(false);
         categoryRepository.save(category);
     }
