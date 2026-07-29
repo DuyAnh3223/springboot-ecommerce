@@ -21,9 +21,9 @@ public class ProductCreateRequest {
 
     String description;
 
-    Boolean draft;
+    boolean draft;
 
-    Boolean published;
+    boolean published;
 
     Long categoryId;
     Long brandId;

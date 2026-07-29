@@ -22,6 +22,6 @@ public class ProductSkuResponse {
     Integer stock;
     String imageUrl;
     List<ProductImageResponse> images;
-    Boolean isActive;
+    boolean active;
     Map<String, Object> attributes;
 }

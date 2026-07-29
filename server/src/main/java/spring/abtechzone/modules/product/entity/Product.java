@@ -50,9 +50,11 @@ public class Product {
     @DecimalMax("5.0")
     Double rating;
 
-    boolean isDraft;
+    @Column(name = "is_draft", nullable = false)
+    boolean draft;
 
-    boolean isPublished;
+    @Column(name = "is_published", nullable = false)
+    boolean published;
 
     @NotNull
     @ColumnDefault("0")
@@ -159,15 +161,16 @@ public class Product {
         // Normalize and remove accents
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);
         Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
-        String slug = pattern.matcher(normalized).replaceAll("");
+        String cleaned = pattern.matcher(normalized).replaceAll("");
 
         // Handle Vietnamese specific characters 'Đ' and 'đ'
-        slug = slug.replace("đ", "d").replace("Đ", "D");
+        cleaned = cleaned.replace("đ", "d").replace("Đ", "D");
 
-        return slug.toLowerCase(Locale.ENGLISH)
-                .replaceAll("[^a-z0-9\\s-]", "") // Remove special characters
+        return cleaned.toLowerCase(Locale.ENGLISH)
+                .replaceAll("[^-a-z0-9\\s]", "") // Remove special characters
                 .replaceAll("\\s+", "-") // Replace spaces with hyphens
                 .replaceAll("-+", "-") // Remove duplicate hyphens
-                .replaceAll("^-|-$", ""); // Remove leading/trailing hyphens
+                .replaceAll("^-+", "") // Remove leading hyphens
+                .replaceAll("-+$", ""); // Remove trailing hyphens
     }
 }

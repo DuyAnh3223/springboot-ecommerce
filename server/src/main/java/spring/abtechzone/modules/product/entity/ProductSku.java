@@ -61,39 +61,36 @@ public class ProductSku {
     @ColumnDefault("'VND'")
     @Column(name = "currency", nullable = false, length = 3)
     @Builder.Default
-    private String currency = "VND";
+    String currency = "VND";
 
     @Column(name = "weight_gram")
-    private Integer weightGram;
+    Integer weightGram;
 
     @NotNull
     @ColumnDefault("true")
     @Column(name = "is_active", nullable = false)
     @Builder.Default
-    private Boolean isActive = true;
+    boolean active = true;
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     @Builder.Default
-    private OffsetDateTime createdAt = OffsetDateTime.now();
+    OffsetDateTime createdAt = OffsetDateTime.now();
 
     @NotNull
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "updated_at", nullable = false)
     @Builder.Default
-    private OffsetDateTime updatedAt = OffsetDateTime.now();
+    OffsetDateTime updatedAt = OffsetDateTime.now();
 
     @Column(name = "deleted_at")
-    private OffsetDateTime deletedAt;
+    OffsetDateTime deletedAt;
 
     @PrePersist
     public void onPrePersist() {
         if (currency == null) {
             currency = "VND";
-        }
-        if (isActive == null) {
-            isActive = true;
         }
         if (createdAt == null) {
             createdAt = OffsetDateTime.now();
@@ -108,6 +105,6 @@ public class ProductSku {
 
     public void softDelete() {
         this.deletedAt = OffsetDateTime.now();
-        this.isActive = false;
+        this.active = false;
     }
 }

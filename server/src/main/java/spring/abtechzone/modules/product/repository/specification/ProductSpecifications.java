@@ -5,6 +5,14 @@ import org.springframework.data.jpa.domain.Specification;
 import spring.abtechzone.modules.product.entity.Product;
 
 public class ProductSpecifications {
+
+    private static final String DRAFT = "draft";
+    private static final String PUBLISHED = "published";
+
+    private ProductSpecifications() {
+        // Utility class
+    }
+
     public static Specification<Product> hasKeyword(String keyword) {
         return (root, query, criteriaBuilder) -> {
             if (keyword == null || keyword.isBlank()) return null;
@@ -21,9 +29,7 @@ public class ProductSpecifications {
     }
 
     public static Specification<Product> isPublished() {
-        return (root, query, cb) -> {
-            return cb.and(cb.equal(root.get("isDraft"), false), cb.equal(root.get("isPublished"), true));
-        };
+        return (root, query, cb) -> cb.and(cb.equal(root.get(DRAFT), false), cb.equal(root.get(PUBLISHED), true));
     }
 
     public static Specification<Product> hasStatus(String status) {
@@ -31,11 +37,11 @@ public class ProductSpecifications {
             if (status == null || status.isBlank() || "all".equalsIgnoreCase(status)) {
                 return null;
             }
-            if ("draft".equalsIgnoreCase(status)) {
-                return cb.equal(root.get("isDraft"), true);
+            if (DRAFT.equalsIgnoreCase(status)) {
+                return cb.equal(root.get(DRAFT), true);
             }
-            if ("published".equalsIgnoreCase(status)) {
-                return cb.and(cb.equal(root.get("isDraft"), false), cb.equal(root.get("isPublished"), true));
+            if (PUBLISHED.equalsIgnoreCase(status)) {
+                return cb.and(cb.equal(root.get(DRAFT), false), cb.equal(root.get(PUBLISHED), true));
             }
             return null;
         };

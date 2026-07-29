@@ -18,7 +18,6 @@ public class ProductUpdateRequest {
     String description;
 
     Boolean draft;
-
     Boolean published;
 
     Long categoryId;
