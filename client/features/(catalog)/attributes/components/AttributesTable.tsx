@@ -62,7 +62,7 @@ export default function AttributesTable({
           </TableHead>
           <TableHead className="text-xs font-bold text-slate-650 h-10 w-[12%]">Kiểu dữ liệu</TableHead>
           <TableHead className="text-xs font-bold text-slate-650 h-10 w-[8%]">Đơn vị</TableHead>
-          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[25%]">Giá trị gợi ý (Enum)</TableHead>
+          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[25%]">Danh sách giá trị </TableHead>
           <TableHead className="text-xs font-bold text-slate-650 h-10 w-[15%] text-right pr-6">Hành động</TableHead>
         </TableRow>
       </TableHeader>

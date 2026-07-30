@@ -11,8 +11,8 @@ interface AttributeFormProps {
   onCodeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isCodeLocked: boolean;
   onToggleCodeLock: () => void;
-  dataType: "STRING" | "NUMBER" | "BOOLEAN" | "ENUM";
-  onDataTypeChange: (type: "STRING" | "NUMBER" | "BOOLEAN" | "ENUM") => void;
+  dataType: "NUMBER" | "BOOLEAN" | "ENUM";
+  onDataTypeChange: (type: "NUMBER" | "BOOLEAN" | "ENUM") => void;
   unit: string;
   onUnitChange: (val: string) => void;
   tags: string[];
@@ -45,7 +45,7 @@ export default function AttributeForm({
     <form onSubmit={onSaveSubmit} className="space-y-4">
       {/* Name */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-650">
+        <label className="text-xs font-semibold text-slate-655">
           Tên thuộc tính <span className="text-destructive">*</span>
         </label>
         <Input
@@ -58,7 +58,7 @@ export default function AttributeForm({
 
       {/* Code */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-650 flex items-center gap-1">
+        <label className="text-xs font-semibold text-slate-655 flex items-center gap-1">
           Mã thuộc tính (Auto)
         </label>
         <div className="relative">
@@ -83,7 +83,7 @@ export default function AttributeForm({
 
       {/* Data Type */}
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-650">
+        <label className="text-xs font-semibold text-slate-655">
           Kiểu dữ liệu <span className="text-destructive">*</span>
         </label>
         <select
@@ -91,17 +91,16 @@ export default function AttributeForm({
           onChange={(e) => onDataTypeChange(e.target.value as any)}
           className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-slate-350"
         >
-          <option value="STRING">STRING</option>
-          <option value="NUMBER">NUMBER</option>
-          <option value="BOOLEAN">BOOLEAN</option>
-          <option value="ENUM">ENUM</option>
+          <option value="NUMBER">Số</option>
+          <option value="BOOLEAN">Có / Không</option>
+          <option value="ENUM">Danh sách</option>
         </select>
       </div>
 
       {/* Conditional Unit (if NUMBER) */}
       {dataType === "NUMBER" && (
         <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-200">
-          <label className="text-xs font-semibold text-slate-650">
+          <label className="text-xs font-semibold text-slate-655">
             Đơn vị đo (Unit)
           </label>
           <Input
@@ -113,10 +112,10 @@ export default function AttributeForm({
         </div>
       )}
 
-      {/* Conditional Enum values (if ENUM, NUMBER or STRING) */}
-      {(dataType === "ENUM" || dataType === "NUMBER" || dataType === "STRING") && (
+      {/* Conditional Enum values (if ENUM or NUMBER) */}
+      {(dataType === "ENUM" || dataType === "NUMBER") && (
         <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-200">
-          <label className="text-xs font-semibold text-slate-650">
+          <label className="text-xs font-semibold text-slate-655">
             Giá trị danh sách tùy chọn (Gõ Enter hoặc phẩy để thêm nếu cần giới hạn lựa chọn)
           </label>
           <div className="space-y-2">
@@ -124,8 +123,6 @@ export default function AttributeForm({
               placeholder={
                 dataType === "NUMBER"
                   ? "Ví dụ: 2, 4, 6, 8 (Gõ số và nhấn Enter)"
-                  : dataType === "STRING"
-                  ? "Ví dụ: Windows 10, Windows 11 (Gõ và nhấn Enter)"
                   : "Ví dụ: Đỏ, Xanh, Vàng (Gõ và nhấn Enter)"
               }
               value={tagInput}

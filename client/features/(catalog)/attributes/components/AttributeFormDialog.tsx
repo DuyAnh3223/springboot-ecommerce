@@ -40,7 +40,7 @@ export default function AttributeFormDialog({
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [isCodeLocked, setIsCodeLocked] = useState(true);
-  const [dataType, setDataType] = useState<"STRING" | "NUMBER" | "BOOLEAN" | "ENUM">("STRING");
+  const [dataType, setDataType] = useState<"NUMBER" | "BOOLEAN" | "ENUM">("NUMBER");
   const [unit, setUnit] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -49,7 +49,7 @@ export default function AttributeFormDialog({
     setName("");
     setCode("");
     setIsCodeLocked(true);
-    setDataType("STRING");
+    setDataType("NUMBER");
     setUnit("");
     setTags([]);
     setTagInput("");
@@ -139,7 +139,7 @@ export default function AttributeFormDialog({
     }
 
     const enumValuesList =
-      (dataType === "ENUM" || dataType === "NUMBER" || dataType === "STRING") && tags.length > 0
+      (dataType === "ENUM" || dataType === "NUMBER") && tags.length > 0
         ? tags
         : null;
 

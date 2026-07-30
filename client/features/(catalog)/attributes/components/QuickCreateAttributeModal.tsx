@@ -29,14 +29,14 @@ export default function QuickCreateAttributeModal({
   onSuccess,
 }: QuickCreateAttributeModalProps) {
   const [name, setName] = useState("");
-  const [dataType, setDataType] = useState<"STRING" | "NUMBER" | "BOOLEAN" | "ENUM">("STRING");
+  const [dataType, setDataType] = useState<"NUMBER" | "BOOLEAN" | "ENUM">("NUMBER");
   const [unit, setUnit] = useState("");
   const tagInputState = useTagInput();
   const { isLoading, error, setError, run } = useAsyncAction();
 
   const resetForm = () => {
     setName("");
-    setDataType("STRING");
+    setDataType("NUMBER");
     setUnit("");
     tagInputState.reset();
     setError(null);
@@ -119,7 +119,6 @@ export default function QuickCreateAttributeModal({
               }}
               className="w-full h-9 px-3 rounded-md border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-350 cursor-pointer"
             >
-              <option value="STRING">STRING</option>
               <option value="NUMBER">NUMBER</option>
               <option value="BOOLEAN">BOOLEAN</option>
               <option value="ENUM">ENUM</option>
