@@ -11,6 +11,7 @@ import { useProductFilters } from "../hooks/useProductFilters";
 import { ProductFilters } from "./ProductFilters";
 import { ProductTable } from "./ProductTable";
 import { ProductModals } from "./ProductModals";
+import PaginationBar from "@/features/(catalog)/categories/components/PaginationBar";
 
 interface ProductsClientProps {
   initialData: PageResponse<ProductResponse>;
@@ -48,6 +49,16 @@ export function ProductsClient({ initialData, categories }: ProductsClientProps)
 
       {/* Product Table */}
       <ProductTable products={initialData.content} isPending={filters.isPending} />
+
+      {/* Pagination Bar */}
+      <PaginationBar
+        initialData={initialData}
+        currentPage={filters.currentPage}
+        currentSize={filters.currentSize}
+        isPending={filters.isPending}
+        onPageChange={(p) => filters.updateQueryParams({ page: p })}
+        onSizeChange={(val) => filters.updateQueryParams({ size: val, page: 1 })}
+      />
 
       {/* Dialog Modals */}
       <ProductModals />

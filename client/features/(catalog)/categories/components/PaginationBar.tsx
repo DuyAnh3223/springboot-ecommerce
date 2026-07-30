@@ -43,14 +43,14 @@ const PaginationBar = ({
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 bg-transparent mt-2">
       {/* Left side: showing count */}
       <div className="text-xs text-slate-500 font-medium">
-        Showing <span className="font-semibold text-slate-700">{from}-{to}</span> of <span className="font-semibold text-slate-700">{totalElements}</span> results
+        Hiển thị <span className="font-semibold text-slate-700">{from}-{to}</span> trong tổng số <span className="font-semibold text-slate-700">{totalElements}</span> kết quả
       </div>
 
       {/* Right side: rows selector and page navigation */}
       <div className="flex flex-wrap items-center gap-4.5">
         {/* Rows per page */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-medium">Rows</span>
+          <span className="text-xs text-slate-500 font-medium">Hiển thị</span>
           <select
             value={currentSize}
             onChange={(e) => onSizeChange(parseInt(e.target.value))}
@@ -60,6 +60,7 @@ const PaginationBar = ({
             <option value="10">10</option>
             <option value="20">20</option>
             <option value="50">50</option>
+            <option value="100">100</option>
           </select>
         </div>
 
@@ -71,7 +72,7 @@ const PaginationBar = ({
             className="h-8 text-xs font-medium cursor-pointer border-slate-200 text-slate-650 hover:bg-slate-50 px-2.5 rounded-lg"
             onClick={() => onPageChange(currentPage - 1)}
           >
-            Previous
+            Trước
           </Button>
 
           {/* If there are pages, show them */}
@@ -100,7 +101,7 @@ const PaginationBar = ({
             className="h-8 text-xs font-medium cursor-pointer border-slate-200 text-slate-655 hover:bg-slate-50 px-2.5 rounded-lg"
             onClick={() => onPageChange(currentPage + 1)}
           >
-            Next
+            Sau
           </Button>
         </div>
       </div>
