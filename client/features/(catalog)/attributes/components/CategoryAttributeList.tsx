@@ -25,7 +25,7 @@ interface CategoryAttributeListProps {
   onRemove: (code: string) => void;
   onToggleCheckbox: (
     code: string,
-    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isMultiValue"
+    field: "isFilterable" | "isSortable" | "isVariantDefining" | "isCompatibilityKey" | "isMultiValue"
   ) => void;
 }
 

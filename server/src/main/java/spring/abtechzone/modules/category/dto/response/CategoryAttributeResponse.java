@@ -22,6 +22,7 @@ public class CategoryAttributeResponse {
     List<Object> enumValues;
 
     Boolean isFilterable;
+    Boolean isSortable;
     Boolean isVariantDefining;
     Boolean isCompatibilityKey;
     Boolean isRequired;

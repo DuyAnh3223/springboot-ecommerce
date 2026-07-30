@@ -11,6 +11,7 @@ interface SelectedAttributeItem {
   unit: string | null;
   enumValues: any;
   isFilterable: boolean;
+  isSortable?: boolean;
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isMultiValue: boolean;
@@ -23,7 +24,7 @@ interface CategoryAttributeCardProps {
   onRemove: (code: string) => void;
   onToggleCheckbox: (
     code: string,
-    field: "isFilterable" | "isVariantDefining" | "isCompatibilityKey" | "isMultiValue"
+    field: "isFilterable" | "isSortable" | "isVariantDefining" | "isCompatibilityKey" | "isMultiValue"
   ) => void;
 }
 
@@ -89,6 +90,16 @@ export default function CategoryAttributeCard({
             className="rounded border-slate-300 accent-shop_dark_green cursor-pointer size-4"
           />
           Dùng làm bộ lọc tìm kiếm cho danh mục này
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-slate-655 font-semibold cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={Boolean(item.isSortable)}
+            onChange={() => onToggleCheckbox(item.code, "isSortable")}
+            className="rounded border-slate-300 accent-shop_dark_green cursor-pointer size-4"
+          />
+          Cho phép sắp xếp theo thuộc tính này
         </label>
 
         <label className="flex items-center gap-2 text-xs text-slate-655 font-semibold cursor-pointer select-none">

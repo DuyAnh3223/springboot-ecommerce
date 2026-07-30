@@ -26,6 +26,7 @@ export interface CategoryAttributeResponse {
   unit: string | null;
   enumValues: any[] | null;
   isFilterable: boolean;
+  isSortable: boolean;
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
@@ -36,6 +37,7 @@ export interface CategoryAttributeResponse {
 export interface AssignAttributeRequest {
   attributeId: number;
   isFilterable: boolean;
+  isSortable?: boolean;
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;

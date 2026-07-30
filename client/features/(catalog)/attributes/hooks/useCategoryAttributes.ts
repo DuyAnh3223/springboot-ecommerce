@@ -20,6 +20,7 @@ export interface SelectedAttributeItem {
   unit: string | null;
   enumValues: any;
   isFilterable: boolean;
+  isSortable: boolean;
   isVariantDefining: boolean;
   isCompatibilityKey: boolean;
   isRequired: boolean;
@@ -77,6 +78,7 @@ export function useCategoryAttributes(
           unit: attr.unit,
           enumValues: attr.enumValues,
           isFilterable: attr.isFilterable,
+          isSortable: Boolean(attr.isSortable),
           isVariantDefining: attr.isVariantDefining,
           isCompatibilityKey: attr.isCompatibilityKey,
           isRequired: attr.isRequired,
@@ -106,6 +108,7 @@ export function useCategoryAttributes(
       unit: gAttr.unit,
       enumValues: gAttr.enumValues,
       isFilterable: true,
+      isSortable: false,
       isVariantDefining: false,
       isCompatibilityKey: false,
       isRequired: false,
@@ -124,6 +127,7 @@ export function useCategoryAttributes(
     code: string,
     field:
       | "isFilterable"
+      | "isSortable"
       | "isVariantDefining"
       | "isCompatibilityKey"
       | "isMultiValue",
@@ -180,6 +184,7 @@ export function useCategoryAttributes(
           const assignRequests = toAssign.map((item) => ({
             attributeId: item.attributeId,
             isFilterable: item.isFilterable,
+            isSortable: item.isSortable,
             isVariantDefining: item.isVariantDefining,
             isCompatibilityKey: item.isCompatibilityKey,
             isRequired: item.isRequired,
@@ -203,6 +208,7 @@ export function useCategoryAttributes(
           if (!orig) return false;
           return (
             orig.isFilterable !== sel.isFilterable ||
+            orig.isSortable !== sel.isSortable ||
             orig.isVariantDefining !== sel.isVariantDefining ||
             orig.isCompatibilityKey !== sel.isCompatibilityKey ||
             orig.isRequired !== sel.isRequired ||
@@ -217,6 +223,7 @@ export function useCategoryAttributes(
             {
               attributeId: item.attributeId,
               isFilterable: item.isFilterable,
+              isSortable: item.isSortable,
               isVariantDefining: item.isVariantDefining,
               isCompatibilityKey: item.isCompatibilityKey,
               isRequired: item.isRequired,
