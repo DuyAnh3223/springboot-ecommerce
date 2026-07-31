@@ -55,8 +55,12 @@ public class CategoryAttributeService {
             }
             boolean isVariant = req.getIsVariantDefining() != null && req.getIsVariantDefining();
             boolean isMulti = req.getIsMultiValue() != null && req.getIsMultiValue();
+            boolean isSortable = req.getIsSortable() != null && req.getIsSortable();
             if (isVariant && isMulti) {
                 throw new AppException(ErrorCode.VARIANT_CANNOT_BE_MULTI_VALUE);
+            }
+            if (isSortable && (isMulti || isVariant)) {
+                throw new AppException(ErrorCode.ATTRIBUTE_SORTABLE_INVALID_COMBINATION);
             }
             if (isVariant) {
                 Attribute attribute = attributeRepository
@@ -78,6 +82,7 @@ public class CategoryAttributeService {
             ca.setCategory(category);
             ca.setAttribute(attribute);
             ca.setIsFilterable(req.getIsFilterable() != null ? req.getIsFilterable() : true);
+            ca.setIsSortable(req.getIsSortable() != null ? req.getIsSortable() : false);
             ca.setIsVariantDefining(req.getIsVariantDefining() != null ? req.getIsVariantDefining() : false);
             ca.setIsCompatibilityKey(req.getIsCompatibilityKey() != null ? req.getIsCompatibilityKey() : false);
             ca.setIsRequired(req.getIsRequired() != null ? req.getIsRequired() : false);
@@ -114,8 +119,12 @@ public class CategoryAttributeService {
         boolean isVariant =
                 request.getIsVariantDefining() != null ? request.getIsVariantDefining() : ca.getIsVariantDefining();
         boolean isMulti = request.getIsMultiValue() != null ? request.getIsMultiValue() : ca.getIsMultiValue();
+        boolean isSortable = request.getIsSortable() != null ? request.getIsSortable() : ca.getIsSortable();
         if (isVariant && isMulti) {
             throw new AppException(ErrorCode.VARIANT_CANNOT_BE_MULTI_VALUE);
+        }
+        if (isSortable && (isMulti || isVariant)) {
+            throw new AppException(ErrorCode.ATTRIBUTE_SORTABLE_INVALID_COMBINATION);
         }
         if (isVariant) {
             if (!"ENUM".equalsIgnoreCase(ca.getAttribute().getDataType())) {
