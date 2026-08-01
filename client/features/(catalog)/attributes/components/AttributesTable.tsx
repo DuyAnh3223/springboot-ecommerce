@@ -44,7 +44,7 @@ export default function AttributesTable({
         <TableRow>
           <TableHead
             onClick={() => onSort("name")}
-            className="cursor-pointer select-none text-xs font-bold text-slate-650 h-10 w-[20%]"
+            className="cursor-pointer select-none text-xs font-bold text-slate-650 h-8 w-[16%]"
           >
             Tên thuộc tính
             {currentSortBy === "name" && (
@@ -53,17 +53,17 @@ export default function AttributesTable({
           </TableHead>
           <TableHead
             onClick={() => onSort("code")}
-            className="cursor-pointer select-none text-xs font-bold text-slate-650 h-10 w-[20%]"
+            className="cursor-pointer select-none text-xs font-bold text-slate-650 h-8 w-[16%]"
           >
             Mã thuộc tính
             {currentSortBy === "code" && (
               currentOrder === "asc" ? <ChevronUp className="inline ml-1 size-3" /> : <ChevronDown className="inline ml-1 size-3" />
             )}
           </TableHead>
-          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[12%]">Kiểu dữ liệu</TableHead>
-          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[8%]">Đơn vị</TableHead>
-          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[25%]">Danh sách giá trị </TableHead>
-          <TableHead className="text-xs font-bold text-slate-650 h-10 w-[15%] text-right pr-6">Hành động</TableHead>
+          <TableHead className="text-xs font-bold text-slate-650 h-8 w-[5%]">Kiểu dữ liệu</TableHead>
+          <TableHead className="text-xs font-bold text-slate-650 h-8 w-[3%]">Đơn vị</TableHead>
+          <TableHead className="text-xs font-bold text-slate-650 h-8 w-[55%]">Danh sách giá trị</TableHead>
+          <TableHead className="text-xs font-bold text-slate-650 h-8 w-[5%] text-right pr-6">Hành động</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -83,17 +83,17 @@ export default function AttributesTable({
         ) : (
           attributes.map((attr) => (
             <TableRow key={attr.id} className="hover:bg-slate-50/50 border-b border-slate-100">
-              <TableCell className="font-semibold text-slate-900 text-xs py-3">{attr.name}</TableCell>
-              <TableCell className="font-mono text-slate-500 text-xs py-3">{attr.code}</TableCell>
-              <TableCell className="py-3">
+              <TableCell className="font-semibold text-slate-900 text-xs py-1">{attr.name}</TableCell>
+              <TableCell className="font-mono text-slate-500 text-xs py-1">{attr.code}</TableCell>
+              <TableCell className="py-1">
                 <Badge variant="outline" className="text-[10px] font-bold px-2 bg-slate-100/50 text-slate-600 border-slate-200">
                   {attr.dataType}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs text-slate-655 font-medium py-3">{attr.unit || "-"}</TableCell>
-              <TableCell className="py-3 max-w-[280px]">
+              <TableCell className="text-xs text-slate-655 font-medium py-1">{attr.unit || "-"}</TableCell>
+              <TableCell className="py-1">
                 {attr.dataType === "ENUM" && attr.enumValues ? (
-                  <div className="flex flex-wrap gap-1 max-h-[48px] overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-1 max-h-[52px] overflow-y-auto ">
                     {(Array.isArray(attr.enumValues) ? attr.enumValues : Object.keys(attr.enumValues)).map((val) => (
                       <Badge key={val} className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 font-medium">
                         {val}
@@ -104,7 +104,7 @@ export default function AttributesTable({
                   <span className="text-xs text-slate-400 font-medium">-</span>
                 )}
               </TableCell>
-              <TableCell className="text-right pr-6 py-3 space-x-1.5">
+              <TableCell className="text-right pr-6 py-1 space-x-1.5">
                 <Button
                   variant="outline"
                   onClick={() => onEdit(attr)}

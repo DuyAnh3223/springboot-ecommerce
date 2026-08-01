@@ -124,10 +124,10 @@ export default function AttributesClient({ initialData }: AttributesClientProps)
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-1">
             <Sliders className="size-5 text-shop_light_green" /> Quản lý thuộc tính 
           </h1>
-          <p className="text-xs text-slate-500 font-medium">
+          <p className="text-sm text-slate-500 font-medium">
             Định nghĩa các thuộc tính lõi và kiểu dữ liệu dùng chung trong toàn bộ hệ thống.
           </p>
         </div>
@@ -140,7 +140,7 @@ export default function AttributesClient({ initialData }: AttributesClientProps)
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 bg-white p-3 border border-slate-100 rounded-xl shadow-xs">
+      <div className="flex items-center justify-between gap-3 bg-white p-2 border border-slate-100 rounded-xl shadow-xs">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-4" />
           <Input
