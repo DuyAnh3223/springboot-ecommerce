@@ -24,7 +24,7 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
 
   return (
     <TableRow className="hover:bg-slate-50/50 border-b border-slate-100">
-      <TableCell className="pl-4">
+      <TableCell className="pl-3 w-8">
         {skusCount > 0 && (
           <button
             onClick={onToggleExpand}
@@ -34,37 +34,41 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
           </button>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="w-12">
         {product.primaryImageUrl ? (
           <img
             src={product.primaryImageUrl}
             alt={product.name}
-            className="size-10 object-cover rounded-md border border-slate-150"
+            className="size-9 object-cover rounded-md border border-slate-150"
           />
         ) : (
-          <div className="size-10 bg-slate-100 flex items-center justify-center rounded-md border border-slate-150 text-slate-400">
-            <Package className="size-5" />
+          <div className="size-9 bg-slate-100 flex items-center justify-center rounded-md border border-slate-150 text-slate-400">
+            <Package className="size-4" />
           </div>
         )}
       </TableCell>
       <TableCell className="font-medium text-slate-800">
-        <div>
-          <div>{product.name}</div>
-          <div className="text-xs text-slate-400 mt-0.5">{product.slug}</div>
+        <div className="max-w-[220px] lg:max-w-[320px]">
+          <div className="font-semibold text-slate-800 truncate" title={product.name}>
+            {product.name}
+          </div>
+          <div className="text-xs text-slate-400 mt-0.5 truncate" title={product.slug}>
+            {product.slug}
+          </div>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="w-28">
         {product.category ? (
-          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-2xs truncate max-w-[100px]">
             {product.category.name}
           </Badge>
         ) : (
           <span className="text-slate-400">—</span>
         )}
       </TableCell>
-      <TableCell className="font-medium text-slate-600">{skusCount}</TableCell>
-      <TableCell className="font-medium text-slate-600">{product.totalStock ?? 0}</TableCell>
-      <TableCell className="font-medium text-slate-650">
+      <TableCell className="font-medium text-slate-600 text-center w-16">{skusCount}</TableCell>
+      <TableCell className="font-medium text-slate-600 text-center w-24">{product.totalStock ?? 0}</TableCell>
+      <TableCell className="font-medium text-slate-650 text-xs whitespace-nowrap w-32">
         {product.priceMin !== undefined && product.priceMin !== null ? (
           <span>
             {product.priceMin.toLocaleString("vi-VN")}đ
@@ -76,47 +80,47 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
           <span className="text-slate-400">—</span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="w-24">
         {product.published ? (
-          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100">
+          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100 text-3xs px-2 py-0.5">
             Đang bán
           </Badge>
         ) : (
-          <Badge className="bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200">
+          <Badge className="bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 text-3xs px-2 py-0.5">
             Bản nháp
           </Badge>
         )}
       </TableCell>
-      <TableCell className="font-medium text-slate-600">
+      <TableCell className="font-medium text-slate-600 text-center w-24 text-xs whitespace-nowrap">
         {product.activeSkuCount ?? 0} / {skusCount}
       </TableCell>
-      <TableCell className="text-right pr-4 space-x-1.5">
+      <TableCell className="text-right pr-3 whitespace-nowrap space-x-1 w-28">
         {product.published ? (
           <Button
             variant="outline"
             size="sm"
             onClick={() => openDialog("unpublish", product)}
-            className="border-slate-200 text-amber-600 hover:text-amber-700 hover:bg-amber-50 size-8 p-0 cursor-pointer"
+            className="border-slate-200 text-amber-600 hover:text-amber-700 hover:bg-amber-50 size-7.5 p-0 cursor-pointer"
             title="Tạm ẩn sản phẩm"
           >
-            <Globe className="size-4 text-amber-500" />
+            <Globe className="size-3.5 text-amber-500" />
           </Button>
         ) : (
           <Button
             variant="outline"
             size="sm"
             onClick={() => openDialog("publish", product)}
-            className="border-slate-200 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 size-8 p-0 cursor-pointer"
+            className="border-slate-200 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 size-7.5 p-0 cursor-pointer"
             title="Xuất bản sản phẩm"
           >
-            <Globe className="size-4 text-emerald-500" />
+            <Globe className="size-3.5 text-emerald-500" />
           </Button>
         )}
         <Button
           variant="outline"
           size="sm"
           onClick={handleEdit}
-          className="border-slate-200 text-slate-600 hover:text-slate-850 size-8 p-0 cursor-pointer"
+          className="border-slate-200 text-slate-600 hover:text-slate-850 size-7.5 p-0 cursor-pointer"
         >
           <Edit2 className="size-3.5" />
         </Button>
@@ -124,7 +128,7 @@ export function ProductRow({ product, isExpanded, onToggleExpand }: ProductRowPr
           variant="outline"
           size="sm"
           onClick={() => openDialog("delete", product)}
-          className="border-slate-200 text-red-600 hover:text-red-700 hover:bg-red-50 size-8 p-0 cursor-pointer"
+          className="border-slate-200 text-red-600 hover:text-red-700 hover:bg-red-50 size-7.5 p-0 cursor-pointer"
         >
           <Trash2 className="size-3.5" />
         </Button>

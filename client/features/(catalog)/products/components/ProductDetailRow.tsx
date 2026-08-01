@@ -35,48 +35,51 @@ export function ProductDetailRow({ productId, loading, detail }: ProductDetailRo
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail?.skus?.map((sku) => (
-                  <TableRow key={sku.id} className="hover:bg-slate-50/30">
-                    <TableCell className="py-1">
-                      {sku.imageUrl ? (
-                        <img
-                          src={sku.imageUrl}
-                          alt={sku.sku}
-                          className="size-8 object-cover rounded border"
-                        />
-                      ) : (
-                        <div className="size-8 bg-slate-50 flex items-center justify-center rounded border text-slate-300">
-                          <Package className="size-4" />
+                {detail?.skus?.map((sku) => {
+                  const isSkuActive = sku.active ?? true;
+                  return (
+                    <TableRow key={sku.id} className="hover:bg-slate-50/30">
+                      <TableCell className="py-1">
+                        {sku.imageUrl ? (
+                          <img
+                            src={sku.imageUrl}
+                            alt={sku.sku}
+                            className="size-8 object-cover rounded border"
+                          />
+                        ) : (
+                          <div className="size-8 bg-slate-50 flex items-center justify-center rounded border text-slate-300">
+                            <Package className="size-4" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold text-slate-700 py-1">{sku.sku}</TableCell>
+                      <TableCell className="py-1">
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(sku.attributes || {}).map(([key, val]) => (
+                            <Badge
+                              key={key}
+                              variant="outline"
+                              className="bg-slate-50 text-[10px] py-0 px-1.5 border-slate-200"
+                            >
+                              {key}: {String(val)}
+                            </Badge>
+                          ))}
                         </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-semibold text-slate-700 py-1">{sku.sku}</TableCell>
-                    <TableCell className="py-1">
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(sku.attributes || {}).map(([key, val]) => (
-                          <Badge
-                            key={key}
-                            variant="outline"
-                            className="bg-slate-50 text-[10px] py-0 px-1.5 border-slate-200"
-                          >
-                            {key}: {String(val)}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium text-slate-600 py-1">
-                      {sku.price.toLocaleString("vi-VN")}đ
-                    </TableCell>
-                    <TableCell className="text-slate-600 py-1">{sku.stock}</TableCell>
-                    <TableCell className="py-1">
-                      {sku.isActive ? (
-                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-150 py-0 text-3xs">Hoạt động</Badge>
-                      ) : (
-                        <Badge className="bg-slate-50 text-slate-400 border-slate-200 py-0 text-3xs">Không hoạt động</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-600 py-1">
+                        {sku.price.toLocaleString("vi-VN")}đ
+                      </TableCell>
+                      <TableCell className="text-slate-600 py-1">{sku.stock}</TableCell>
+                      <TableCell className="py-1">
+                        {isSkuActive ? (
+                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-150 py-0 text-3xs">Hoạt động</Badge>
+                        ) : (
+                          <Badge className="bg-slate-50 text-slate-400 border-slate-200 py-0 text-3xs">Không hoạt động</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

@@ -23,8 +23,11 @@ export interface SkuResponse {
   sku: string;
   price: number;
   stock: number;
+  weightGram?: number | null;
+  currency?: string | null;
   imageUrl: string | null;
   images: ProductImage[];
+  active?: boolean;
   isActive?: boolean;
   attributes: Record<string, any>;
 }

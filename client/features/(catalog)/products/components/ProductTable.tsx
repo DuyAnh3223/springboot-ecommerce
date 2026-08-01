@@ -37,20 +37,20 @@ export function ProductTable({ products, isPending }: ProductTableProps) {
           </p>
         </CardContent>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="w-full">
+          <Table className="w-full">
             <TableHeader className="bg-slate-50/50 border-b border-slate-100">
               <TableRow>
-                <TableHead className="w-10 pl-4"></TableHead>
-                <TableHead className="w-16">Ảnh</TableHead>
+                <TableHead className="w-8 pl-3"></TableHead>
+                <TableHead className="w-12">Ảnh</TableHead>
                 <TableHead className="font-semibold text-slate-600">Tên sản phẩm</TableHead>
-                <TableHead className="font-semibold text-slate-600">Danh mục</TableHead>
-                <TableHead className="font-semibold text-slate-600">Số SKU</TableHead>
-                <TableHead className="font-semibold text-slate-600">Tổng tồn kho</TableHead>
-                <TableHead className="font-semibold text-slate-600">Khoảng giá</TableHead>
-                <TableHead className="font-semibold text-slate-600">Trạng thái</TableHead>
-                <TableHead className="font-semibold text-slate-600">SKU hoạt động</TableHead>
-                <TableHead className="font-semibold text-slate-650 text-right pr-4">Hành động</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-28">Danh mục</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-16 text-center">Số SKU</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-24 text-center">Tổng tồn kho</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-32">Khoảng giá</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-24">Trạng thái</TableHead>
+                <TableHead className="font-semibold text-slate-600 w-24 text-center">SKU hoạt động</TableHead>
+                <TableHead className="font-semibold text-slate-650 text-right pr-3 w-28">Hành động</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

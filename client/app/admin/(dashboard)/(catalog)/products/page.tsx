@@ -17,7 +17,7 @@ interface PageProps {
 
 export const metadata = {
   title: "Quản lý sản phẩm | Admin",
-  description: "Quản lý sản phẩm, thuộc tính EAV và biến thể SKU.",
+  description: "Quản lý sản phẩm, thuộc tính và biến thể.",
 };
 
 export default async function ProductsPage({ searchParams }: PageProps) {

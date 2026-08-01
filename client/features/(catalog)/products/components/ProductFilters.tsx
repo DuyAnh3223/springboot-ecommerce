@@ -22,7 +22,7 @@ export function ProductFilters({ categories, filters }: ProductFiltersProps) {
   } = filters;
 
   return (
-    <Card className="border-none shadow-sm bg-white p-4">
+    <Card className="border-none shadow-sm bg-white p-3">
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
