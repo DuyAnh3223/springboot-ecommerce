@@ -40,7 +40,7 @@ const PaginationBar = ({
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 bg-transparent mt-2">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 py-2 bg-transparent mt-2">
       {/* Left side: showing count */}
       <div className="text-xs text-slate-500 font-medium">
         Hiển thị <span className="font-semibold text-slate-700">{from}-{to}</span> trong tổng số <span className="font-semibold text-slate-700">{totalElements}</span> kết quả
