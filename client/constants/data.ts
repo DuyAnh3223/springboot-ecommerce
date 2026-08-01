@@ -1,17 +1,17 @@
 export const headerData = [
-  { title: "Home", href: "/" },
-  { title: "Category", href: "/category" },
-  { title: "Blog", href: "/blog" },
-  { title: "Hot Deal", href: "/deal" },
+  { title: "Trang chủ", href: "/" },
+  { title: "Danh mục", href: "/category" },
+  { title: "Flash Sale", href: "#flash-sale" },
+  { title: "Xây dựng PC", href: "#pc-builder" },
 ];
 
 export const quickLinksData = [
-  { title: "About us", href: "/about" },
-  { title: "Contact us", href: "/contact" },
-  { title: "Terms & Conditions", href: "/terms" },
-  { title: "Privacy Policy", href: "/privacy" },
-  { title: "FAQs", href: "/faqs" },
-  { title: "Help", href: "/help" },
+  { title: "Về ABTechZone", href: "#" },
+  { title: "Liên hệ hỗ trợ", href: "#" },
+  { title: "Điều khoản dịch vụ", href: "#" },
+  { title: "Chính sách bảo mật", href: "#" },
+  { title: "Hỏi đáp (FAQs)", href: "#" },
+  { title: "Hướng dẫn mua hàng", href: "#" },
 ];
 
 export const categoriesData = [
@@ -24,3 +24,4 @@ export const categoriesData = [
   { title: "Nguồn máy tính (PSU)", href: "psu" },
   { title: "Vỏ máy tính (Case)", href: "case" },
 ];
+

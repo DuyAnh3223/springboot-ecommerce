@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react'
 import Container from './Container'
 import FooterTop from './FooterTop'
@@ -17,7 +19,9 @@ const Footer = () => {
         <div className='py-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8'>
           <div className='space-y-4'>
             <Logo/>
-            <SubText >Lorem ipsum dolor sit amet consectetur, adipisicing elit. Nihil eaque necessitatibus inventore accusantium in suscipit cum molestias culpa quo totam.</SubText>
+            <SubText>
+              ABTechZone - Hệ thống bán lẻ linh kiện máy tính, PC Gaming, Workstation chính hãng hàng đầu. Cam kết sản phẩm chất lượng, giá tốt nhất và bảo hành tận tâm.
+            </SubText>
             <SocialMedia 
             className='text-darkColor/60'
             iconClassName='border-darkColor/60 hover:border-shop_dark-green hover:text-shop_dark_green'
@@ -25,7 +29,7 @@ const Footer = () => {
           </div>
 
           <div>
-            <SubTitle> Quick Links</SubTitle>
+            <SubTitle>Liên Kết Nhanh</SubTitle>
             <ul className='space-y-3 mt-4'>
               {quickLinksData?.map((item)=>(
                 <li key={item?.title}>
@@ -36,7 +40,7 @@ const Footer = () => {
           </div>
 
           <div>
-            <SubTitle> Categories</SubTitle>
+            <SubTitle>Danh Mục Linh Kiện</SubTitle>
             <ul className='space-y-3 mt-4'>
               {categoriesData?.map((item)=>(
                 <li key={item?.title}>
@@ -47,18 +51,18 @@ const Footer = () => {
           </div>
 
           <div className='space-y-4'>
-            <SubTitle>Newsletter</SubTitle>
-            <SubText>Subscribe to our newsletter to receive updates and exclusive offers</SubText>
-            <form className='space-y-3'>
-              <Input placeholder='enter your email' type="email" required></Input>
-              <Button className="w-full">Subscribe</Button>
+            <SubTitle>Nhận Bản Tin Khuyến Mãi</SubTitle>
+            <SubText>Đăng ký nhận tin để cập nhật các chương trình ưu đãi, mã giảm giá và sản phẩm mới nhất từ ABTechZone.</SubText>
+            <form className='space-y-3' onSubmit={(e) => e.preventDefault()}>
+              <Input placeholder='Nhập email của bạn...' type="email" required />
+              <Button type="submit" className="w-full bg-slate-900 hover:bg-rose-600 font-bold transition-all">Đăng Ký Ngay</Button>
             </form>
           </div>
         </div>
 
         <div className='py-6 border-t text-center text-sm text-gray-600'>
           <div>
-            © {new Date().getFullYear()} <Logo className='text-sm'/>. All rights reserved.
+            © {new Date().getFullYear()} <Logo className='text-sm'/>. Tất cả quyền được bảo hộ.
           </div>
         </div>
       </Container>

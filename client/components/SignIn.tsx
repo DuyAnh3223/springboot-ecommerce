@@ -18,7 +18,7 @@ const SignIn = () => {
   if (!mounted) {
     return (
       <Link href="/sign-in" className="text-sm font-semibold hover:text-shop_orange hover:cursor-pointer hoverEffect">
-        Sign In
+        Đăng nhập
       </Link>
     )
   }
