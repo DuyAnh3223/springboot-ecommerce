@@ -78,3 +78,12 @@ export async function createSkusBulk(
   const response = await api.post(`/products/${productId}/skus/bulk`, values);
   return response.data.result;
 }
+
+export async function reconcileSkus(
+  productId: number,
+  payload: any,
+): Promise<ProductResponse> {
+  const response = await api.put(`/products/${productId}/skus`, payload);
+  return response.data.result;
+}
+
