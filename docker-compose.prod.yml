@@ -1,62 +1,88 @@
 services:
   db:
-    image: postgres:15
-    container_name: postgres-db
+    image: ${POSTGRES_IMAGE:-postgres:15.6-alpine}
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+      start_period: 10s
+    networks:
+      - data
 
   redis:
-    image: redis:latest
-    container_name: Redis
-
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 6
+      start_period: 5s
+    networks:
+      - data
 
   backend:
-
-    image: ${DOCKERHUB_USERNAME}/backend-prod:latest
-    container_name: ecommerce-springboot-server
+    image: ${DOCKERHUB_USERNAME:?DOCKERHUB_USERNAME is required}/backend-prod:${IMAGE_TAG:-stable}
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
-      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
-      REDIS_ADDRESS: ${REDIS_ADDRESS}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?SPRING_PROFILES_ACTIVE is required}
+      JWT_SIGNER_KEY: ${JWT_SIGNER_KEY:?JWT_SIGNER_KEY is required}
+      REDIS_ADDRESS: redis://redis:6379
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:?AWS_BUCKET_NAME is required}
+      AWS_BUCKET_ACCESS_KEY: ${AWS_BUCKET_ACCESS_KEY:?AWS_BUCKET_ACCESS_KEY is required}
+      AWS_BUCKET_SECRET_KEY: ${AWS_BUCKET_SECRET_KEY:?AWS_BUCKET_SECRET_KEY is required}
+      CLOUDFRONT_URL: ${CLOUDFRONT_URL:?CLOUDFRONT_URL is required}
+      CLOUDFRONT_KEY_PAIR_ID: ${CLOUDFRONT_KEY_PAIR_ID:?CLOUDFRONT_KEY_PAIR_ID is required}
+      CLOUDFRONT_PRIVATE_KEY: ${CLOUDFRONT_PRIVATE_KEY:?CLOUDFRONT_PRIVATE_KEY is required}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/abtechzone/swagger-ui.html || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - data
+      - app
 
   frontend:
-    image: ${DOCKERHUB_USERNAME}/frontend-prod:latest
-    container_name: ecommerce-nextjs-client
+    image: ${DOCKERHUB_USERNAME:?DOCKERHUB_USERNAME is required}/frontend-prod:${IMAGE_TAG:-stable}
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       SPRING_API_URL: http://backend:8080/abtechzone
-      NEXT_PUBLIC_SPRING_API_URL: ${NEXT_PUBLIC_SPRING_API_URL}
+      NEXT_PUBLIC_SPRING_API_URL: ${NEXT_PUBLIC_SPRING_API_URL:?NEXT_PUBLIC_SPRING_API_URL is required at image build time}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - app
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  data:
+    internal: true
+  app:
