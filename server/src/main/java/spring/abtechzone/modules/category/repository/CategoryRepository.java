@@ -5,6 +5,10 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import spring.abtechzone.modules.category.entity.Category;
 
+import java.util.Optional;
+
 public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
     Boolean existsByName(String name);
+
+    Optional<Category> findBySlugAndIsActiveTrue(String slug);
 }
