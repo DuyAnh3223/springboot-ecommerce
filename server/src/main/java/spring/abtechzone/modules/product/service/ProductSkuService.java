@@ -1,6 +1,8 @@
 package spring.abtechzone.modules.product.service;
 
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,10 +20,8 @@ import spring.abtechzone.common.service.AwsS3FileService;
 import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
-import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSkuSearchRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
-import spring.abtechzone.modules.product.dto.request.SkuPreviewRequest;
+import spring.abtechzone.modules.product.dto.request.*;
+import spring.abtechzone.modules.product.dto.request.ProductSkuItemRequest;
 import spring.abtechzone.modules.product.dto.response.ProductImageResponse;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.dto.response.SkuPreviewResponse;
@@ -237,6 +237,202 @@ public class ProductSkuService {
 
         if (productSkuRepository.existsBySkuAndIdNot(sku, skuId)) {
             throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+        }
+    }
+
+    @Transactional
+    public void reconcileSkus(Long productId, ProductSkuReconcileRequest request) {
+        Product product = productRepository
+                .findByIdForUpdate(productId)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        List<ProductSku> existingSkus = productSkuRepository.findByProductIdAndDeletedAtIsNull(productId);
+        Set<Long> existingSkuIds = existingSkus.stream().map(ProductSku::getId).collect(Collectors.toSet());
+        Set<Long> removedSet =
+                request.getRemovedSkuIds() != null ? new HashSet<>(request.getRemovedSkuIds()) : Collections.emptySet();
+        List<ProductSkuItemRequest> upsertItems =
+                request.getSkus() != null ? request.getSkus() : Collections.emptyList();
+
+        validateReconcileScope(existingSkuIds, removedSet, upsertItems);
+        processRemovedSkus(product, existingSkus, removedSet, upsertItems);
+        processUpsertSkus(product, existingSkus, removedSet, upsertItems);
+
+        recalculateProductAggregates(product);
+        productRepository.save(product);
+    }
+
+    private void validateReconcileScope(
+            Set<Long> existingSkuIds, Set<Long> removedSet, List<ProductSkuItemRequest> upsertItems) {
+        for (Long removeId : removedSet) {
+            if (!existingSkuIds.contains(removeId)) {
+                throw new AppException(ErrorCode.SKU_NOT_FOUND);
+            }
+        }
+        for (ProductSkuItemRequest item : upsertItems) {
+            if (item.getId() != null && removedSet.contains(item.getId())) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
+            }
+        }
+    }
+
+    private void processRemovedSkus(
+            Product product,
+            List<ProductSku> existingSkus,
+            Set<Long> removedSet,
+            List<ProductSkuItemRequest> upsertItems) {
+        if (removedSet.isEmpty()) {
+            return;
+        }
+
+        long activeExistingRemaining = existingSkus.stream()
+                .filter(s -> s.isActive() && s.getDeletedAt() == null && !removedSet.contains(s.getId()))
+                .count();
+        long newSkusCount = upsertItems.stream().filter(r -> r.getId() == null).count();
+
+        if (product.isPublished() && (activeExistingRemaining + newSkusCount == 0)) {
+            throw new AppException(ErrorCode.PRODUCT_MUST_HAVE_ACTIVE_SKU);
+        }
+
+        for (Long removeId : removedSet) {
+            existingSkus.stream()
+                    .filter(s -> s.getId().equals(removeId) && s.getDeletedAt() == null)
+                    .findFirst()
+                    .ifPresent(skuToRemove -> {
+                        skuToRemove.softDelete();
+                        productSkuRepository.save(skuToRemove);
+                    });
+        }
+    }
+
+    private void processUpsertSkus(
+            Product product,
+            List<ProductSku> existingSkus,
+            Set<Long> removedSet,
+            List<ProductSkuItemRequest> upsertItems) {
+        if (upsertItems.isEmpty()) {
+            return;
+        }
+
+        validateRequestSkuCodesUnique(upsertItems);
+
+        List<ProductSku> workingActiveSkus = new ArrayList<>(existingSkus.stream()
+                .filter(s -> !removedSet.contains(s.getId()) && s.getDeletedAt() == null)
+                .toList());
+
+        for (ProductSkuItemRequest item : upsertItems) {
+            if (item.getId() != null) {
+                updateSingleSku(product, existingSkus, item, workingActiveSkus);
+            } else {
+                createSingleSku(product, item, workingActiveSkus);
+            }
+        }
+    }
+
+    private void validateRequestSkuCodesUnique(List<ProductSkuItemRequest> upsertItems) {
+        Set<String> requestSkuCodes = new HashSet<>();
+        for (ProductSkuItemRequest item : upsertItems) {
+            if (item.getSku() == null || item.getSku().isBlank()) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_INVALID);
+            }
+            if (!requestSkuCodes.add(item.getSku())) {
+                throw new AppException(ErrorCode.PRODUCT_SKU_EXISTS);
+            }
+        }
+    }
+
+    private void updateSingleSku(
+            Product product,
+            List<ProductSku> existingSkus,
+            ProductSkuItemRequest item,
+            List<ProductSku> workingActiveSkus) {
+        ProductSku sku = existingSkus.stream()
+                .filter(s -> s.getId().equals(item.getId()) && s.getDeletedAt() == null)
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
+
+        validateSkuForUpdate(sku.getId(), item.getSku());
+
+        Map<String, Object> updatedAttrs = item.getAttributes() != null ? item.getAttributes() : sku.getAttributes();
+        productAttributeValidator.validateSkuAttributes(product, updatedAttrs);
+
+        Long targetId = sku.getId();
+        List<ProductSku> otherSkus = workingActiveSkus.stream()
+                .filter(s -> !s.getId().equals(targetId))
+                .toList();
+        productAttributeValidator.validateSkuNotDuplicate(product, otherSkus, updatedAttrs);
+
+        sku.setSku(item.getSku());
+        sku.setPrice(item.getPrice());
+        sku.setStock(item.getStock());
+        sku.setWeightGram(item.getWeightGram());
+        if (item.getCurrency() != null) sku.setCurrency(item.getCurrency());
+        sku.setAttributes(updatedAttrs);
+        sku.setActive(true);
+
+        sku = productSkuRepository.save(sku);
+
+        if (item.getImages() != null) {
+            skuImageService.syncSkuImages(sku, item.getImages());
+        }
+
+        Long updatedId = sku.getId();
+        for (int i = 0; i < workingActiveSkus.size(); i++) {
+            if (workingActiveSkus.get(i).getId().equals(updatedId)) {
+                workingActiveSkus.set(i, sku);
+                break;
+            }
+        }
+    }
+
+    private void createSingleSku(Product product, ProductSkuItemRequest item, List<ProductSku> workingActiveSkus) {
+        validateSkuForCreate(item.getSku());
+
+        Map<String, Object> attrs = item.getAttributes() != null ? item.getAttributes() : Map.of();
+        productAttributeValidator.validateSkuAttributes(product, attrs);
+        productAttributeValidator.validateSkuNotDuplicate(product, workingActiveSkus, attrs);
+
+        ProductSku newSku = ProductSku.builder()
+                .product(product)
+                .sku(item.getSku())
+                .price(item.getPrice())
+                .stock(item.getStock())
+                .weightGram(item.getWeightGram())
+                .currency(item.getCurrency() != null ? item.getCurrency() : "VND")
+                .attributes(attrs)
+                .active(true)
+                .build();
+
+        newSku = productSkuRepository.save(newSku);
+
+        if (item.getImages() != null) {
+            skuImageService.syncSkuImages(newSku, item.getImages());
+        }
+
+        workingActiveSkus.add(newSku);
+    }
+
+    private void recalculateProductAggregates(Product product) {
+        Long productId = product.getId();
+        int totalSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNull(productId);
+        int activeSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNullAndActiveTrue(productId);
+        int totalStock = productSkuRepository.sumStockByProductIdAndActiveTrue(productId);
+
+        product.setSkuCount(totalSkuCount);
+        product.setActiveSkuCount(activeSkuCount);
+        product.setTotalStock(totalStock);
+
+        if (activeSkuCount > 0) {
+            Object[] bounds = productSkuRepository.findPriceMinAndMaxByProductIdAndActiveTrue(productId);
+            if (bounds != null && bounds.length >= 2 && bounds[0] != null) {
+                product.setPriceMin((BigDecimal) bounds[0]);
+                product.setPriceMax((BigDecimal) bounds[1]);
+            } else {
+                product.setPriceMin(BigDecimal.ZERO);
+                product.setPriceMax(BigDecimal.ZERO);
+            }
+        } else {
+            product.setPriceMin(BigDecimal.ZERO);
+            product.setPriceMax(BigDecimal.ZERO);
         }
     }
 

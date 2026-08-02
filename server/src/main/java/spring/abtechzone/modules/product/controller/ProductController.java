@@ -15,11 +15,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResult;
-import spring.abtechzone.modules.product.dto.request.ProductCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSearchRequest;
-import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
-import spring.abtechzone.modules.product.dto.request.ProductUpdateRequest;
-import spring.abtechzone.modules.product.dto.request.SkuPreviewRequest;
+import spring.abtechzone.modules.product.dto.request.*;
 import spring.abtechzone.modules.product.dto.response.ProductResponse;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.dto.response.SkuPreviewResponse;
@@ -172,6 +168,22 @@ public class ProductController {
             @RequestBody @Valid SkuPreviewRequest request) {
         return ApiResult.<List<SkuPreviewResponse>>builder()
                 .result(productSkuService.previewSkus(productId, request))
+                .build();
+    }
+
+    @PutMapping("/{productId}/skus")
+    @Operation(
+            summary = "Reconcile product SKUs (Admin)",
+            description = "Atomically update, create and archive SKUs for a product in a single request")
+    @ApiResponse(responseCode = "200", description = "Product SKUs reconciled")
+    @ApiResponse(responseCode = "400", description = "Validation error or invalid attributes")
+    @ApiResponse(responseCode = "404", description = "Product not found")
+    ApiResult<ProductResponse> reconcileSkus(
+            @PathVariable @Parameter(description = "Product ID") Long productId,
+            @RequestBody @Valid ProductSkuReconcileRequest request) {
+        productSkuService.reconcileSkus(productId, request);
+        return ApiResult.<ProductResponse>builder()
+                .result(productService.getProduct(productId))
                 .build();
     }
 
