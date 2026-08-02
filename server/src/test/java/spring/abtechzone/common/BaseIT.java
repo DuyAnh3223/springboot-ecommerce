@@ -1,23 +1,23 @@
-package spring.abtechzone;
+package spring.abtechzone.common;
 
-import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest
-@Testcontainers
+import spring.abtechzone.AbTechZoneApplication;
+
+@SpringBootTest(classes = AbTechZoneApplication.class)
 @ActiveProfiles("test")
-class AbTechZoneApplicationTests {
+public abstract class BaseIT {
 
-    @Container
-    @SuppressWarnings("resource")
-    static final PostgreSQLContainer<?> POSTGRES_CONTAINER =
-            new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
+    protected static final PostgreSQLContainer<?> POSTGRES_CONTAINER;
+
+    static {
+        POSTGRES_CONTAINER = new PostgreSQLContainer<>("postgres:15").withInitScript("db/init-extensions.sql");
+        POSTGRES_CONTAINER.start();
+    }
 
     @DynamicPropertySource
     static void configureDatasource(DynamicPropertyRegistry registry) {
@@ -27,7 +27,4 @@ class AbTechZoneApplicationTests {
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
     }
-
-    @Test
-    void contextLoads() {}
 }
