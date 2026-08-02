@@ -49,7 +49,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
   if (isOutOfStock) {
     return (
       <Button disabled variant="outline" size="sm" className="h-6 text-[10px] px-2 opacity-50 border-slate-200 text-slate-400">
-        Háº¿t hÃ ng
+        Hết Hàng
       </Button>
     );
   }
@@ -62,7 +62,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
         size="sm"
         className="h-6 text-[10px] px-2 border-slate-300 text-slate-700 hover:text-shop_light_green hover:bg-emerald-50/60 font-semibold"
       >
-        TÃ¹y chá»n <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
+       Tùy chọn <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
       </Button>
     );
   }
@@ -75,7 +75,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
       className="h-6 text-[10px] px-2.5 bg-shop_light_green hover:bg-shop_dark_green text-white font-bold shadow-2xs transition-all"
     >
       <ShoppingCart className="w-2.5 h-2.5 mr-0.5" />
-      {loading ? "..." : "ThÃªm"}
+      {loading ? "..." : "Thêm"}
     </Button>
   );
 }

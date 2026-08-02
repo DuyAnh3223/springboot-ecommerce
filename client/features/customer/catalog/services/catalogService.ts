@@ -13,7 +13,7 @@ export interface PageResponse<T> {
 
 export const catalogService = {
   getCategoryFacets: async (categorySlug: string): Promise<CategoryFacetData> => {
-    const res = await api.get(`/api/v1/public/catalog/category/${categorySlug}/facets`);
+    const res = await api.get(`/catalog/category/${categorySlug}/facets`);
     return res.data.result;
   },
 
@@ -42,7 +42,7 @@ export const catalogService = {
     }
 
     const res = await api.get(
-      `/api/v1/public/catalog/category/${categorySlug}/products?${queryParams.toString()}`
+      `/catalog/category/${categorySlug}/products?${queryParams.toString()}`
     );
     return res.data.result;
   },
