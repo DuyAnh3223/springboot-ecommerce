@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getUserSession } from "@/features/auth/actions";
 import { getAddresses } from "@/features/users/services/address.service";
-import AddressList from "@/features/users/components/AddressList";
+import AddressList from "@/features/customer/account/components/AddressList";
 
 export const metadata = {
   title: "Sổ địa chỉ | AB Tech Zone",

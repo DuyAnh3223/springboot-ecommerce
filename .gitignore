@@ -1,5 +1,7 @@
 HELP.md
 my docs/
+.agents/docs
+.commandcode/
 plan/
 target/
 .mvn/wrapper/maven-wrapper.jar

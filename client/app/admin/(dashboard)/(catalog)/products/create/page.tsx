@@ -1,6 +1,6 @@
-import { getCategories } from "@/features/(catalog)/categories/services/category.service";
-import { ProductFormPage } from "@/features/(catalog)/products/components/ProductFormPage";
-import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
+import { getCategories } from "@/features/categories/services/category.service";
+import { ProductFormPage } from "@/features/admin/catalog/products/components/ProductFormPage";
+import { CategoryResponse } from "@/features/categories/category.type";
 
 export const metadata = {
   title: "Thêm sản phẩm | Admin",

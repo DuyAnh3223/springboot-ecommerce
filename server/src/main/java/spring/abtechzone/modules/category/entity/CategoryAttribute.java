@@ -41,6 +41,11 @@ public class CategoryAttribute {
 
     @NotNull
     @ColumnDefault("false")
+    @Column(name = "is_sortable", nullable = false)
+    private Boolean isSortable;
+
+    @NotNull
+    @ColumnDefault("false")
     @Column(name = "is_variant_defining", nullable = false)
     private Boolean isVariantDefining;
 

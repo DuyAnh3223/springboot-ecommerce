@@ -2,7 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getUserSession } from "@/features/auth/actions";
 import Container from "@/components/Container";
-import ProfileSidebar from "@/features/users/components/ProfileSidebar";
+import ProfileSidebar from "@/features/customer/account/components/ProfileSidebar";
 
 export const metadata = {
   title: "Tài khoản của tôi",

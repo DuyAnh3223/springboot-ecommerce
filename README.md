@@ -153,20 +153,20 @@ Key design decisions:
 
 ## 🧪 Testing
 
-Tests are partitioned strictly by module and cover three layers:
+Tests follow a fast-feedback Test Pyramid:
 
-| Module    | Unit Test                      | Integration Test                                                       |
-| --------- | ------------------------------ | ---------------------------------------------------------------------- |
-| `user`    | `AddressServiceTest` (Mockito) | `AddressRepositoryIntegrationTest`, `AddressControllerIntegrationTest` |
-| `product` | —                              | `ProductIntegrationTest`                                               |
-| `cart`    | `CartServiceTest` (Mockito)    | `CartIntegrationTest`                                                  |
-| `order`   | `OrderServiceTest` (Mockito)   | `OrderIntegrationTest`                                                 |
-| `voucher` | `VoucherValidatorUnitTest`     | `VoucherIntegrationTest`                                               |
+| Module / Scope | Fast Developer Loop (`*Test`) | Integration Verification (`*IT`) |
+| --- | --- | --- |
+| `catalog` / `product` | `CatalogProductSpecificationsTest`, `ProductServiceTest`, `ProductSkuServiceTest`, `SkuImageServiceTest`, `SkuVariantPreviewCalculatorTest` | `CatalogIT` |
+| `order` | `OrderServiceTest` | `OrderIT` |
+| `cart` | `CartServiceTest`, `CartControllerTest` (`@WebMvcTest`) | — |
+| `user` | `AddressServiceTest`, `AddressControllerTest` (`@WebMvcTest`) | `AddressRepositoryIT` |
+| `voucher` | `VoucherValidatorUnitTest` | — |
 
 **Testing approach:**
 
-- **Unit tests**: Mockito `@Mock / @InjectMocks`, Given-When-Then pattern, `@DisplayName`
-- **Integration tests**: Testcontainers (MySQL container), `@SpringBootTest`, `@DynamicPropertySource`
+- **Fast developer loop (`mvn test`)**: Mockito unit tests, `@WebMvcTest` slices, Surefire, **100% zero Docker containers**.
+- **Integration verification gate (`mvn verify -Pintegration`)**: PostgreSQL Testcontainers (`postgres:15`), Failsafe, single shared container base (`BaseIT`).
 - **Coverage**: JaCoCo report — run `./mvnw clean test jacoco:report`, open `target/site/jacoco/index.html`
 
 ---

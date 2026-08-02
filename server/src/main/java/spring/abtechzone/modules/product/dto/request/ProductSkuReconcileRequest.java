@@ -1,0 +1,23 @@
+package spring.abtechzone.modules.product.dto.request;
+
+import java.util.List;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ProductSkuReconcileRequest {
+
+    @NotNull(message = "SKU_LIST_REQUIRED")
+    @Valid
+    List<ProductSkuItemRequest> skus;
+
+    List<Long> removedSkuIds;
+}

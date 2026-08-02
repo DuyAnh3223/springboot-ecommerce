@@ -1,4 +1,4 @@
-import { api } from "@/lib/axios";
+import { api } from "@/shared/http/api";
 
 export interface AwsS3FileResponse {
   fileName: string;

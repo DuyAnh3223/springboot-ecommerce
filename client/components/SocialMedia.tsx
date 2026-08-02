@@ -1,7 +1,7 @@
 import React from 'react'
 import { FaYoutube, FaGithub, FaLinkedin, FaFacebook, FaSlack } from "react-icons/fa6";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn } from '@/shared/utils/cn';
 import Link from 'next/link';
 
 interface Props {

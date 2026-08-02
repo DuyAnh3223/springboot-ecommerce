@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import AnnouncementBar from "@/components/AnnouncementBar";
 import AuthInitializer from "@/features/auth/components/AuthInitializer";
 import { getUserSession } from "@/features/auth/actions";
 
 export const metadata: Metadata = {
-  title:{
-    template: "%s | AB Tech Zone",
-    default: "AB Tech Zone"
+  title: {
+    template: "%s | ABTechZone",
+    default: "ABTechZone - Thế Giới Linh Kiện PC & Gaming Rig",
   },
-  description:"AB Tech Zone - Your one stop electronics store for all your needs",
-  
+  description:
+    "ABTechZone - Hệ thống bán lẻ linh kiện máy tính, CPU, Card màn hình VGA, Mainboard, RAM, SSD chính hãng với giá tốt nhất thị trường.",
 };
 
 export default async function ClientLayout({
@@ -23,12 +24,14 @@ export default async function ClientLayout({
   return (
     <AuthInitializer user={user}>
       <div className="flex flex-col min-h-screen">
-        <Header/>
-        <main className="flex-1" >{children}</main>
-        <Footer/>
+        <AnnouncementBar />
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
       </div>
     </AuthInitializer>
   );
 }
+
 
 

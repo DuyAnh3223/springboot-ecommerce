@@ -1,6 +1,6 @@
-import { getCategories } from "@/features/(catalog)/categories/services/category.service";
-import { getProduct } from "@/features/(catalog)/products/services/product.service";
-import { ProductFormPage } from "@/features/(catalog)/products/components/ProductFormPage";
+import { getCategories } from "@/features/categories/services/category.service";
+import { getProduct } from "@/features/products/services/product.service";
+import { ProductFormPage } from "@/features/admin/catalog/products/components/ProductFormPage";
 import { notFound } from "next/navigation";
 
 interface PageProps {

@@ -1,7 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getUserSession } from "@/features/auth/actions";
-import ProfileForm from "@/features/users/components/ProfileForm";
+import ProfileForm from "@/features/customer/account/components/ProfileForm";
 
 export const metadata = {
   title: "Thông tin cá nhân | AB Tech Zone",
