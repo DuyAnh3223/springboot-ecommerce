@@ -16,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import spring.abtechzone.common.service.AwsS3FileService;
+import spring.abtechzone.modules.product.dto.request.ProductSkuItemRequest;
+import spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.entity.Product;
@@ -92,17 +94,15 @@ class ProductSkuServiceTest {
     @Test
     @DisplayName("reconcileSkus with valid request should lock product and reconcile SKUs")
     void reconcileSkus_ValidRequest_ShouldLockProductAndReconcile() {
-        spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest request =
-                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest.builder()
-                        .removedSkuIds(java.util.List.of(20L))
-                        .skus(java.util.List.of(spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest
-                                .ProductSkuItemRequest.builder()
-                                .id(10L)
-                                .sku("SKU-100-RED")
-                                .price(BigDecimal.valueOf(150000))
-                                .stock(20)
-                                .build()))
-                        .build();
+        ProductSkuReconcileRequest request = ProductSkuReconcileRequest.builder()
+                .removedSkuIds(java.util.List.of(20L))
+                .skus(java.util.List.of(ProductSkuItemRequest.builder()
+                        .id(10L)
+                        .sku("SKU-100-RED")
+                        .price(BigDecimal.valueOf(150000))
+                        .stock(20)
+                        .build()))
+                .build();
 
         ProductSku removeSku =
                 ProductSku.builder().id(20L).sku("SKU-100-BLUE").active(true).build();
@@ -124,17 +124,15 @@ class ProductSkuServiceTest {
     @Test
     @DisplayName("reconcileSkus with overlapping removed and upsert ID should throw exception")
     void reconcileSkus_OverlappingRemovedAndUpsertId_ShouldThrowException() {
-        spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest request =
-                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest.builder()
-                        .removedSkuIds(java.util.List.of(10L))
-                        .skus(java.util.List.of(spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest
-                                .ProductSkuItemRequest.builder()
-                                .id(10L)
-                                .sku("SKU-100-RED")
-                                .price(BigDecimal.valueOf(150000))
-                                .stock(20)
-                                .build()))
-                        .build();
+        ProductSkuReconcileRequest request = ProductSkuReconcileRequest.builder()
+                .removedSkuIds(java.util.List.of(10L))
+                .skus(java.util.List.of(ProductSkuItemRequest.builder()
+                        .id(10L)
+                        .sku("SKU-100-RED")
+                        .price(BigDecimal.valueOf(150000))
+                        .stock(20)
+                        .build()))
+                .build();
 
         when(productRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(sampleProduct));
         when(productSkuRepository.findByProductIdAndDeletedAtIsNull(100L)).thenReturn(java.util.List.of(sampleSku));
@@ -146,11 +144,10 @@ class ProductSkuServiceTest {
     @Test
     @DisplayName("reconcileSkus with foreign removedSkuId not belonging to product should throw SKU_NOT_FOUND")
     void reconcileSkus_InvalidRemovedSkuIdScope_ShouldThrowException() {
-        spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest request =
-                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest.builder()
-                        .removedSkuIds(java.util.List.of(999L)) // Foreign SKU ID
-                        .skus(java.util.List.of())
-                        .build();
+        ProductSkuReconcileRequest request = ProductSkuReconcileRequest.builder()
+                .removedSkuIds(java.util.List.of(999L)) // Foreign SKU ID
+                .skus(java.util.List.of())
+                .build();
 
         when(productRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(sampleProduct));
         when(productSkuRepository.findByProductIdAndDeletedAtIsNull(100L)).thenReturn(java.util.List.of(sampleSku));
@@ -162,16 +159,14 @@ class ProductSkuServiceTest {
     @Test
     @DisplayName("reconcileSkus should calculate price min/max aggregates correctly using Object[] bounds")
     void reconcileSkus_PriceMinMaxBounds_ShouldCalculateAggregatesCorrectly() {
-        spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest request =
-                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest.builder()
-                        .skus(java.util.List.of(spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest
-                                .ProductSkuItemRequest.builder()
-                                .id(10L)
-                                .sku("SKU-100-RED")
-                                .price(BigDecimal.valueOf(100000))
-                                .stock(10)
-                                .build()))
-                        .build();
+        ProductSkuReconcileRequest request = ProductSkuReconcileRequest.builder()
+                .skus(java.util.List.of(ProductSkuItemRequest.builder()
+                        .id(10L)
+                        .sku("SKU-100-RED")
+                        .price(BigDecimal.valueOf(100000))
+                        .stock(10)
+                        .build()))
+                .build();
 
         when(productRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(sampleProduct));
         when(productSkuRepository.findByProductIdAndDeletedAtIsNull(100L)).thenReturn(java.util.List.of(sampleSku));
@@ -193,24 +188,21 @@ class ProductSkuServiceTest {
     @Test
     @DisplayName("reconcileSkus with duplicate variant combination should throw AppException")
     void reconcileSkus_DuplicateVariantCombination_ShouldThrowException() {
-        spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest request =
-                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest.builder()
-                        .skus(java.util.List.of(
-                                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest
-                                        .ProductSkuItemRequest.builder()
-                                        .sku("SKU-RED-16GB-1")
-                                        .price(BigDecimal.valueOf(100000))
-                                        .stock(10)
-                                        .attributes(java.util.Map.of("color", "red", "ram", "16gb"))
-                                        .build(),
-                                spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest
-                                        .ProductSkuItemRequest.builder()
-                                        .sku("SKU-RED-16GB-2")
-                                        .price(BigDecimal.valueOf(110000))
-                                        .stock(5)
-                                        .attributes(java.util.Map.of("color", "red", "ram", "16gb"))
-                                        .build()))
-                        .build();
+        ProductSkuReconcileRequest request = ProductSkuReconcileRequest.builder()
+                .skus(java.util.List.of(
+                        ProductSkuItemRequest.builder()
+                                .sku("SKU-RED-16GB-1")
+                                .price(BigDecimal.valueOf(100000))
+                                .stock(10)
+                                .attributes(java.util.Map.of("color", "red", "ram", "16gb"))
+                                .build(),
+                        ProductSkuItemRequest.builder()
+                                .sku("SKU-RED-16GB-2")
+                                .price(BigDecimal.valueOf(110000))
+                                .stock(5)
+                                .attributes(java.util.Map.of("color", "red", "ram", "16gb"))
+                                .build()))
+                .build();
 
         when(productRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(sampleProduct));
         when(productSkuRepository.findByProductIdAndDeletedAtIsNull(100L)).thenReturn(java.util.List.of());
