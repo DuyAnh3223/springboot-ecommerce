@@ -1,24 +1,27 @@
-export const headerData=[
-    {title:"Home", href:"/"},
-    {title:"Shop", href:"/shop"},
-    {title:"Blog", href:"/blog"},
-    {title:"Hot Deal", href:"/deal"},
+export const headerData = [
+  { title: "Trang chủ", href: "/" },
+  { title: "Danh mục", href: "/category" },
+  { title: "Flash Sale", href: "#flash-sale" },
+  { title: "Xây dựng PC", href: "#pc-builder" },
 ];
 
 export const quickLinksData = [
-  { title: "About us", href: "/about" },
-  { title: "Contact us", href: "/contact" },
-  { title: "Terms & Conditions", href: "/terms" },
-  { title: "Privacy Policy", href: "/privacy" },
-  { title: "FAQs", href: "/faqs" },
-  { title: "Help", href: "/help" },
+  { title: "Về ABTechZone", href: "#" },
+  { title: "Liên hệ hỗ trợ", href: "#" },
+  { title: "Điều khoản dịch vụ", href: "#" },
+  { title: "Chính sách bảo mật", href: "#" },
+  { title: "Hỏi đáp (FAQs)", href: "#" },
+  { title: "Hướng dẫn mua hàng", href: "#" },
 ];
+
 export const categoriesData = [
-  { title: "Mobiles", href: "mobiles" },
-  { title: "Appliances", href: "appliances" },
-  { title: "Smartphones", href: "smartphones" },
-  { title: "Air Conditioners", href: "air-conditioners" },
-  { title: "Washing Machine", href: "washing-machine" },
-  { title: "Kitchen Appliances", href: "kitchen-appliances" },
-  { title: "Gadget accessories", href: "gadget-accessories" },
+  { title: "Vi xử lý (CPU)", href: "cpu" },
+  { title: "Tản nhiệt CPU", href: "cpu-cooler" },
+  { title: "Bo mạch chủ (Mainboard)", href: "motherboard" },
+  { title: "Bộ nhớ RAM", href: "ram" },
+  { title: "Ổ cứng (SSD/HDD)", href: "storage" },
+  { title: "Card màn hình (VGA)", href: "vga" },
+  { title: "Nguồn máy tính (PSU)", href: "psu" },
+  { title: "Vỏ máy tính (Case)", href: "case" },
 ];
+

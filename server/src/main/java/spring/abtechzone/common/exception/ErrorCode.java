@@ -72,6 +72,8 @@ public enum ErrorCode {
     PRODUCT_CATEGORY_CANNOT_BE_CHANGED(
             1060, "Product category cannot be changed after creation", HttpStatus.BAD_REQUEST),
     ACCESS_DENIED(1061, "Access denied", HttpStatus.FORBIDDEN),
+    ATTRIBUTE_SORTABLE_INVALID_COMBINATION(
+            1062, "Sortable attribute cannot be multi-value or variant-defining", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

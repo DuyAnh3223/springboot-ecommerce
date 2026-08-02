@@ -16,6 +16,9 @@ public class AssignAttributeRequest {
     Boolean isFilterable = true;
 
     @Builder.Default
+    Boolean isSortable = false;
+
+    @Builder.Default
     Boolean isVariantDefining = false;
 
     @Builder.Default

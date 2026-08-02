@@ -268,6 +268,7 @@ public class ProductService {
         return toDetailResponse(product);
     }
 
+    @PreAuthorize("permitAll()")
     public ProductResponse toDetailResponse(Product product) {
         if (product == null) {
             return null;
@@ -288,6 +289,7 @@ public class ProductService {
         return response;
     }
 
+    @PreAuthorize("permitAll()")
     public ProductResponse toSummaryResponse(Product product, String resolvedPrimaryImageUrl) {
         if (product == null) {
             return null;

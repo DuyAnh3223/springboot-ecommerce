@@ -1,0 +1,54 @@
+import { PageResponse } from "@/shared/types/page.type";
+
+export interface AttributeResponse {
+  id: number;
+  code: string;
+  name: string;
+  dataType: string;
+  unit: string | null;
+  enumValues: any[] | null;
+}
+
+export interface AttributeRequest {
+  code?: string;
+  name: string;
+  dataType: string;
+  unit?: string | null;
+  enumValues?: any[] | null;
+}
+
+export interface CategoryAttributeResponse {
+  id: number; // ID of the CategoryAttribute record
+  attributeId: number;
+  code: string;
+  name: string;
+  dataType: string;
+  unit: string | null;
+  enumValues: any[] | null;
+  isFilterable: boolean;
+  isSortable: boolean;
+  isVariantDefining: boolean;
+  isCompatibilityKey: boolean;
+  isRequired: boolean;
+  isMultiValue: boolean;
+  sortOrder: number;
+}
+
+export interface AssignAttributeRequest {
+  attributeId: number;
+  isFilterable: boolean;
+  isSortable?: boolean;
+  isVariantDefining: boolean;
+  isCompatibilityKey: boolean;
+  isRequired: boolean;
+  isMultiValue: boolean;
+  sortOrder: number;
+}
+
+export interface GetAttributesParams {
+  keyword?: string;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  order?: "asc" | "desc";
+}

@@ -9,28 +9,28 @@ interface ContactItemData{
 
 const data: ContactItemData[] = [
   {
-    title: "Visit Us",
-    subtitle: "HCMC, Viet Nam",
+    title: "Cửa hàng ABTechZone",
+    subtitle: "TP. Hồ Chí Minh, Việt Nam",
     icon: (
       <MapPin className="h-6 w-6 text-gray-600 group-hover:text-primary transition-colors" />
     ),
   },
   {
-    title: "Call Us",
+    title: "Hotline hỗ trợ",
     subtitle: "+84 958 648 597",
     icon: (
       <Phone className="h-6 w-6 text-gray-600 group-hover:text-primary transition-colors" />
     ),
   },
   {
-    title: "Working Hours",
-    subtitle: "Mon - Fri: 9:00 AM - 6:00 PM",
+    title: "Giờ làm việc",
+    subtitle: "Thứ 2 - Chủ Nhật: 8:00 - 21:00",
     icon: (
       <Clock className="h-6 w-6 text-gray-600 group-hover:text-primary transition-colors" />
     ),
   },
   {
-    title: "Email Us",
+    title: "Email tư vấn",
     subtitle: "abtechzone@gmail.com",
     icon: (
       <Mail className="h-6 w-6 text-gray-600 group-hover:text-primary transition-colors " />

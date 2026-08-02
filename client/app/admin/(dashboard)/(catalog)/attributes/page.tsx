@@ -1,5 +1,5 @@
-import { getGlobalAttributes } from "@/features/(catalog)/attributes/services/attribute.service";
-import AttributesClient from "@/features/(catalog)/attributes/components/AttributesClient";
+import { getGlobalAttributes } from "@/features/attributes/services/attribute.service";
+import AttributesClient from "@/features/admin/catalog/attributes/components/AttributesClient";
 
 interface PageProps {
   searchParams: Promise<{

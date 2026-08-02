@@ -1,7 +1,7 @@
 import React from 'react'
 import { Title } from './ui/text'
 import Link from 'next/link'
-import { banner_1 } from '@/images'
+import { banner_1 } from '@/shared/images'
 import Image from 'next/image'
 
 const HomeBanner = () => {

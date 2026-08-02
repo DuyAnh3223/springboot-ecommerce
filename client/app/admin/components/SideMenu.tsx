@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/utils/cn'
 import { 
   LayoutDashboard, 
   Package, 
@@ -31,41 +31,41 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   {
-    title: 'Tổng quan',
+    title: 'Tá»•ng quan',
     href: '/admin',
     icon: LayoutDashboard,
   },
   {
-    title: 'Khách hàng',
+    title: 'KhÃ¡ch hÃ ng',
     href: '/admin/customers',
     icon: Users,
   },
   {
-    title: 'Đơn hàng',
+    title: 'ÄÆ¡n hÃ ng',
     href: '/admin/orders',
     icon: ShoppingCart,
   },
   {
-    title: 'Danh mục',
+    title: 'Danh má»¥c',
     icon: LayoutGrid,
     subMenu: [
       {
-        title: 'Danh sách danh mục',
+        title: 'Danh sÃ¡ch danh má»¥c',
         href: '/admin/categories',
       },
       {
-        title: 'Thuộc tính ',
+        title: 'Thuá»™c tÃ­nh ',
         href: '/admin/attributes',
       },
     ]
   },
   {
-    title: 'Sản phẩm',
+    title: 'Sáº£n pháº©m',
     href: '/admin/products',
     icon: Package,
   },
   {
-    title: 'Cài đặt',
+    title: 'CÃ i Ä‘áº·t',
     href: '/admin/settings',
     icon: Settings,
   },
@@ -106,7 +106,7 @@ export default function SideMenu() {
       {/* Nav Menu */}
       <nav className="flex-1 px-4 py-6 space-y-1.5">
         <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-3">
-          Quản lý hệ thống
+          Quáº£n lÃ½ há»‡ thá»‘ng
         </div>
         {menuItems.map((item) => {
           const Icon = item.icon
@@ -194,7 +194,7 @@ export default function SideMenu() {
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all cursor-pointer"
         >
           <ArrowLeft className="size-4" />
-          <span>Về trang cửa hàng</span>
+          <span>Vá» trang cá»­a hÃ ng</span>
         </Link>
       </div>
     </aside>

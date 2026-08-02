@@ -65,6 +65,14 @@ public class CategoryService {
         return categoryMapper.toCategoryResponse(category, awsS3FileService);
     }
 
+    @PreAuthorize("permitAll()")
+    public CategoryResponse getCategoryBySlug(String slug) {
+        Category category = categoryRepository
+                .findBySlugAndIsActiveTrue(slug)
+                .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
+        return categoryMapper.toCategoryResponse(category, awsS3FileService);
+    }
+
     @Transactional
     public CategoryResponse updateCategory(Long id, CategoryRequest request) {
         Category category =

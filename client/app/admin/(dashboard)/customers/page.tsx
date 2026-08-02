@@ -1,6 +1,6 @@
 import React from "react"
 import { getUsers } from "@/features/users/services/user.service"
-import { CustomersClient } from "@/features/users/components/CustomersClient"
+import { CustomersClient } from "@/features/admin/customers/components/CustomersClient"
 import { Users } from "lucide-react"
 
 interface PageProps {

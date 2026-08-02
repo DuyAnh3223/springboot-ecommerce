@@ -28,6 +28,15 @@ public class ProductSpecifications {
                 categoryId == null ? null : cb.equal(root.get("category").get("id"), categoryId);
     }
 
+    public static Specification<Product> hasActiveCategory(Long categoryId) {
+        return (root, query, cb) -> {
+            if (categoryId == null) return null;
+            return cb.and(
+                    cb.equal(root.get("category").get("id"), categoryId),
+                    cb.equal(root.get("category").get("isActive"), true));
+        };
+    }
+
     public static Specification<Product> isPublished() {
         return (root, query, cb) -> cb.and(cb.equal(root.get(DRAFT), false), cb.equal(root.get(PUBLISHED), true));
     }

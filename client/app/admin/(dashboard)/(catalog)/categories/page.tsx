@@ -1,5 +1,5 @@
-import { getCategories } from "@/features/(catalog)/categories/services/category.service";
-import { CategoriesClient } from "@/features/(catalog)/categories/components/CategoriesClient";
+import { getCategories } from "@/features/categories/services/category.service";
+import { CategoriesClient } from "@/features/admin/catalog/categories/components/CategoriesClient";
 
 interface PageProps {
   searchParams: Promise<{

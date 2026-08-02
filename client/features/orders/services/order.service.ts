@@ -1,4 +1,4 @@
-import { api } from "@/lib/axios";
+import { api } from "@/shared/http/api";
 import { OrderResponse } from "../order.type";
 
 export async function getUserOrders(userId: string): Promise<OrderResponse[]> {
