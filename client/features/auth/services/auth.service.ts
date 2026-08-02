@@ -1,4 +1,4 @@
-import { api } from "@/lib/axios";
+import { api } from "@/shared/http/api";
 import { SignInInput, SignUpInput } from "../schemas/auth.schema";
 import { PassThrough } from "stream";
 

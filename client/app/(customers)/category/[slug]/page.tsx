@@ -4,13 +4,13 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { ChevronRight, Home, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCatalogFilters } from "@/features/(catalog)/catalog/hooks/useCatalogFilters";
-import { catalogService, PageResponse } from "@/features/(catalog)/catalog/services/catalogService";
-import { CategoryFacetData, CatalogProductItem } from "@/features/(catalog)/catalog/types/catalog.types";
-import { CatalogSidebar } from "@/features/(catalog)/catalog/components/CatalogSidebar";
-import { CatalogTable } from "@/features/(catalog)/catalog/components/CatalogTable";
-import { CatalogFilterChips } from "@/features/(catalog)/catalog/components/CatalogFilterChips";
-import { CatalogFilterDrawer } from "@/features/(catalog)/catalog/components/CatalogFilterDrawer";
+import { useCatalogFilters } from "@/features/customer/catalog/hooks/useCatalogFilters";
+import { catalogService, PageResponse } from "@/features/customer/catalog/services/catalogService";
+import { CategoryFacetData, CatalogProductItem } from "@/features/customer/catalog/types/catalog.types";
+import { CatalogSidebar } from "@/features/customer/catalog/components/CatalogSidebar";
+import { CatalogTable } from "@/features/customer/catalog/components/CatalogTable";
+import { CatalogFilterChips } from "@/features/customer/catalog/components/CatalogFilterChips";
+import { CatalogFilterDrawer } from "@/features/customer/catalog/components/CatalogFilterDrawer";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;

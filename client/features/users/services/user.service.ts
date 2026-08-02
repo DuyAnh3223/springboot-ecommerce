@@ -1,4 +1,4 @@
-import { api } from "@/lib/axios";
+import { api } from "@/shared/http/api";
 import { UserResponse, GetUsersParams, UserUpdateRequest } from "../user.type";
 
 import { PageResponse } from "@/shared/types/page.type";

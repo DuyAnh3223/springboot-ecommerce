@@ -6,11 +6,15 @@ export async function uploadFileAction(
   formData: FormData,
 ): Promise<{ data?: AwsS3FileResponse; error?: string }> {
   try {
-    const file = formData.get("file") as File;
-    const folder = (formData.get("folder") as string) || "products";
+    const file = formData.get("file");
+    const folder = formData.get("folder");
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return { error: "Vui lòng chọn file cần tải lên" };
+    }
+
+    if (typeof folder !== "string" || !folder.trim()) {
+      return { error: "Vui lòng cung cấp thư mục tải file" };
     }
 
     const res = await uploadFile(file, folder);

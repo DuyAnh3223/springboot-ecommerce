@@ -1,7 +1,7 @@
-import { getProducts } from "@/features/(catalog)/products/services/product.service";
-import { getCategories } from "@/features/(catalog)/categories/services/category.service";
-import { ProductsClient } from "@/features/(catalog)/products/components/ProductsClient";
-import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
+import { getProducts } from "@/features/products/services/product.service";
+import { getCategories } from "@/features/categories/services/category.service";
+import { ProductsClient } from "@/features/admin/catalog/products/components/ProductsClient";
+import { CategoryResponse } from "@/features/categories/category.type";
 
 interface PageProps {
   searchParams: Promise<{

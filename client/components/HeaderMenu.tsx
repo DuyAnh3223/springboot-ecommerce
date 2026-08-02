@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { headerData, categoriesData } from "@/constants/data";
-import { getCategories } from "@/features/(catalog)/categories/services/category.service";
-import { CategoryResponse } from "@/features/(catalog)/categories/category.type";
+import { getCategories } from "@/features/categories/services/category.service";
+import { CategoryResponse } from "@/features/categories/category.type";
 import { ChevronDown, Cpu, Fan, CircuitBoard, MemoryStick, HardDrive, Monitor, Zap, Box, Folder } from "lucide-react";
-import { getSafeImageUrl } from "@/lib/utils";
+import { getSafeImageUrl } from "@/shared/utils/image";
 import { useOutsideClick } from "@/shared/hooks";
 
 const categoryIconMap: Record<string, React.ReactNode> = {
@@ -45,7 +45,7 @@ const HeaderMenu = () => {
         }
       })
       .catch((err) => {
-        console.warn("Không thể tải danh mục từ API:", err);
+        console.warn("KhÃ´ng thá»ƒ táº£i danh má»¥c tá»« API:", err);
       });
     return () => {
       isMounted = false;
@@ -106,14 +106,14 @@ const HeaderMenu = () => {
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xl ring-1 ring-black/5">
                     <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
                       <span className="text-xs font-bold uppercase tracking-wider text-shop_light_green">
-                        Danh mục linh kiện PC
+                        Danh má»¥c linh kiá»‡n PC
                       </span>
                       <Link
                         href="/category"
                         onClick={() => setIsOpen(false)}
                         className="text-xs text-slate-500 hover:text-shop_light_green hoverEffect font-medium"
                       >
-                        Xem tất cả &rarr;
+                        Xem táº¥t cáº£ &rarr;
                       </Link>
                     </div>
 
