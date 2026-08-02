@@ -28,7 +28,9 @@ jobs:
           context: ./server
           file: ./server/Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/backend-prod:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/backend-prod:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/backend-prod:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -41,7 +43,9 @@ jobs:
           build-args: |
             NEXT_PUBLIC_SPRING_API_URL=${{ secrets.NEXT_PUBLIC_SPRING_API_URL }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/frontend-prod:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/frontend-prod:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/frontend-prod:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -77,10 +81,9 @@ jobs:
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             
             
-            docker compose -f docker-compose.prod.yml pull
-            
-            
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml pull
+
+            IMAGE_TAG=${{ github.sha }} docker compose -f docker-compose.prod.yml up -d --remove-orphans
             
             
             docker image prune -f
