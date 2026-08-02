@@ -24,7 +24,7 @@ import spring.abtechzone.modules.category.entity.Attribute;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.product.entity.Product;
 
-class CatalogProductSpecificationsTest {
+class CatalogSpecificationsTest {
 
     private Root<Product> root;
     private CriteriaQuery<?> query;
@@ -45,7 +45,7 @@ class CatalogProductSpecificationsTest {
         @Test
         @DisplayName("Returns null predicate when brandId is null")
         void hasBrand_null_returnsNull() {
-            var spec = CatalogProductSpecifications.hasBrand(null);
+            var spec = CatalogSpecifications.hasBrand(null);
             Predicate predicate = spec.toPredicate(root, query, cb);
             assertThat(predicate).isNull();
         }
@@ -62,7 +62,7 @@ class CatalogProductSpecificationsTest {
             when(brandPath.get("id")).thenReturn(idPath);
             when(cb.equal(idPath, 100L)).thenReturn(expectedPredicate);
 
-            var spec = CatalogProductSpecifications.hasBrand(100L);
+            var spec = CatalogSpecifications.hasBrand(100L);
             Predicate predicate = spec.toPredicate(root, query, cb);
 
             assertThat(predicate).isEqualTo(expectedPredicate);
@@ -76,7 +76,7 @@ class CatalogProductSpecificationsTest {
         @Test
         @DisplayName("Returns null predicate when both min and max are null")
         void priceRange_bothNull_returnsNull() {
-            var spec = CatalogProductSpecifications.priceRange(null, null);
+            var spec = CatalogSpecifications.priceRange(null, null);
             Predicate predicate = spec.toPredicate(root, query, cb);
             assertThat(predicate).isNull();
         }
@@ -92,7 +92,7 @@ class CatalogProductSpecificationsTest {
             when(cb.greaterThanOrEqualTo(priceMinPath, new BigDecimal("1000"))).thenReturn(expectedPredicate);
             when(cb.and(any(Predicate[].class))).thenAnswer(invocation -> expectedPredicate);
 
-            var spec = CatalogProductSpecifications.priceRange(new BigDecimal("1000"), null);
+            var spec = CatalogSpecifications.priceRange(new BigDecimal("1000"), null);
             Predicate predicate = spec.toPredicate(root, query, cb);
 
             assertThat(predicate).isNotNull();
@@ -106,7 +106,7 @@ class CatalogProductSpecificationsTest {
         @Test
         @DisplayName("Returns null specification when request attributes map is empty")
         void attributeFilters_empty_returnsNull() {
-            var spec = CatalogProductSpecifications.attributeFilters(Map.of(), List.of());
+            var spec = CatalogSpecifications.attributeFilters(Map.of(), List.of());
             assertThat(spec).isNull();
         }
 
@@ -121,7 +121,7 @@ class CatalogProductSpecificationsTest {
             ca.setAttribute(attr);
             ca.setIsFilterable(false);
 
-            var spec = CatalogProductSpecifications.attributeFilters(Map.of("COLOR", List.of("Red")), List.of(ca));
+            var spec = CatalogSpecifications.attributeFilters(Map.of("COLOR", List.of("Red")), List.of(ca));
 
             assertThat(spec).isNull();
         }
@@ -136,7 +136,7 @@ class CatalogProductSpecificationsTest {
         void catalogSort_countQuery_skipsOrderBy() {
             doReturn(Long.class).when(query).getResultType();
 
-            var spec = CatalogProductSpecifications.catalogSort("name", "asc", List.of());
+            var spec = CatalogSpecifications.catalogSort("name", "asc", List.of());
             Predicate predicate = spec.toPredicate(root, query, cb);
 
             assertThat(predicate).isNull();
@@ -154,7 +154,7 @@ class CatalogProductSpecificationsTest {
             when(root.get("name")).thenReturn(namePath);
             when(cb.asc(namePath)).thenReturn(expectedOrder);
 
-            var spec = CatalogProductSpecifications.catalogSort("name", "asc", List.of());
+            var spec = CatalogSpecifications.catalogSort("name", "asc", List.of());
             Predicate predicate = spec.toPredicate(root, query, cb);
 
             assertThat(predicate).isNull();

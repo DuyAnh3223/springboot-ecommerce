@@ -25,6 +25,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ENDPOINTS = {
         "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
     };
+    private static final String[] PUBLIC_CUSTOMER_ENDPOINTS = {
+        "/catalog/**", "/categories", "/categories/**",
+    };
     private static final String[] SWAGGER_ENDPOINTS = {
         "/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/api-docs.yaml", "/swagger-resources/**", "/webjars/**"
     };
@@ -44,6 +47,8 @@ public class SecurityConfig {
         httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(SWAGGER_ENDPOINTS)
                 .permitAll()
                 .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+                .permitAll()
+                .requestMatchers(HttpMethod.GET, PUBLIC_CUSTOMER_ENDPOINTS)
                 .permitAll()
                 .anyRequest()
                 .authenticated());

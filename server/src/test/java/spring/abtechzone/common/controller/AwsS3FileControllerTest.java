@@ -65,7 +65,7 @@ class AwsS3FileControllerTest {
 
         when(awsS3FileService.upload(any(), eq("uploads"))).thenReturn(awsS3FileResponse);
 
-        mockMvc.perform(multipart("/files/upload").file(file))
+        mockMvc.perform(multipart("/files/upload").file(file).param("folder", "uploads"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.fileKey").value("uploads/test.jpg"))
                 .andExpect(jsonPath("$.result.fileUrl").value("https://bucket.s3.amazonaws.com/uploads/test.jpg"));
