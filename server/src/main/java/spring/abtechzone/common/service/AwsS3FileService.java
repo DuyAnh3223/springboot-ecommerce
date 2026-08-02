@@ -154,8 +154,11 @@ public class AwsS3FileService {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        String prefix = (folderName != null && !folderName.isBlank()) ? folderName.trim() + "/" : "uploads/";
-        String fileKey = prefix + UUID.randomUUID();
+        if (folderName == null || !folderName.matches("[A-Za-z0-9_-]+")) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+
+        String fileKey = folderName + "/" + UUID.randomUUID();
 
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()

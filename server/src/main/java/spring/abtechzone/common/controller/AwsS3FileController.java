@@ -30,8 +30,7 @@ public class AwsS3FileController {
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResult<AwsS3FileResponse> upload(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "folder", required = false, defaultValue = "uploads") String folder) {
+            @RequestParam("file") MultipartFile file, @RequestParam("folder") String folder) {
         return ApiResult.<AwsS3FileResponse>builder()
                 .result(awsS3FileService.upload(file, folder))
                 .build();
