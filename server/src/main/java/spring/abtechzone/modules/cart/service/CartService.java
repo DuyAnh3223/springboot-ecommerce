@@ -48,38 +48,65 @@ public class CartService {
     // ────────────────────────────────────────────────────────
     @Transactional
     public CartResponse addToCart(CartItemRequest request) {
-        User user = getAuthenticatedUser();
+        if (request == null || request.getQuantity() == null || request.getQuantity() < 1) {
+            throw new AppException(ErrorCode.CART_ITEM_QUANTITY_INVALID);
+        }
+
+        if (request.getProductSkuId() == null) {
+            throw new AppException(ErrorCode.SKU_NOT_FOUND);
+        }
 
         // Tìm ProductSku
         ProductSku productSku = productSkuRepository
                 .findById(request.getProductSkuId())
                 .orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
 
-        // Tìm hoặc tạo Cart cho user
-        Cart cart = cartRepository
-                .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
-                .orElseGet(() -> {
-                    Cart newCart = Cart.builder()
-                            .user(user)
-                            .status(CartStatus.ACTIVE)
-                            .items(new ArrayList<>())
-                            .build();
-                    return cartRepository.save(newCart);
-                });
+        User user = getAuthenticatedUser();
 
-        // Kiểm tra xem ProductSku đã có trong giỏ hàng chưa
-        Optional<CartItem> existingItem = cart.getItems().stream()
+        int stock = productSku.getStock() != null ? productSku.getStock() : 0;
+
+        // Validation 1: Request quantity must be <= stock
+        if (request.getQuantity() > stock) {
+            throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
+        }
+
+        // Validation 2: Cumulative quantity must be <= stock
+        Optional<Cart> existingCartOpt = cartRepository.findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE);
+        Optional<CartItem> existingItem = Optional.empty();
+        if (existingCartOpt.isPresent()) {
+            existingItem = existingCartOpt.get().getItems().stream()
+                    .filter(item -> item.getProductSku().getId().equals(productSku.getId()))
+                    .findFirst();
+        }
+
+        if (existingItem.isPresent()) {
+            long newQuantity = (long) existingItem.get().getQuantity() + request.getQuantity();
+            if (newQuantity > stock) {
+                throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
+            }
+        }
+
+        // Cả hai validation đều đã pass → tiến hành lấy/tạo Cart và lưu Item
+        Cart cart = existingCartOpt.orElseGet(() -> {
+            Cart newCart = Cart.builder()
+                    .user(user)
+                    .status(CartStatus.ACTIVE)
+                    .items(new ArrayList<>())
+                    .build();
+            return cartRepository.save(newCart);
+        });
+
+        // Re-check item trong giỏ (có thể là cart cũ hoặc vừa tạo)
+        Optional<CartItem> itemInCartOpt = cart.getItems().stream()
                 .filter(item -> item.getProductSku().getId().equals(productSku.getId()))
                 .findFirst();
 
-        if (existingItem.isPresent()) {
-            // Đã tồn tại → cộng dồn số lượng, cập nhật giá mới nhất
-            CartItem item = existingItem.get();
+        if (itemInCartOpt.isPresent()) {
+            CartItem item = itemInCartOpt.get();
             item.setQuantity(item.getQuantity() + request.getQuantity());
             item.setUnitPrice(productSku.getPrice());
             cartItemRepository.save(item);
         } else {
-            // Chưa tồn tại → tạo CartItem mới
             CartItem newItem = CartItem.builder()
                     .cart(cart)
                     .productSku(productSku)
@@ -96,7 +123,7 @@ public class CartService {
     // ────────────────────────────────────────────────────────
     // GET /cart — Lấy giỏ hàng (giá & trạng thái mới nhất)
     // ────────────────────────────────────────────────────────
-    @Transactional(readOnly = true)
+    @Transactional
     public CartResponse getCart() {
         User user = getAuthenticatedUser();
 
@@ -105,9 +132,17 @@ public class CartService {
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         // Sync giá mới nhất từ ProductSku cho mỗi item
+        boolean priceChanged = false;
         for (CartItem item : cart.getItems()) {
             ProductSku sku = item.getProductSku();
-            item.setUnitPrice(sku.getPrice());
+            if (item.getUnitPrice() == null || item.getUnitPrice().compareTo(sku.getPrice()) != 0) {
+                item.setUnitPrice(sku.getPrice());
+                priceChanged = true;
+            }
+        }
+
+        if (priceChanged) {
+            cartRepository.save(cart);
         }
 
         return cartMapper.toCartResponse(cart);
