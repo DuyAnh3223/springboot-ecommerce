@@ -57,8 +57,8 @@
 ### 2.5 Cart Module (`spring.abtechzone.modules.cart`)
 - **`CartService`**:
   - Active Cart Resolution: Calls `cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE)`.
-  - `addToCart(CartItemRequest)`: Creates cart if absent, accumulates quantity if SKU exists, or appends new `CartItem`.
-  - `getCart()`: Synchronizes unit prices from current `ProductSku.price` on read.
+  - `addToCart(CartItemRequest)`: Validates request format, creates cart if absent, accumulates quantity if SKU exists, or appends new `CartItem`, validating cumulative quantity against current `ProductSku.stock`.
+  - `getCart()`: Synchronizes unit prices from current `ProductSku.price` on read and persists synced prices to the database.
 
 ### 2.6 Order Module (`spring.abtechzone.modules.order`)
 - **`OrderService`**:
