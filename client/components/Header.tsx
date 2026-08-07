@@ -10,7 +10,11 @@ import FavoriteButton from "./FavoriteButton";
 import SignIn from "./SignIn";
 import MobileMenu from "./MobileMenu";
 
-const Header = () => {
+interface HeaderProps {
+  initialCartQuantity?: number;
+}
+
+const Header = ({ initialCartQuantity = 0 }: HeaderProps) => {
   return (
     <header className="bg-white py-4 border-b border-slate-150 sticky top-0 z-40 shadow-xs">
       <Container className="flex items-center justify-between text-lightColor gap-4">
@@ -33,7 +37,7 @@ const Header = () => {
             <Wrench className="w-3.5 h-3.5" />
             <span>Build PC</span>
           </Link>
-          <CartIcon />
+          <CartIcon initialQuantity={initialCartQuantity} />
           <FavoriteButton />
           <SignIn />
         </div>
