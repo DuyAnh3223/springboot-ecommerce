@@ -48,7 +48,8 @@ export interface CatalogProductItem {
     id: number;
     name: string;
   };
-  attributes?: Record<string, any>;
+  singleSkuId?: number;
+  attributes?: Record<string, string | number | boolean | string[]>;
 }
 
 export interface CatalogFilterParams {
