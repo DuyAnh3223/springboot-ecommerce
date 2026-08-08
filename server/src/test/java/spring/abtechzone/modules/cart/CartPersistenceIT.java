@@ -64,7 +64,6 @@ class CartPersistenceIT extends BaseIT {
     @Autowired
     private EntityManager entityManager;
 
-
     @MockitoBean
     private AuthService authService;
 
