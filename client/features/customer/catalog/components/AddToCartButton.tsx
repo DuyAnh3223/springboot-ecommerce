@@ -35,7 +35,11 @@ export function AddToCartButton({ product, className, iconOnly = false }: AddToC
 
     setLoading(true);
     try {
-      await handleAddToCart(product.singleSkuId, 1);
+      await handleAddToCart(product.singleSkuId, 1, {
+        productName: product.name,
+        imageUrl: product.thumbnail || product.primaryImageUrl || "",
+        unitPrice: product.priceMin || 0,
+      });
     } finally {
       setLoading(false);
     }

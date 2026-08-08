@@ -2,6 +2,7 @@
 
 import { useAsyncAction } from "@/shared/hooks/useAsyncAction";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/features/auth/stores/auth.store";
 import {
   addCartItemAction,
   updateCartItemAction,
@@ -9,14 +10,38 @@ import {
   clearCartAction,
 } from "../actions/cart.actions";
 import { useCartStore } from "../stores/cart.store";
+import {
+  addGuestCartItem,
+  updateGuestCartItemQuantity,
+  removeGuestCartItem,
+  clearGuestCart,
+} from "../utils/guest-cart.utils";
 
 export function useCart() {
   const router = useRouter();
   const { isLoading, error, setError, run } = useAsyncAction();
   const store = useCartStore();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  const isGuestMode = !isAuthenticated || store.isGuest;
 
   const handleUpdateQuantity = async (skuId: number, quantity: number) => {
     if (quantity < 1) return;
+
+    if (isGuestMode) {
+      store.setPendingSku(skuId, true);
+      const updatedItems = updateGuestCartItemQuantity(skuId, quantity);
+      store.setCart({
+        cartId: null,
+        status: "ACTIVE",
+        items: updatedItems,
+        userId: null,
+        isGuest: true,
+      });
+      store.setPendingSku(skuId, false);
+      return;
+    }
+
     const previousSnapshot = store.getSnapshot();
     const previousSelected = store.selectedSkuIds;
 
@@ -39,6 +64,20 @@ export function useCart() {
   };
 
   const handleRemoveItem = async (skuId: number) => {
+    if (isGuestMode) {
+      store.setPendingSku(skuId, true);
+      const updatedItems = removeGuestCartItem(skuId);
+      store.setCart({
+        cartId: null,
+        status: "ACTIVE",
+        items: updatedItems,
+        userId: null,
+        isGuest: true,
+      });
+      store.setPendingSku(skuId, false);
+      return;
+    }
+
     const previousSnapshot = store.getSnapshot();
     const previousSelected = store.selectedSkuIds;
 
@@ -63,6 +102,21 @@ export function useCart() {
   const handleClearCart = async () => {
     if (store.isClearPending) return;
 
+    if (isGuestMode) {
+      store.setIsClearPending(true);
+      clearGuestCart();
+      store.clear();
+      store.setCart({
+        cartId: null,
+        status: "ACTIVE",
+        items: [],
+        userId: null,
+        isGuest: true,
+      });
+      store.setIsClearPending(false);
+      return;
+    }
+
     const previousSnapshot = store.getSnapshot();
     const previousSelected = store.selectedSkuIds;
 
@@ -84,7 +138,42 @@ export function useCart() {
     }
   };
 
-  const handleAddToCart = async (productSkuId: number, quantity: number = 1) => {
+  const handleAddToCart = async (
+    productSkuId: number,
+    quantity: number = 1,
+    itemDetails?: {
+      productName?: string;
+      imageUrl?: string;
+      unitPrice?: number;
+      skuCode?: string;
+    }
+  ) => {
+    if (isGuestMode) {
+      const guestItem = {
+        productSkuId,
+        skuCode: itemDetails?.skuCode || "",
+        productName: itemDetails?.productName || "Sản phẩm",
+        imageUrl: itemDetails?.imageUrl || "",
+        quantity,
+        unitPrice: itemDetails?.unitPrice || 0,
+      };
+
+      const result = addGuestCartItem(guestItem);
+      if (!result.success) {
+        setError(result.error || "Không thể thêm vào giỏ hàng.");
+        return false;
+      }
+
+      store.setCart({
+        cartId: null,
+        status: "ACTIVE",
+        items: result.items,
+        userId: null,
+        isGuest: true,
+      });
+      return true;
+    }
+
     const result = await run(() => addCartItemAction({ productSkuId, quantity }));
 
     if (result && result.success && result.data) {
