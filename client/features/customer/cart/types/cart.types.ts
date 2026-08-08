@@ -12,11 +12,16 @@ export interface CartSnapshot {
   status: string;
   items: CartItem[];
   userId: string | null;
+  isGuest?: boolean;
 }
 
 export interface AddCartItemInput {
   productSkuId: number;
   quantity: number;
+  productName?: string;
+  imageUrl?: string;
+  unitPrice?: number;
+  skuCode?: string;
 }
 
 export interface UpdateCartItemInput {

@@ -11,6 +11,7 @@ interface CartState {
   hydrationKey: string | null;
   pendingSkuIds: number[];
   isClearPending: boolean;
+  isGuest: boolean;
 
   // Actions
   setCart: (snapshot: CartSnapshot, hydrationKey?: string) => void;
@@ -42,6 +43,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   hydrationKey: null,
   pendingSkuIds: [],
   isClearPending: false,
+  isGuest: false,
 
   setCart: (snapshot, hydrationKey) => {
     const newItems = snapshot.items || [];
@@ -61,6 +63,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         selectedSkuIds: newSelectedSkuIds,
         isHydrated: true,
         hydrationKey: hydrationKey ?? state.hydrationKey,
+        isGuest: snapshot.isGuest ?? false,
       };
     });
   },
@@ -76,6 +79,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       hydrationKey: hydrationKey ?? null,
       pendingSkuIds: [],
       isClearPending: false,
+      isGuest: false,
     });
   },
 
@@ -93,6 +97,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       items: newItems,
       selectedSkuIds: restoredSelected,
       isHydrated: true,
+      isGuest: snapshot.isGuest ?? false,
     });
   },
 
@@ -174,7 +179,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   getSnapshot: () => {
-    const { cartId, status, items, userId } = get();
-    return { cartId, status, items, userId };
+    const { cartId, status, items, userId, isGuest } = get();
+    return { cartId, status, items, userId, isGuest };
   },
 }));
