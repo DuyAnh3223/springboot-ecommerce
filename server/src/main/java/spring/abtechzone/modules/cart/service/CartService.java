@@ -12,7 +12,6 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
@@ -27,7 +26,7 @@ import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.repository.UserRepository;
+import spring.abtechzone.modules.user.service.UserService;
 
 @Service
 @Slf4j
@@ -35,16 +34,15 @@ import spring.abtechzone.modules.user.repository.UserRepository;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class CartService {
 
-    UserRepository userRepository;
     CartRepository cartRepository;
     CartItemRepository cartItemRepository;
     ProductSkuRepository productSkuRepository;
     CartItemMapper cartItemMapper;
     CartMapper cartMapper;
-    AuthService authService;
+    UserService userService;
 
     // ────────────────────────────────────────────────────────
-    // POST /cart/add — Thêm sản phẩm vào giỏ
+    // POST /cart/add
     // ────────────────────────────────────────────────────────
     @Transactional
     public CartResponse addToCart(CartItemRequest request) {
@@ -56,12 +54,12 @@ public class CartService {
             throw new AppException(ErrorCode.SKU_NOT_FOUND);
         }
 
-        // Tìm ProductSku
+        // Find ProductSku
         ProductSku productSku = productSkuRepository
                 .findById(request.getProductSkuId())
                 .orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
 
-        User user = getAuthenticatedUser();
+        User user = userService.getCurrentUser();
 
         int stock = productSku.getStock() != null ? productSku.getStock() : 0;
 
@@ -86,7 +84,7 @@ public class CartService {
             }
         }
 
-        // Cả hai validation đều đã pass → tiến hành lấy/tạo Cart và lưu Item
+        // Both validation pass  → get/create Cart and Save Item
         Cart cart = existingCartOpt.orElseGet(() -> {
             Cart newCart = Cart.builder()
                     .user(user)
@@ -96,7 +94,7 @@ public class CartService {
             return cartRepository.save(newCart);
         });
 
-        // Re-check item trong giỏ (có thể là cart cũ hoặc vừa tạo)
+        // Re-check item in cart
         Optional<CartItem> itemInCartOpt = cart.getItems().stream()
                 .filter(item -> item.getProductSku().getId().equals(productSku.getId()))
                 .findFirst();
@@ -121,17 +119,17 @@ public class CartService {
     }
 
     // ────────────────────────────────────────────────────────
-    // GET /cart — Lấy giỏ hàng (giá & trạng thái mới nhất)
+    // GET /cart
     // ────────────────────────────────────────────────────────
     @Transactional
     public CartResponse getCart() {
-        User user = getAuthenticatedUser();
+        User user = userService.getCurrentUser();
 
         Cart cart = cartRepository
                 .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
-        // Sync giá mới nhất từ ProductSku cho mỗi item
+        // Sync newest price from ProductSku for each item
         boolean priceChanged = false;
         for (CartItem item : cart.getItems()) {
             ProductSku sku = item.getProductSku();
@@ -149,11 +147,11 @@ public class CartService {
     }
 
     // ────────────────────────────────────────────────────────
-    // DELETE /cart/items/:skuId — Xoá 1 item khỏi giỏ
+    // DELETE /cart/items/:skuId
     // ────────────────────────────────────────────────────────
     @Transactional
     public void removeCartItem(Long skuId) {
-        User user = getAuthenticatedUser();
+        User user = userService.getCurrentUser();
 
         Cart cart = cartRepository
                 .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
@@ -167,11 +165,11 @@ public class CartService {
     }
 
     // ────────────────────────────────────────────────────────
-    // PATCH /cart/items/:skuId — Cập nhật số lượng (absolute)
+    // PATCH /cart/items/:skuId
     // ────────────────────────────────────────────────────────
     @Transactional
     public CartItemResponse updateCartItemQuantity(Long skuId, UpdateQuantityRequest request) {
-        User user = getAuthenticatedUser();
+        User user = userService.getCurrentUser();
 
         Cart cart = cartRepository
                 .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
@@ -183,13 +181,13 @@ public class CartService {
 
         int newQuantity = request.getQuantity();
 
-        // Kiểm tra tồn kho
+        // Check stock
         int stock = cartItem.getProductSku().getStock();
         if (newQuantity > stock) {
             throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
         }
 
-        // Cập nhật số lượng & sync giá mới nhất
+        // Update quantity and sync newest price
         cartItem.setQuantity(newQuantity);
         cartItem.setUnitPrice(cartItem.getProductSku().getPrice());
         cartItem = cartItemRepository.save(cartItem);
@@ -198,11 +196,11 @@ public class CartService {
     }
 
     // ────────────────────────────────────────────────────────
-    // DELETE /cart — Xoá toàn bộ giỏ hàng
+    // DELETE /cart
     // ────────────────────────────────────────────────────────
     @Transactional
     public void clearCart() {
-        User user = getAuthenticatedUser();
+        User user = userService.getCurrentUser();
 
         Cart cart = cartRepository
                 .findByUserIdAndStatus(user.getId(), CartStatus.ACTIVE)
@@ -212,11 +210,5 @@ public class CartService {
         cartRepository.save(cart);
     }
 
-    // ────────────────────────────────────────────────────────
-    // Helper: Lấy User từ SecurityContext
-    // ────────────────────────────────────────────────────────
-    private User getAuthenticatedUser() {
-        String username = authService.getCurrentUsername();
-        return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-    }
+
 }
