@@ -1,5 +1,4 @@
 import React from "react";
-import { redirect } from "next/navigation";
 import { getUserSession } from "@/features/auth/actions/get-session.action";
 import { cartService } from "@/features/customer/cart/services/cart.service";
 import { CartPageClient } from "@/features/customer/cart/components/CartPageClient";
@@ -10,16 +9,14 @@ export const metadata = {
 
 export default async function CartPage() {
   const session = await getUserSession();
-  if (!session) {
-    redirect("/sign-in?callbackUrl=/cart");
-  }
-
   let initialError: string | null = null;
 
-  try {
-    await cartService.getCart();
-  } catch {
-    initialError = "Không thể kết nối đến máy chủ để tải giỏ hàng. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.";
+  if (session) {
+    try {
+      await cartService.getCart();
+    } catch {
+      initialError = "Không thể kết nối đến máy chủ để tải giỏ hàng. Vui lòng kiểm tra lại kết nối mạng hoặc thử lại sau.";
+    }
   }
 
   return (
@@ -33,7 +30,7 @@ export default async function CartPage() {
         </p>
       </div>
 
-      <CartPageClient initialError={initialError} />
+      <CartPageClient initialError={initialError} isGuest={!session} />
     </div>
   );
 }
