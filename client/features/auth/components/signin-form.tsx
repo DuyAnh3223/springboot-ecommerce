@@ -12,17 +12,22 @@ import { Label } from '@/components/ui/label'
 import { useState } from 'react'
 import { Loader2, Eye, EyeOff, User, Lock, AlertCircle } from 'lucide-react'
 
+import { getGuestCart, clearGuestCart } from '@/features/customer/cart/utils/guest-cart.utils'
+import { mergeGuestCartAction } from '@/features/customer/cart/actions/merge-guest-cart.actions'
+import { useCartStore } from '@/features/customer/cart/stores/cart.store'
+
 interface SigninFormProps {
   prefilledUsername?: string
+  callbackUrl?: string
 }
 
-export function SigninForm({ prefilledUsername = '' }: SigninFormProps) {
+export function SigninForm({ prefilledUsername = '', callbackUrl = '' }: SigninFormProps) {
   const router = useRouter()
   const setUser = useAuthStore((s) => s.setUser)
   const [showPassword, setShowPassword] = useState(false)
 
   const form = useForm<SignInInput>({
-    resolver: zodResolver(signInSchema as any),
+    resolver: zodResolver(signInSchema),
     defaultValues: { username: prefilledUsername, password: '' },
   })
 
@@ -38,7 +43,23 @@ export function SigninForm({ prefilledUsername = '' }: SigninFormProps) {
     
     if (result?.success && result.user) {
       setUser(result.user)
-      router.push('/')
+
+      const guestItems = getGuestCart();
+      if (guestItems.length > 0) {
+        try {
+          const mergeRes = await mergeGuestCartAction(
+            guestItems.map((i) => ({ productSkuId: i.productSkuId, quantity: i.quantity }))
+          );
+          if (mergeRes.success && mergeRes.data) {
+            useCartStore.getState().setCart(mergeRes.data);
+          }
+          clearGuestCart();
+        } catch {
+          clearGuestCart();
+        }
+      }
+
+      router.push(callbackUrl || '/')
       router.refresh()
     }
   }

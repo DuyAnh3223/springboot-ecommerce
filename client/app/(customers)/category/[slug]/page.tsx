@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronRight, Home, PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCatalogFilters } from "@/features/customer/catalog/hooks/useCatalogFilters";
-import { catalogService, PageResponse } from "@/features/customer/catalog/services/catalogService";
+import { catalogService, PageResponse } from "@/features/customer/catalog/services/catalog.service";
 import { CategoryFacetData, CatalogProductItem } from "@/features/customer/catalog/types/catalog.types";
 import { CatalogSidebar } from "@/features/customer/catalog/components/CatalogSidebar";
 import { CatalogTable } from "@/features/customer/catalog/components/CatalogTable";

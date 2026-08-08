@@ -1,9 +1,9 @@
 "use client";
 
 import { CatalogProductItem } from "@/features/customer/catalog/types/catalog.types";
+import { AddToCartButton } from "@/features/customer/catalog/components/AddToCartButton";
 import { getSafeImageUrl } from "@/shared/utils/image";
-import { Star, Eye, ShoppingCart } from "lucide-react";
-import Link from "next/link";
+import { Star, Eye } from "lucide-react";
 
 interface HomeProductCardProps {
   product: CatalogProductItem;
@@ -75,7 +75,7 @@ export default function HomeProductCard({ product, onQuickView }: HomeProductCar
       {/* Footer / Price & Action */}
       <div className="pt-2 border-t border-slate-100 space-y-2">
         <div className="flex flex-col">
-          <span className="text-[10px] text-slate-500 font-medium">GiÃ¡ niÃªm yáº¿t:</span>
+          <span className="text-[10px] text-slate-500 font-medium">Giá niêm yết</span>
           <span className="text-sm font-extrabold text-rose-600">
             {formatVND(product.priceMin)}
             {product.priceMax > product.priceMin && ` - ${formatVND(product.priceMax)}`}
@@ -89,16 +89,10 @@ export default function HomeProductCard({ product, onQuickView }: HomeProductCar
             className="flex-1 py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200 flex items-center justify-center gap-1"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Chi Tiáº¿t</span>
+            <span>Chi Tiết</span>
           </button>
 
-          <Link
-            href={`/category/${product.slug}`}
-            className="py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center"
-            title="Xem danh má»¥c"
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-          </Link>
+          <AddToCartButton product={product} iconOnly />
         </div>
       </div>
     </div>

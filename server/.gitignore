@@ -2,6 +2,7 @@ HELP.md
 my docs/
 plan/
 target/
+Interview-Playbook
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

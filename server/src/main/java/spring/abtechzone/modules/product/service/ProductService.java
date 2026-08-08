@@ -297,7 +297,20 @@ public class ProductService {
 
         ProductResponse response = productMapper.toProductResponseSummary(product);
         response.setPrimaryImageUrl(resolvedPrimaryImageUrl);
+        setSingleSkuId(response, product);
         return response;
+    }
+
+    private void setSingleSkuId(ProductResponse response, Product product) {
+        if (product.getSkus() == null) {
+            return;
+        }
+
+        List<ProductSku> activeSkus =
+                product.getSkus().stream().filter(ProductSku::isActive).toList();
+        if (activeSkus.size() == 1) {
+            response.setSingleSkuId(activeSkus.get(0).getId());
+        }
     }
 
     private String findPrimaryImageKey(Product product) {
