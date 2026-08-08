@@ -225,10 +225,210 @@ class CartServiceTest {
         }
 
         @Test
+        @DisplayName("SKU mới với quantity bằng stock → thành công")
+        void shouldCreateNewItem_whenQuantityIsEqualToStock() {
+            // Given (stock = 50, request quantity = 50)
+            request = CartItemRequest.builder().productSkuId(100L).quantity(50).build();
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(cartMapper.toCartResponse(any(Cart.class))).thenReturn(cartResponse);
+
+            // When
+            CartResponse result = cartService.addToCart(request);
+
+            // Then
+            assertThat(result).isNotNull();
+            verify(cartItemRepository).save(any(CartItem.class));
+        }
+
+        @Test
+        @DisplayName("SKU mới với quantity vượt stock → throw PRODUCT_STOCK_INVALID, không tạo cart mới")
+        void shouldThrowStockInvalid_whenNewSkuQuantityExceedsStock() {
+            // Given (stock = 50, request quantity = 51)
+            request = CartItemRequest.builder().productSkuId(100L).quantity(51).build();
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.PRODUCT_STOCK_INVALID);
+                    });
+
+            verify(cartRepository, never()).save(any(Cart.class));
+            verify(cartItemRepository, never()).save(any(CartItem.class));
+        }
+
+        @Test
+        @DisplayName("SKU đã có với tổng quantity bằng stock → thành công")
+        void shouldAccumulateQuantity_whenTotalQuantityIsEqualToStock() {
+            // Given (stock = 50, existing = 40, request quantity = 10)
+            CartItem existingItem = CartItem.builder()
+                    .id(10L)
+                    .cart(cart)
+                    .productSku(productSku)
+                    .quantity(40)
+                    .unitPrice(productSku.getPrice())
+                    .build();
+            cart.getItems().add(existingItem);
+
+            request = CartItemRequest.builder().productSkuId(100L).quantity(10).build();
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(cartMapper.toCartResponse(any(Cart.class))).thenReturn(cartResponse);
+
+            // When
+            cartService.addToCart(request);
+
+            // Then
+            assertThat(existingItem.getQuantity()).isEqualTo(50);
+            verify(cartItemRepository).save(existingItem);
+        }
+
+        @Test
+        @DisplayName("SKU đã có với tổng quantity vượt stock → throw PRODUCT_STOCK_INVALID")
+        void shouldThrowStockInvalid_whenTotalQuantityExceedsStock() {
+            // Given (stock = 50, existing = 40, request quantity = 11)
+            CartItem existingItem = CartItem.builder()
+                    .id(10L)
+                    .cart(cart)
+                    .productSku(productSku)
+                    .quantity(40)
+                    .unitPrice(productSku.getPrice())
+                    .build();
+            cart.getItems().add(existingItem);
+
+            request = CartItemRequest.builder().productSkuId(100L).quantity(11).build();
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.PRODUCT_STOCK_INVALID);
+                    });
+
+            // Verify quantity và giá cũ không bị mutate, không save
+            assertThat(existingItem.getQuantity()).isEqualTo(40);
+            verify(cartItemRepository, never()).save(any(CartItem.class));
+        }
+
+        @Test
+        @DisplayName("SKU đã có với tổng quantity cực lớn gây overflow → throw PRODUCT_STOCK_INVALID")
+        void shouldThrowStockInvalid_whenCumulativeQuantityOverflows() {
+            // Given (stock = 50, existing = Integer.MAX_VALUE - 5, request quantity = 10)
+            CartItem existingItem = CartItem.builder()
+                    .id(10L)
+                    .cart(cart)
+                    .productSku(productSku)
+                    .quantity(Integer.MAX_VALUE - 5)
+                    .unitPrice(productSku.getPrice())
+                    .build();
+            cart.getItems().add(existingItem);
+
+            request = CartItemRequest.builder().productSkuId(100L).quantity(10).build();
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.PRODUCT_STOCK_INVALID);
+                    });
+
+            verify(cartItemRepository, never()).save(any(CartItem.class));
+        }
+
+        @Test
+        @DisplayName("Quantity không hợp lệ (0) → throw CART_ITEM_QUANTITY_INVALID")
+        void shouldThrowQuantityInvalid_whenQuantityIsZero() {
+            // Given
+            request = CartItemRequest.builder().productSkuId(100L).quantity(0).build();
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.CART_ITEM_QUANTITY_INVALID);
+                    });
+        }
+
+        @Test
+        @DisplayName("Quantity không hợp lệ (null) → throw CART_ITEM_QUANTITY_INVALID")
+        void shouldThrowQuantityInvalid_whenQuantityIsNull() {
+            // Given
+            request =
+                    CartItemRequest.builder().productSkuId(100L).quantity(null).build();
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.CART_ITEM_QUANTITY_INVALID);
+                    });
+        }
+
+        @Test
+        @DisplayName("Quantity không hợp lệ (âm) → throw CART_ITEM_QUANTITY_INVALID")
+        void shouldThrowQuantityInvalid_whenQuantityIsNegative() {
+            // Given
+            request = CartItemRequest.builder().productSkuId(100L).quantity(-5).build();
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.CART_ITEM_QUANTITY_INVALID);
+                    });
+        }
+
+        @Test
+        @DisplayName("Request null → throw CART_ITEM_QUANTITY_INVALID")
+        void shouldThrowQuantityInvalid_whenRequestIsNull() {
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(null))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.CART_ITEM_QUANTITY_INVALID);
+                    });
+        }
+
+        @Test
+        @DisplayName("ProductSkuId null → throw SKU_NOT_FOUND")
+        void shouldThrowSkuNotFound_whenProductSkuIdIsNull() {
+            // Given
+            request = CartItemRequest.builder().productSkuId(null).quantity(2).build();
+
+            // When & Then
+            assertThatThrownBy(() -> cartService.addToCart(request))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(ex -> {
+                        AppException appEx = (AppException) ex;
+                        assertThat(appEx.getErrorCode()).isEqualTo(ErrorCode.SKU_NOT_FOUND);
+                    });
+        }
+
+        @Test
         @DisplayName("ProductSku không tồn tại → throw SKU_NOT_FOUND")
         void shouldThrowSkuNotFound_whenProductSkuDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            request = CartItemRequest.builder().productSkuId(100L).quantity(2).build();
             when(productSkuRepository.findById(100L)).thenReturn(Optional.empty());
 
             // When & Then
@@ -247,6 +447,8 @@ class CartServiceTest {
         @DisplayName("User không tồn tại → throw USER_NOT_FOUND")
         void shouldThrowUserNotFound_whenUserDoesNotExist() {
             // Given
+            request = CartItemRequest.builder().productSkuId(100L).quantity(2).build();
+            when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.empty());
 
             // When & Then
@@ -258,7 +460,7 @@ class CartServiceTest {
                     });
 
             // Verify không tương tác với bất kỳ repository nào khác
-            verifyNoInteractions(productSkuRepository, cartRepository, cartItemRepository);
+            verifyNoInteractions(cartRepository, cartItemRepository);
         }
     }
 
@@ -270,7 +472,7 @@ class CartServiceTest {
     class GetCart {
 
         @Test
-        @DisplayName("Giỏ tồn tại → trả về CartResponse với giá được sync mới nhất")
+        @DisplayName("Giỏ tồn tại → trả về CartResponse với giá được sync mới nhất và save")
         void shouldReturnCartAndSyncLatestPrices() {
             // Given — item có giá cũ (899.99), productSku có giá mới (999.99)
             CartItem item = CartItem.builder()
@@ -285,6 +487,7 @@ class CartServiceTest {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartMapper.toCartResponse(cart)).thenReturn(cartResponse);
+            when(cartRepository.save(any(Cart.class))).thenReturn(cart);
 
             // When
             CartResponse result = cartService.getCart();
@@ -292,6 +495,33 @@ class CartServiceTest {
             // Then — giá phải được sync lên 999.99
             assertThat(item.getUnitPrice()).isEqualByComparingTo(BigDecimal.valueOf(999.99));
             assertThat(result).isEqualTo(cartResponse);
+            verify(cartRepository).save(cart);
+        }
+
+        @Test
+        @DisplayName("Giỏ tồn tại + giá đã đúng → trả về CartResponse và không save")
+        void shouldReturnCartAndNotSave_whenPricesAreAlreadyCorrect() {
+            // Given — item đã có giá đúng (999.99)
+            CartItem item = CartItem.builder()
+                    .id(10L)
+                    .cart(cart)
+                    .productSku(productSku) // productSku.price = 999.99
+                    .quantity(2)
+                    .unitPrice(BigDecimal.valueOf(999.99))
+                    .build();
+            cart.getItems().add(item);
+
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(cartMapper.toCartResponse(cart)).thenReturn(cartResponse);
+
+            // When
+            CartResponse result = cartService.getCart();
+
+            // Then
+            assertThat(item.getUnitPrice()).isEqualByComparingTo(BigDecimal.valueOf(999.99));
+            assertThat(result).isEqualTo(cartResponse);
+            verify(cartRepository, never()).save(any(Cart.class));
         }
 
         @Test

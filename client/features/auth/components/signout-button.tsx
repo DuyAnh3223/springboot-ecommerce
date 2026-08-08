@@ -23,7 +23,7 @@ export function LogoutButton() {
         try {
           await signoutAction()
           clear()
-          router.push('/sign-in')
+          router.push('/')
           router.refresh()
         } catch (error) {
           console.error(error)

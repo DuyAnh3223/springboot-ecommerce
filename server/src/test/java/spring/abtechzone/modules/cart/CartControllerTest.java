@@ -87,6 +87,66 @@ class CartControllerTest {
     }
 
     @Test
+    @DisplayName("POST /cart/add - invalid request format (null productSkuId) returns 400 Bad Request")
+    void addToCart_nullProductSkuId_returns400() throws Exception {
+        CartItemRequest request = new CartItemRequest();
+        request.setProductSkuId(null);
+        request.setQuantity(2);
+
+        mockMvc.perform(post("/cart/add")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /cart/add - invalid request format (null quantity) returns 400 Bad Request")
+    void addToCart_nullQuantity_returns400() throws Exception {
+        CartItemRequest request = new CartItemRequest();
+        request.setProductSkuId(10L);
+        request.setQuantity(null);
+
+        mockMvc.perform(post("/cart/add")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /cart/add - invalid request format (zero quantity) returns 400 Bad Request")
+    void addToCart_zeroQuantity_returns400() throws Exception {
+        CartItemRequest request = new CartItemRequest();
+        request.setProductSkuId(10L);
+        request.setQuantity(0);
+
+        mockMvc.perform(post("/cart/add")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /cart/add - invalid request format (negative quantity) returns 400 Bad Request")
+    void addToCart_negativeQuantity_returns400() throws Exception {
+        CartItemRequest request = new CartItemRequest();
+        request.setProductSkuId(10L);
+        request.setQuantity(-5);
+
+        mockMvc.perform(post("/cart/add")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("GET /cart - returns active cart")
     void getCart_success_returnsCart() throws Exception {
         CartResponse mockResponse = CartResponse.builder()

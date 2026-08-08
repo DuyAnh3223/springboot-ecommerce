@@ -1,5 +1,5 @@
 import { getCategories } from "@/features/categories/services/category.service";
-import { catalogService } from "@/features/customer/catalog/services/catalogService";
+import { catalogService } from "@/features/customer/catalog/services/catalog.service";
 import { CategoryTile } from "../home.types";
 import { CatalogProductItem } from "@/features/customer/catalog/types/catalog.types";
 import { categoriesData } from "@/constants/data";
@@ -15,7 +15,10 @@ export async function fetchHomeCategories(): Promise<CategoryTile[]> {
       }));
     }
   } catch (err) {
-    console.warn("Lỗi khi tải danh mục trang chủ từ API, chuyển sang dữ liệu fallback:", err);
+    console.warn(
+      "Lỗi khi tải danh mục trang chủ từ API, chuyển sang dữ liệu fallback:",
+      err,
+    );
   }
 
   // Fallback if API returns empty or fails
@@ -25,7 +28,9 @@ export async function fetchHomeCategories(): Promise<CategoryTile[]> {
   }));
 }
 
-export async function fetchHomeProductsByCategory(categorySlug: string): Promise<CatalogProductItem[]> {
+export async function fetchHomeProductsByCategory(
+  categorySlug: string,
+): Promise<CatalogProductItem[]> {
   try {
     const res = await catalogService.getCatalogProducts(categorySlug, {
       size: 8,

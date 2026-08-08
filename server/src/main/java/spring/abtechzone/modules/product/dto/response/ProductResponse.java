@@ -31,6 +31,7 @@ public class ProductResponse {
     Integer skuCount;
     Integer activeSkuCount;
     Integer totalStock;
+    Long singleSkuId;
     BigDecimal priceMin;
     BigDecimal priceMax;
 
