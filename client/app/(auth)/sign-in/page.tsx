@@ -11,7 +11,8 @@ import { useSearchParams } from 'next/navigation'
 function SignInFormWrapper() {
   const searchParams = useSearchParams()
   const prefilledUsername = searchParams.get('username') || ''
-  return <SigninForm prefilledUsername={prefilledUsername} />
+  const callbackUrl = searchParams.get('callbackUrl') || ''
+  return <SigninForm prefilledUsername={prefilledUsername} callbackUrl={callbackUrl} />
 }
 
 export default function SignInPage() {
