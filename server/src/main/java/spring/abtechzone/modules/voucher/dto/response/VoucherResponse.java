@@ -28,6 +28,7 @@ public class VoucherResponse {
     Integer maxPerUser;
     BigDecimal minOrderValue;
     boolean isActive;
+    BigDecimal maxDiscountAmount;
     VoucherApplyScope applyScope;
     Set<ProductSkuResponse> productSkus;
 }

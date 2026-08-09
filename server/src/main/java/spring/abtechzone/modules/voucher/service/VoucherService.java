@@ -150,7 +150,7 @@ public class VoucherService {
                 .build();
     }
 
-    private static BigDecimal getDiscount(Voucher voucher, BigDecimal totalOrder) {
+    public static BigDecimal getDiscount(Voucher voucher, BigDecimal totalOrder) {
         BigDecimal discountAmount = BigDecimal.ZERO;
         if (voucher.getType() == VoucherType.FIXED_AMOUNT) {
             discountAmount = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
@@ -159,6 +159,15 @@ public class VoucherService {
             discountAmount = totalOrder.multiply(percentage).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         }
 
+        // has Max Discount Cap
+        if (voucher.getMaxDiscountAmount() != null
+                && voucher.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            if (discountAmount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
+                discountAmount = voucher.getMaxDiscountAmount();
+            }
+        }
+
+        // Discount Amount must not higher than totalOrder
         if (discountAmount.compareTo(totalOrder) > 0) {
             discountAmount = totalOrder;
         }

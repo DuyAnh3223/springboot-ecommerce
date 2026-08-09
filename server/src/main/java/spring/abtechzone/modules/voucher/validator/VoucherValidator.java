@@ -27,13 +27,13 @@ public class VoucherValidator {
 
     public void validateCreate(VoucherCreateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
+        validateValue(request.getType(), request.getValue(), request.getMaxDiscountAmount());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
     }
 
     public void validateUpdate(VoucherUpdateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
+        validateValue(request.getType(), request.getValue(), request.getMaxDiscountAmount());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
     }
 
@@ -111,6 +111,24 @@ public class VoucherValidator {
 
         if (applyScope == VoucherApplyScope.SPECIFIC && !hasProductSkus) {
             throw new AppException(ErrorCode.VOUCHER_SCOPE_INVALID);
+        }
+    }
+
+    public void validateValue(VoucherType type, BigDecimal value, BigDecimal maxDiscountAmount) {
+        if (type == null || value == null) return;
+
+        if (value.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
+        }
+
+        if (type == VoucherType.PERCENTAGE) {
+            if (value.compareTo(ONE_HUNDRED) >= 0) {
+                throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
+            }
+
+            if (maxDiscountAmount != null && maxDiscountAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new AppException(ErrorCode.VOUCHER_MAX_DISCOUNT_INVALID);
+            }
         }
     }
 }

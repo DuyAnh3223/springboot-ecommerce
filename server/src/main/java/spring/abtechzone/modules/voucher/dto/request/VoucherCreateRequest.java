@@ -52,6 +52,9 @@ public class VoucherCreateRequest {
 
     Boolean isActive;
 
+    @PositiveOrZero(message = "VOUCHER_MAX_DISCOUNT_INVALID")
+    BigDecimal maxDiscountAmount;
+
     @NotNull(message = "SCOPE_NOT_NULL")
     VoucherApplyScope applyScope;
 
