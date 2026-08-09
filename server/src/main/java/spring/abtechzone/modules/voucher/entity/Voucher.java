@@ -62,13 +62,16 @@ public class Voucher {
 
     boolean isActive;
 
+    @Column(precision = 12, scale = 2)
+    BigDecimal maxDiscountAmount;
+
     @ManyToMany
     @JoinTable(
             name = "voucher_user",
             joinColumns = @JoinColumn(name = "voucher_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id"))
     @Builder.Default
-    List<User> userIds = new ArrayList<>(); // Users nào đã sử dụng
+    List<User> users = new ArrayList<>(); // Users nào đã sử dụng
 
     @NotNull
     @Enumerated(EnumType.STRING)

@@ -1,7 +1,6 @@
 package spring.abtechzone.modules.order.service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -50,9 +49,9 @@ import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
-import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.service.VoucherService;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 @Service
@@ -73,6 +72,7 @@ public class OrderService {
     ProductSkuRepository productSkuRepository;
     OrderMapper orderMapper;
     AuthService authService;
+    VoucherService voucherService;
 
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
@@ -130,7 +130,7 @@ public class OrderService {
                     .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
             voucherValidator.validateVoucher(voucher, subtotal);
-            totalDiscount = calculateDiscount(voucher, subtotal);
+            totalDiscount = voucherService.getDiscount(voucher, subtotal);
             appliedVoucherCode = voucher.getCode();
         }
 
@@ -307,7 +307,7 @@ public class OrderService {
 
         voucherValidator.validateVoucher(appliedVoucher, subtotal);
         validateVoucherPerUser(appliedVoucher, user);
-        BigDecimal discountAmount = calculateDiscount(appliedVoucher, subtotal);
+        BigDecimal discountAmount = voucherService.getDiscount(appliedVoucher, subtotal);
 
         return new AppliedVoucherInfo(appliedVoucher, discountAmount);
     }
@@ -429,36 +429,12 @@ public class OrderService {
     private void validateVoucherPerUser(Voucher voucher, User user) {
         if (voucher.getMaxPerUser() == null) return;
 
-        long userUsageCount = voucher.getUserIds().stream()
-                .filter(u -> u.getId().equals(user.getId()))
-                .count();
+        // Fix N+1
+        long userUsageCount = voucherRepository.countUsageByVoucherIdAndUserId(voucher.getId(), user.getId());
 
         if (userUsageCount >= voucher.getMaxPerUser()) {
             throw new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED);
         }
-    }
-
-    /**
-     * Tính discount dựa trên loại voucher.
-     * - FIXED_AMOUNT: trả trực tiếp giá trị voucher
-     * - PERCENTAGE: tính theo phần trăm, cap tại subtotal
-     */
-    private BigDecimal calculateDiscount(Voucher voucher, BigDecimal subtotal) {
-        BigDecimal discount = BigDecimal.ZERO;
-
-        if (voucher.getType() == VoucherType.FIXED_AMOUNT) {
-            discount = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
-        } else if (voucher.getType() == VoucherType.PERCENTAGE) {
-            BigDecimal percentage = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
-            discount = subtotal.multiply(percentage).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        }
-
-        // Discount không được vượt quá subtotal
-        if (discount.compareTo(subtotal) > 0) {
-            discount = subtotal;
-        }
-
-        return discount;
     }
 
     /**

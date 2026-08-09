@@ -35,4 +35,12 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
     @Modifying
     @Query(value = "INSERT INTO voucher_user (voucher_id, user_id) VALUES (:voucherId, :userId)", nativeQuery = true)
     void insertVoucherUser(@Param("voucherId") Long voucherId, @Param("userId") UUID userId);
+
+    /**
+     * Count user's voucher usage
+     */
+    @Query(
+            value = "SELECT COUNT(*) FROM voucher_user WHERE voucher_id = :voucherId AND user_id = :userId",
+            nativeQuery = true)
+    long countUsageByVoucherIdAndUserId(@Param("voucherId") Long voucherId, @Param("userId") UUID userId);
 }
