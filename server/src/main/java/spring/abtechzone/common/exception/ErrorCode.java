@@ -30,7 +30,6 @@ public enum ErrorCode {
     PRODUCT_SLUG_INVALID(1019, "Product slug is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_DATE_INVALID(1020, "Voucher date is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_VALUE_INVALID(1021, "Voucher value is invalid", HttpStatus.BAD_REQUEST),
-    VOUCHER_SCOPE_INVALID(1021, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_NOT_FOUND(1022, "Voucher not found", HttpStatus.NOT_FOUND),
     VOUCHER_EXISTED(1023, "Voucher already exists", HttpStatus.BAD_REQUEST),
     VOUCHER_EXPIRED(1024, "Voucher expired", HttpStatus.BAD_REQUEST),
@@ -74,6 +73,8 @@ public enum ErrorCode {
     ACCESS_DENIED(1061, "Access denied", HttpStatus.FORBIDDEN),
     ATTRIBUTE_SORTABLE_INVALID_COMBINATION(
             1062, "Sortable attribute cannot be multi-value or variant-defining", HttpStatus.BAD_REQUEST),
+    VOUCHER_SCOPE_INVALID(1063, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
+    VOUCHER_MAX_DISCOUNT_INVALID(1064, "Voucher max discount amount is invalid", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
