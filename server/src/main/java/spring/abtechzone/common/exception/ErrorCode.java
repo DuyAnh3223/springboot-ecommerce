@@ -52,8 +52,8 @@ public enum ErrorCode {
     BRAND_EXISTED(1041, "Brand already exists", HttpStatus.BAD_REQUEST),
     BRAND_NOT_FOUND(1042, "Brand not found", HttpStatus.NOT_FOUND),
     RESERVATION_NOT_FOUND(1043, "Reservation not found", HttpStatus.NOT_FOUND),
-    SYSTEM_BUSY(1044, "System busy, try again later", HttpStatus.BAD_REQUEST),
-    SYSTEM_ERROR(1045, "System error, try again later", HttpStatus.BAD_REQUEST),
+    SYSTEM_BUSY(1044, "System busy, try again later", HttpStatus.SERVICE_UNAVAILABLE),
+    SYSTEM_ERROR(1045, "System error, try again later", HttpStatus.INTERNAL_SERVER_ERROR),
     ATTRIBUTE_EXISTS(1046, "Attribute already exists", HttpStatus.BAD_REQUEST),
     ATTRIBUTE_NOT_FOUND(1047, "Attribute not found", HttpStatus.NOT_FOUND),
     CATEGORY_ATTRIBUTE_ALREADY_ASSIGNED(1048, "Attribute is already assigned to this category", HttpStatus.CONFLICT),
@@ -75,6 +75,7 @@ public enum ErrorCode {
             1062, "Sortable attribute cannot be multi-value or variant-defining", HttpStatus.BAD_REQUEST),
     VOUCHER_SCOPE_INVALID(1063, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_MAX_DISCOUNT_INVALID(1064, "Voucher max discount amount is invalid", HttpStatus.BAD_REQUEST),
+    VOUCHER_CODE_IMMUTABLE(1065, "Voucher code cannot be modified after creation", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
