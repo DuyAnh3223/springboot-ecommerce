@@ -31,6 +31,13 @@ open:
     serverUrl: http://localhost:8080/abtechzone
     serverName: ABTechZone Local Server
 
+app:
+  bootstrap-admin:
+    enabled: ${BOOTSTRAP_ADMIN_ENABLED:false}
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:admin@abtechzone.com}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
