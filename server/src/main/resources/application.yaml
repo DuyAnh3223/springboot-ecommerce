@@ -37,13 +37,20 @@ app:
     username: ${BOOTSTRAP_ADMIN_USERNAME:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
     email: ${BOOTSTRAP_ADMIN_EMAIL:admin@abtechzone.com}
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  swagger:
+    enabled: ${SWAGGER_ENABLED:true}
 
 springdoc:
   swagger-ui:
+    enabled: ${app.swagger.enabled:true}
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: alpha
   api-docs:
+    enabled: ${app.swagger.enabled:true}
     path: /api-docs
 
 aws:

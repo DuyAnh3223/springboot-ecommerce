@@ -1,5 +1,8 @@
 package spring.abtechzone.common.config;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -34,6 +38,12 @@ public class SecurityConfig {
     @Value("${jwt.signerKey}")
     private String jwtSignerKey;
 
+    @Value("${app.swagger.enabled:true}")
+    private boolean swaggerEnabled;
+
+    @Value("${app.security.cors.allowed-origins:http://localhost:3000}")
+    private String corsAllowedOrigins;
+
     private final CustomJwtDecoder customJwtDecoder;
 
     public SecurityConfig(CustomJwtDecoder customJwtDecoder) {
@@ -45,16 +55,19 @@ public class SecurityConfig {
 
         httpSecurity.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
-        httpSecurity.authorizeHttpRequests(request -> request.requestMatchers(SWAGGER_ENDPOINTS)
-                .permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**")
-                .permitAll()
-                .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
-                .permitAll()
-                .requestMatchers(HttpMethod.GET, PUBLIC_CUSTOMER_ENDPOINTS)
-                .permitAll()
-                .anyRequest()
-                .authenticated());
+        httpSecurity.authorizeHttpRequests(request -> {
+            if (swaggerEnabled) {
+                request.requestMatchers(SWAGGER_ENDPOINTS).permitAll();
+            }
+            request.requestMatchers(HttpMethod.OPTIONS, "/**")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, PUBLIC_ENDPOINTS)
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, PUBLIC_CUSTOMER_ENDPOINTS)
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated();
+        });
 
         httpSecurity.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwtConfigurer -> jwtConfigurer
                         .decoder(customJwtDecoder)
@@ -85,10 +98,17 @@ public class SecurityConfig {
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
 
-        corsConfiguration.addAllowedOrigin("http://localhost:3000");
-        corsConfiguration.addAllowedOrigin("http://13.230.194.224:3000");
-        corsConfiguration.addAllowedMethod("*");
-        corsConfiguration.addAllowedHeader("*");
+        if (StringUtils.hasText(corsAllowedOrigins)) {
+            List<String> origins = Arrays.stream(corsAllowedOrigins.split(","))
+                    .map(String::trim)
+                    .filter(StringUtils::hasText)
+                    .toList();
+            corsConfiguration.setAllowedOrigins(origins);
+        }
+
+        corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        corsConfiguration.setAllowedHeaders(
+                List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
         corsConfiguration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
