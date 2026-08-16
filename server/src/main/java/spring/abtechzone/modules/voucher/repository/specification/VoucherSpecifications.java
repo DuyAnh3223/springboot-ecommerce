@@ -22,13 +22,33 @@ public class VoucherSpecifications {
             if (status == null || status.isBlank()) return null;
             LocalDateTime now = LocalDateTime.now();
             if ("expired".equalsIgnoreCase(status)) {
-                return cb.and(cb.isNotNull(root.get("endDate")), cb.lessThan(root.get("endDate"), now));
+                return cb.and(
+                        cb.equal(root.get("isActive"), true),
+                        cb.isNotNull(root.get("endDate")),
+                        cb.lessThan(root.get("endDate"), now));
             } else if ("active".equalsIgnoreCase(status)) {
                 return cb.and(
+                        cb.equal(root.get("isActive"), true),
                         cb.or(cb.isNull(root.get("startDate")), cb.lessThanOrEqualTo(root.get("startDate"), now)),
                         cb.or(cb.isNull(root.get("endDate")), cb.greaterThanOrEqualTo(root.get("endDate"), now)));
+            } else if ("disabled".equalsIgnoreCase(status)) {
+                return cb.equal(root.get("isActive"), false);
             }
             return null;
+        };
+    }
+
+    public static Specification<Voucher> hasCodeOrNameLike(String search) {
+        return (root, query, cb) -> {
+            if (search == null || search.isBlank()) return null;
+            String escaped = search.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                    .toLowerCase();
+            String pattern = "%" + escaped + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("code")), pattern, '\\'),
+                    cb.like(cb.lower(root.get("name")), pattern, '\\'));
         };
     }
 

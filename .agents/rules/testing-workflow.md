@@ -1,8 +1,4 @@
----
-trigger: always_on
----
-
-# Efficient Testing Workflow
+# Backend Testing Workflow
 
 ## Objective
 

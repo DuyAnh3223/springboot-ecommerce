@@ -135,6 +135,7 @@ export function CartPageClient({ initialError, isGuest: propIsGuest }: CartPageC
               selectedCount={selectedSkuIds.length}
               selectedQuantity={getSelectedQuantity}
               subtotal={getSelectedSubtotal}
+              selectedSkuIds={selectedSkuIds}
             />
           </div>
         </div>

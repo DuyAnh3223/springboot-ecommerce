@@ -11,9 +11,6 @@ import spring.abtechzone.modules.cart.entity.Cart;
 
 @Repository
 public interface CartRepository extends JpaRepository<Cart, Long> {
-    Optional<Cart> findByUserId(UUID userId);
 
     Optional<Cart> findByUserIdAndStatus(UUID userId, CartStatus status);
-
-    Optional<Cart> findFirstByUserIdAndStatusOrderByIdDesc(UUID userId, CartStatus status);
 }

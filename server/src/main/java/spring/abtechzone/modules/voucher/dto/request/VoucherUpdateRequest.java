@@ -33,9 +33,6 @@ public class VoucherUpdateRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "VALUE_INVALID")
     BigDecimal value;
 
-    @NotBlank(message = "VOUCHER_CODE_NOT_BLANK")
-    String code;
-
     @NotNull(message = "START_DATE_NOT_NULL")
     LocalDateTime startDate;
 
@@ -52,6 +49,9 @@ public class VoucherUpdateRequest {
     BigDecimal minOrderValue;
 
     Boolean isActive;
+
+    @PositiveOrZero(message = "VOUCHER_MAX_DISCOUNT_INVALID")
+    BigDecimal maxDiscountAmount;
 
     @NotNull(message = "SCOPE_NOT_NULL")
     VoucherApplyScope applyScope;

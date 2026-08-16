@@ -1,15 +1,22 @@
-package spring.abtechzone.order;
+package spring.abtechzone.modules.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -57,6 +64,7 @@ import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.service.VoucherService;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 @ExtendWith(MockitoExtension.class)
@@ -97,6 +105,9 @@ class OrderServiceTest {
 
     @Mock
     AuthService authService;
+
+    @Mock
+    VoucherService voucherService;
 
     @Spy
     OrderMapper orderMapper = Mappers.getMapper(spring.abtechzone.modules.order.mapper.OrderMapper.class);
@@ -165,10 +176,8 @@ class OrderServiceTest {
             return addr;
         });
 
-        // Mock productSkuRepository findById
         lenient().when(productSkuRepository.findById(anyLong())).thenReturn(Optional.of(sku));
 
-        // Mock redissonClient
         RLock mockLock = mock(org.redisson.api.RLock.class);
         lenient().when(redissonClient.getLock(anyString())).thenReturn(mockLock);
         try {
@@ -177,10 +186,59 @@ class OrderServiceTest {
             // ignore
         }
 
-        // Mock transactionTemplate
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
+        });
+
+        lenient()
+                .when(voucherService.calculateEligibleSubtotal(any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    Voucher v = invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    Map<Long, BigDecimal> skuSubtotals = (Map<Long, BigDecimal>) invocation.getArgument(1);
+                    BigDecimal fullSubtotal = invocation.getArgument(2);
+                    if (v == null || v.getApplyScope() == null || v.getApplyScope() == VoucherApplyScope.ALL) {
+                        return fullSubtotal != null ? fullSubtotal : BigDecimal.ZERO;
+                    }
+                    if (skuSubtotals == null || v.getProductSkus() == null) {
+                        return BigDecimal.ZERO;
+                    }
+                    Set<Long> eligibleIds =
+                            v.getProductSkus().stream().map(ProductSku::getId).collect(Collectors.toSet());
+                    BigDecimal sum = BigDecimal.ZERO;
+                    for (Map.Entry<Long, BigDecimal> entry : skuSubtotals.entrySet()) {
+                        if (eligibleIds.contains(entry.getKey())) {
+                            sum = sum.add(entry.getValue());
+                        }
+                    }
+                    return sum;
+                });
+
+        lenient().when(voucherService.getDiscount(any(), any())).thenAnswer(invocation -> {
+            Voucher v = invocation.getArgument(0);
+            BigDecimal eligible = invocation.getArgument(1);
+            if (v == null || eligible == null || eligible.compareTo(BigDecimal.ZERO) <= 0) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal voucherVal = v.getValue() != null ? v.getValue() : BigDecimal.ZERO;
+            BigDecimal discount = BigDecimal.ZERO;
+            if (v.getType() == VoucherType.FIXED_AMOUNT) {
+                discount = voucherVal.min(eligible);
+            } else if (v.getType() == VoucherType.PERCENTAGE) {
+                discount = eligible.multiply(voucherVal)
+                        .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+                if (v.getMaxDiscountAmount() != null && v.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    discount = discount.min(v.getMaxDiscountAmount());
+                }
+            }
+            if (discount.compareTo(eligible) > 0) {
+                discount = eligible;
+            }
+            if (discount.compareTo(BigDecimal.ZERO) < 0) {
+                discount = BigDecimal.ZERO;
+            }
+            return discount.setScale(2, java.math.RoundingMode.HALF_UP);
         });
     }
 
@@ -204,7 +262,7 @@ class OrderServiceTest {
             assertThat(response.getItems()).hasSize(1);
             assertThat(response.getItems().get(0).getProductName()).isEqualTo("iPhone 15 Pro Max");
 
-            verify(voucherValidator, never()).validateVoucher(any(), any());
+            verify(voucherValidator, never()).validateForCheckout(any(), any(), any(), any());
         }
 
         @Test
@@ -230,7 +288,97 @@ class OrderServiceTest {
             assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
             assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 200000));
 
-            verify(voucherValidator).validateVoucher(voucher, BigDecimal.valueOf(2000000.00));
+            verify(voucherValidator)
+                    .validateForCheckout(
+                            eq(voucher),
+                            eq(user),
+                            eq(BigDecimal.valueOf(2000000.00)),
+                            eq(BigDecimal.valueOf(2000000.00)));
+        }
+
+        @Test
+        @DisplayName("checkoutReview success with SPECIFIC scope voucher discounting only eligible SKU")
+        void reviewSuccess_withSpecificVoucher() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+
+            ProductSku sku2 = ProductSku.builder()
+                    .id(200L)
+                    .sku("ACCESSORY-CASE")
+                    .price(BigDecimal.valueOf(500000.00))
+                    .stock(5)
+                    .product(Product.builder()
+                            .id(2L)
+                            .name("Case")
+                            .published(true)
+                            .build())
+                    .build();
+
+            CartItem item2 = CartItem.builder()
+                    .id(20L)
+                    .productSku(sku2)
+                    .quantity(1)
+                    .unitPrice(BigDecimal.valueOf(500000.00))
+                    .build();
+
+            cart.getItems().add(item2);
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            Voucher voucher = Voucher.builder()
+                    .code("SPECIFIC10")
+                    .type(VoucherType.PERCENTAGE)
+                    .value(BigDecimal.valueOf(10.0))
+                    .isActive(true)
+                    .applyScope(VoucherApplyScope.SPECIFIC)
+                    .productSkus(Set.of(sku))
+                    .build();
+
+            when(voucherRepository.findByCode("SPECIFIC10")).thenReturn(Optional.of(voucher));
+
+            CheckoutRequest request =
+                    CheckoutRequest.builder().voucherCode("SPECIFIC10").build();
+            CheckoutResponse response = orderService.checkoutReview(request);
+
+            // Subtotal = 2.000.000 (sku 100) + 500.000 (sku 200) = 2.500.000
+            // Discount = 10% of 2.000.000 (eligible SKU only) = 200.000
+            assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2500000.00));
+            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
+            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2500000 + 30000 - 200000));
+
+            verify(voucherValidator)
+                    .validateForCheckout(
+                            eq(voucher),
+                            eq(user),
+                            eq(BigDecimal.valueOf(2500000.00)),
+                            eq(BigDecimal.valueOf(2000000.00)));
+        }
+
+        @Test
+        @DisplayName("checkoutReview throws VOUCHER_PER_USER_LIMIT_REACHED when validation fails")
+        void reviewThrows_perUserLimitReached() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            Voucher voucher = Voucher.builder()
+                    .id(50L)
+                    .code("ONCE_ONLY")
+                    .type(VoucherType.FIXED_AMOUNT)
+                    .value(BigDecimal.valueOf(50000))
+                    .isActive(true)
+                    .maxPerUser(1)
+                    .applyScope(VoucherApplyScope.ALL)
+                    .build();
+
+            when(voucherRepository.findByCode("ONCE_ONLY")).thenReturn(Optional.of(voucher));
+            doThrow(new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED))
+                    .when(voucherValidator)
+                    .validateForCheckout(any(), any(), any(), any());
+
+            CheckoutRequest request =
+                    CheckoutRequest.builder().voucherCode("ONCE_ONLY").build();
+
+            assertThatThrownBy(() -> orderService.checkoutReview(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED.getMessage());
         }
 
         @Test
@@ -344,6 +492,108 @@ class OrderServiceTest {
             Address savedAddress = addressCaptor.getValue();
             assertThat(savedAddress.getRecipientName()).isEqualTo("Van B");
             assertThat(savedAddress.getUser().getId()).isEqualTo(userId);
+        }
+
+        @Test
+        @DisplayName("createOrder success with applied voucher")
+        void createOrderSuccess_withVoucher() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            Address address = Address.builder()
+                    .id(addressId)
+                    .recipientName("Van A")
+                    .phone("0909090909")
+                    .province("HCM")
+                    .ward("Ben Nghe")
+                    .street("1 Le Loi")
+                    .user(user)
+                    .build();
+
+            when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
+
+            Voucher voucher = Voucher.builder()
+                    .id(77L)
+                    .code("SAVE100K")
+                    .type(VoucherType.FIXED_AMOUNT)
+                    .value(BigDecimal.valueOf(100000))
+                    .applyScope(VoucherApplyScope.ALL)
+                    .isActive(true)
+                    .build();
+
+            when(voucherRepository.findByCode("SAVE100K")).thenReturn(Optional.of(voucher));
+            when(voucherRepository.increaseUsedCount(eq(77L), eq(userId))).thenReturn(1);
+
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+                Order orderToSave = invocation.getArgument(0);
+                orderToSave.setId(999L);
+                return orderToSave;
+            });
+
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .addressId(addressId)
+                    .paymentMethod("COD")
+                    .voucherCode("SAVE100K")
+                    .build();
+
+            OrderResponse response = orderService.createOrder(request);
+
+            assertThat(response.getOrderId()).isEqualTo(999L);
+            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(100000));
+            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 100000));
+
+            verify(voucherValidator)
+                    .validateForCheckout(
+                            eq(voucher),
+                            eq(user),
+                            eq(BigDecimal.valueOf(2000000.00)),
+                            eq(BigDecimal.valueOf(2000000.00)));
+            verify(voucherRepository).increaseUsedCount(eq(77L), eq(userId));
+            verify(voucherRepository).insertVoucherUser(eq(77L), eq(userId));
+        }
+
+        @Test
+        @DisplayName("createOrder throws VOUCHER_PER_USER_LIMIT_REACHED when validation fails")
+        void createOrderThrows_perUserLimitReached() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            Address address = Address.builder()
+                    .id(addressId)
+                    .recipientName("Van A")
+                    .phone("0909090909")
+                    .province("HCM")
+                    .ward("Ben Nghe")
+                    .street("1 Le Loi")
+                    .user(user)
+                    .build();
+
+            when(addressRepository.findById(addressId)).thenReturn(Optional.of(address));
+
+            Voucher voucher = Voucher.builder()
+                    .id(77L)
+                    .code("SAVE100K")
+                    .type(VoucherType.FIXED_AMOUNT)
+                    .value(BigDecimal.valueOf(100000))
+                    .applyScope(VoucherApplyScope.ALL)
+                    .maxPerUser(1)
+                    .isActive(true)
+                    .build();
+
+            when(voucherRepository.findByCode("SAVE100K")).thenReturn(Optional.of(voucher));
+            doThrow(new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED))
+                    .when(voucherValidator)
+                    .validateForCheckout(any(), any(), any(), any());
+
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .addressId(addressId)
+                    .paymentMethod("COD")
+                    .voucherCode("SAVE100K")
+                    .build();
+
+            assertThatThrownBy(() -> orderService.createOrder(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED.getMessage());
         }
 
         @Test
