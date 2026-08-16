@@ -11,14 +11,17 @@ client/features/
 ├── skus/
 ├── users/
 ├── orders/
+├── vouchers/
 ├── admin/
 │   ├── catalog/
 │   │   ├── products/
 │   │   ├── categories/
-│   │   └── attributes/
+│   │   ├── attributes/
+│   │   └── vouchers/
 │   └── customers/
 └── customer/
     ├── catalog/
+    ├── cart/
     └── account/
 
 client/shared/
@@ -41,6 +44,7 @@ client/app/(customers)/_components/home/
 - Admin catalog UI belongs in `client/features/admin/catalog/<domain>/`.
 - Admin customer-management UI belongs in `client/features/admin/customers/`.
 - Customer catalog read/use-case UI belongs in `client/features/customer/catalog/`.
+- Customer cart UI and audience-specific orchestration belong in `client/features/customer/cart/`.
 - Customer profile/address UI belongs in `client/features/customer/account/`.
 - Home sections, config, types and home-specific orchestration belong in `client/app/(customers)/_components/home/`.
 

@@ -1,6 +1,6 @@
 # Backend Modules & Domain Reference
 
-> **Verified against commit `5e44606` on 2026-07-25**
+> Reference snapshot: verify relevant symbols against current code and tests.
 
 ## 1. Module Overview Table
 
@@ -72,7 +72,7 @@
 ### 2.8 Voucher Module (`spring.abtechzone.modules.voucher`)
 - **`VoucherService` & `VoucherValidator`**:
   - `VoucherType`: `PERCENTAGE` or `FIXED_AMOUNT`.
-  - `VoucherApplyScope`: `GLOBAL`, `CATEGORY`, `PRODUCT`.
+  - `VoucherApplyScope`: `ALL`, `SPECIFIC`.
   - `VoucherValidator`: Validates start/end dates, `minOrderValue`, `maxUses`, and per-user usage limits (`maxPerUser`).
 
 ### 2.9 Common Package (`spring.abtechzone.common`)

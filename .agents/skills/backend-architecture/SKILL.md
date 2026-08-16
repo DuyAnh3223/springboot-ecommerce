@@ -5,20 +5,25 @@ description: Primary architectural reference for Spring Boot backend. Use when c
 
 # Backend Architecture Skill Index
 
-> **Verified against commit `5e44606` on 2026-07-25**
+These references are architecture aids, not a replacement for current code,
+tests, accepted specs, or ADRs. Verify the relevant symbols before relying on a
+reference for implementation.
 
 Welcome to the Spring Boot backend architecture knowledge base for ABTechZone (`springboot-ecommerce`).
 
 ## Topic Index
 
-1. **[Modules & Domain Reference](file:///d:/dev/ABTechZone/.agents/skills/backend-architecture/modules-reference.md)**
+1. **[Modules & Domain Reference](modules-reference.md)**
    - Comprehensive specifications for all 8 business modules (`auth`, `user`, `product`, `category`, `cart`, `order`, `inventory`, `voucher`) and the `common` infrastructure package (`AwsS3FileService`, CloudFront CDN & Signed URLs, `ErrorCode`, `GlobalExceptionHandler`).
 
-2. **[Checkout & Distributed Transaction Flow](file:///d:/dev/ABTechZone/.agents/skills/backend-architecture/checkout-flow.md)**
+2. **[Checkout & Distributed Transaction Flow](checkout-flow.md)**
    - Detailed sequence diagrams and step-by-step logic for `OrderService.createOrder(...)`, Redisson distributed locking (`tryLock`), transaction boundaries, voucher validation, inventory reservation, and explicit failure/rollback compensating actions.
 
-3. **[Testing Guidelines & Mockito Patterns](file:///d:/dev/ABTechZone/.agents/skills/backend-architecture/testing-guidelines.md)**
+3. **[Testing Guidelines & Mockito Patterns](testing-guidelines.md)**
    - Standardized unit testing patterns using `@ExtendWith(MockitoExtension.class)`, `@Mock AuthService`, MapStruct `@Spy` mappers, exact query method stubbing, and `lenient()` rationale to prevent `UnnecessaryStubbingException`.
 
 ## Maintenance Policy
-If any method signature, entity relationship, or business rule in the backend codebase is modified, update the corresponding reference document in this skill directory within the same commit.
+Update the corresponding reference when a change invalidates documented module
+ownership, entity relationships, business invariants, transaction boundaries,
+or reusable testing guidance. Do not require documentation churn for an
+ordinary method signature that does not change those concepts.

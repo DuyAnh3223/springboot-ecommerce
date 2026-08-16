@@ -1,6 +1,6 @@
 # Checkout & Distributed Transaction Flow
 
-> **Verified against commit `5e44606` on 2026-07-25**
+> Reference snapshot: verify relevant symbols against current code and tests.
 
 ## 1. Happy Path Execution Sequence
 
