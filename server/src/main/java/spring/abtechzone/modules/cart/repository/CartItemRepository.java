@@ -11,5 +11,4 @@ import spring.abtechzone.modules.cart.entity.CartItem;
 @Repository
 public interface CartItemRepository extends JpaRepository<CartItem, Long>, JpaSpecificationExecutor<CartItem> {
     Optional<CartItem> findByCartIdAndProductSkuId(Long cartId, Long productSkuId);
-
 }

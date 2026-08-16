@@ -29,7 +29,7 @@ public class SecurityConfig {
         "/users", "/auth/sign-in", "/auth/introspect", "/auth/sign-out", "/auth/refresh",
     };
     private static final String[] PUBLIC_CUSTOMER_ENDPOINTS = {
-        "/catalog/**", "/categories", "/categories/**",
+        "/catalog/**", "/categories", "/categories/**", "/vouchers", "/vouchers/**",
     };
     private static final String[] SWAGGER_ENDPOINTS = {
         "/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/api-docs.yaml", "/swagger-resources/**", "/webjars/**"

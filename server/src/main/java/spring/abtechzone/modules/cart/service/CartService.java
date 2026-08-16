@@ -209,6 +209,4 @@ public class CartService {
         cart.getItems().clear();
         cartRepository.save(cart);
     }
-
-
 }
