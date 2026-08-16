@@ -58,12 +58,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q --spider http://127.0.0.1:8080/abtechzone/actuator/health || exit 1",
+          "wget -q -O /dev/null http://127.0.0.1:8080/abtechzone/actuator/health || exit 1",
         ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
+      interval: 5s
+      timeout: 3s
+      retries: 8
+      start_period: 15s
     networks:
       - data
       - app
