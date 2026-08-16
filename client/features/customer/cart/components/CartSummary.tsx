@@ -1,22 +1,113 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { ShieldCheck, Truck, RotateCcw, ArrowRight } from "lucide-react";
 import { formatCurrency } from "@/shared/utils";
 import { Button } from "@/components/ui/button";
+import { CartVoucherInput } from "./CartVoucherInput";
+import { getVoucher } from "@/features/vouchers/services/voucher.service";
+import { VoucherResponse } from "@/features/vouchers/voucher.type";
 
 interface CartSummaryProps {
   selectedCount: number;
   selectedQuantity: number;
   subtotal: number;
+  selectedSkuIds?: number[];
 }
 
 export function CartSummary({
   selectedCount,
   selectedQuantity,
   subtotal,
+  selectedSkuIds = [],
 }: CartSummaryProps) {
+  const [appliedVoucher, setAppliedVoucher] = useState<VoucherResponse | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+
+  const FLAT_SHIPPING_FEE = subtotal > 0 ? 30000 : 0;
   const isCheckoutDisabled = selectedCount === 0;
+
+  // Re-calculate discount when subtotal or applied voucher changes
+  useEffect(() => {
+    if (!appliedVoucher) {
+      setDiscountAmount(0);
+      return;
+    }
+
+    const minOrder = appliedVoucher.minOrderValue || 0;
+    if (subtotal < minOrder) {
+      // Subtotal dropped below minOrderValue -> invalid
+      setDiscountAmount(0);
+      return;
+    }
+
+    let eligibleSubtotal = subtotal;
+    if (appliedVoucher.applyScope === "SPECIFIC") {
+      const eligibleSkuSet = new Set((appliedVoucher.productSkus || []).map((s) => s.id));
+      const hasMatch = selectedSkuIds.some((id) => eligibleSkuSet.has(id));
+      if (!hasMatch) {
+        setDiscountAmount(0);
+        return;
+      }
+    }
+
+    let computedDiscount = 0;
+    if (appliedVoucher.type === "FIXED_AMOUNT") {
+      computedDiscount = Math.min(appliedVoucher.value, eligibleSubtotal);
+    } else if (appliedVoucher.type === "PERCENTAGE") {
+      computedDiscount = (eligibleSubtotal * appliedVoucher.value) / 100;
+      if (appliedVoucher.maxDiscountAmount && appliedVoucher.maxDiscountAmount > 0) {
+        computedDiscount = Math.min(computedDiscount, appliedVoucher.maxDiscountAmount);
+      }
+    }
+
+    computedDiscount = Math.min(computedDiscount, eligibleSubtotal);
+    setDiscountAmount(Math.round(computedDiscount));
+  }, [appliedVoucher, subtotal, selectedSkuIds]);
+
+  const handleApplyVoucher = async (code: string) => {
+    try {
+      const voucher = await getVoucher(code);
+      if (!voucher || !voucher.isActive) {
+        return { success: false, message: "Mã voucher không tồn tại hoặc đã hết hiệu lực." };
+      }
+
+      if (voucher.endDate && new Date(voucher.endDate) < new Date()) {
+        return { success: false, message: "Mã voucher này đã hết hạn sử dụng." };
+      }
+
+      const minOrder = voucher.minOrderValue || 0;
+      if (subtotal < minOrder) {
+        return {
+          success: false,
+          message: `Đơn hàng chưa đạt giá trị tối thiểu ${formatCurrency(minOrder)} để áp dụng mã này.`,
+        };
+      }
+
+      if (voucher.applyScope === "SPECIFIC") {
+        const eligibleSkuSet = new Set((voucher.productSkus || []).map((s) => s.id));
+        const hasMatch = selectedSkuIds.some((id) => eligibleSkuSet.has(id));
+        if (!hasMatch) {
+          return {
+            success: false,
+            message: "Mã giảm giá này chỉ áp dụng cho một số sản phẩm chỉ định chưa có trong danh sách chọn.",
+          };
+        }
+      }
+
+      setAppliedVoucher(voucher);
+      return { success: true };
+    } catch {
+      return { success: false, message: "Không tìm thấy mã voucher hợp lệ." };
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setDiscountAmount(0);
+  };
+
+  const totalCheckout = Math.max(0, subtotal + FLAT_SHIPPING_FEE - discountAmount);
 
   return (
     <div className="space-y-4">
@@ -33,15 +124,42 @@ export function CartSummary({
             </span>
           </div>
 
-          <div className="flex justify-between items-baseline pt-2 border-t border-slate-100">
-            <span className="text-base font-bold text-slate-800">
-              Tạm tính sản phẩm đang chọn:
+          <div className="flex justify-between text-slate-600">
+            <span>Tạm tính hàng:</span>
+            <span className="font-semibold text-slate-800">{formatCurrency(subtotal)}</span>
+          </div>
+
+          <div className="flex justify-between text-slate-600">
+            <span>Phí vận chuyển tạm tính:</span>
+            <span className="font-semibold text-slate-800">
+              {subtotal > 0 ? formatCurrency(FLAT_SHIPPING_FEE) : "0đ"}
             </span>
+          </div>
+
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-emerald-600 font-semibold">
+              <span>Giảm giá voucher:</span>
+              <span>-{formatCurrency(discountAmount)}</span>
+            </div>
+          )}
+
+          <div className="flex justify-between items-baseline pt-3 border-t border-slate-100">
+            <span className="text-base font-bold text-slate-800">Tổng thanh toán:</span>
             <span className="text-xl font-black text-shop_dark_green">
-              {formatCurrency(subtotal)}
+              {formatCurrency(totalCheckout)}
             </span>
           </div>
         </div>
+
+        {/* Voucher Section */}
+        <CartVoucherInput
+          subtotal={subtotal}
+          selectedSkuIds={selectedSkuIds}
+          appliedVoucherCode={appliedVoucher?.code || null}
+          discountAmount={discountAmount}
+          onApplyVoucher={handleApplyVoucher}
+          onRemoveVoucher={handleRemoveVoucher}
+        />
 
         <div className="pt-2">
           <Button
@@ -52,13 +170,10 @@ export function CartSummary({
               "Vui lòng chọn sản phẩm"
             ) : (
               <span className="flex items-center justify-center">
-                Tiến hành thanh toán (Sắp ra mắt) <ArrowRight className="ml-2 h-4 w-4" />
+                Tiến hành thanh toán <ArrowRight className="ml-2 h-4 w-4" />
               </span>
             )}
           </Button>
-          <p className="mt-2 text-center text-xs text-slate-400">
-            Tính năng thanh toán sẽ được cập nhật sau.
-          </p>
         </div>
       </div>
 
