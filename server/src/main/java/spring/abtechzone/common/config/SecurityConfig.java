@@ -65,6 +65,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, PUBLIC_CUSTOMER_ENDPOINTS)
                     .permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/health/**")
+                    .permitAll()
                     .anyRequest()
                     .authenticated();
         });
