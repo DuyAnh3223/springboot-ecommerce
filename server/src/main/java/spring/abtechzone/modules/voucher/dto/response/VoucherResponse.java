@@ -25,9 +25,11 @@ public class VoucherResponse {
     LocalDateTime startDate;
     LocalDateTime endDate;
     Integer maxUses;
+    Integer usedCount;
     Integer maxPerUser;
     BigDecimal minOrderValue;
-    boolean isActive;
+    Boolean isActive;
+    BigDecimal maxDiscountAmount;
     VoucherApplyScope applyScope;
     Set<ProductSkuResponse> productSkus;
 }

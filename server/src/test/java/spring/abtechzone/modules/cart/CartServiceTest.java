@@ -20,12 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
@@ -42,13 +40,10 @@ import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
-import spring.abtechzone.modules.user.repository.UserRepository;
+import spring.abtechzone.modules.user.service.UserService;
 
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
-
-    @Mock
-    UserRepository userRepository;
 
     @Mock
     CartRepository cartRepository;
@@ -66,7 +61,7 @@ class CartServiceTest {
     CartMapper cartMapper;
 
     @Mock
-    AuthService authService;
+    UserService userService;
 
     @InjectMocks
     CartService cartService;
@@ -80,13 +75,9 @@ class CartServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Set up SecurityContext — giả lập user đã đăng nhập
-        SecurityContextHolder.getContext()
-                .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
-        lenient().when(authService.getCurrentUsername()).thenReturn("testuser");
-
         // Shared fixtures
         user = User.builder().id(userId).username("testuser").build();
+        lenient().when(userService.getCurrentUser()).thenReturn(user);
 
         Product product = Product.builder().id(1L).name("iPhone 15").build();
 
@@ -137,7 +128,6 @@ class CartServiceTest {
         @DisplayName("Giỏ chưa tồn tại → tạo Cart mới + CartItem mới")
         void shouldCreateNewCartAndNewItem_whenCartDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.empty());
             when(cartRepository.save(any(Cart.class))).thenReturn(cart);
@@ -171,7 +161,6 @@ class CartServiceTest {
         @DisplayName("Giỏ đã tồn tại + SKU mới → thêm CartItem mới vào giỏ cũ")
         void shouldAddNewItem_whenCartExistsAndSkuIsNew() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -207,7 +196,6 @@ class CartServiceTest {
                     .build();
             cart.getItems().add(existingItem);
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -229,7 +217,6 @@ class CartServiceTest {
         void shouldCreateNewItem_whenQuantityIsEqualToStock() {
             // Given (stock = 50, request quantity = 50)
             request = CartItemRequest.builder().productSkuId(100L).quantity(50).build();
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -248,7 +235,6 @@ class CartServiceTest {
         void shouldThrowStockInvalid_whenNewSkuQuantityExceedsStock() {
             // Given (stock = 50, request quantity = 51)
             request = CartItemRequest.builder().productSkuId(100L).quantity(51).build();
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
 
             // When & Then
@@ -277,7 +263,6 @@ class CartServiceTest {
             cart.getItems().add(existingItem);
 
             request = CartItemRequest.builder().productSkuId(100L).quantity(10).build();
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -305,7 +290,6 @@ class CartServiceTest {
             cart.getItems().add(existingItem);
 
             request = CartItemRequest.builder().productSkuId(100L).quantity(11).build();
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
@@ -336,7 +320,6 @@ class CartServiceTest {
             cart.getItems().add(existingItem);
 
             request = CartItemRequest.builder().productSkuId(100L).quantity(10).build();
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
@@ -449,7 +432,7 @@ class CartServiceTest {
             // Given
             request = CartItemRequest.builder().productSkuId(100L).quantity(2).build();
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(productSku));
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.empty());
+            when(userService.getCurrentUser()).thenThrow(new AppException(ErrorCode.USER_NOT_FOUND));
 
             // When & Then
             assertThatThrownBy(() -> cartService.addToCart(request))
@@ -484,7 +467,6 @@ class CartServiceTest {
                     .build();
             cart.getItems().add(item);
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartMapper.toCartResponse(cart)).thenReturn(cartResponse);
             when(cartRepository.save(any(Cart.class))).thenReturn(cart);
@@ -511,7 +493,6 @@ class CartServiceTest {
                     .build();
             cart.getItems().add(item);
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartMapper.toCartResponse(cart)).thenReturn(cartResponse);
 
@@ -528,7 +509,6 @@ class CartServiceTest {
         @DisplayName("Giỏ không tồn tại → throw CART_NOT_FOUND")
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.empty());
 
             // When & Then
@@ -560,7 +540,6 @@ class CartServiceTest {
                     .unitPrice(BigDecimal.valueOf(999.99))
                     .build();
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
 
@@ -575,7 +554,6 @@ class CartServiceTest {
         @DisplayName("Cart không tồn tại → throw CART_NOT_FOUND")
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.empty());
 
             // When & Then
@@ -593,7 +571,6 @@ class CartServiceTest {
         @DisplayName("CartItem với skuId không tồn tại → throw CART_ITEM_NOT_FOUND")
         void shouldThrowCartItemNotFound_whenItemDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 999L)).thenReturn(Optional.empty());
 
@@ -636,7 +613,6 @@ class CartServiceTest {
             // Given — request quantity = 10, stock = 50 → hợp lệ
             request = UpdateQuantityRequest.builder().quantity(10).build();
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
             when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -670,7 +646,6 @@ class CartServiceTest {
             // Given — request quantity = 100, stock = 50 → vượt
             request = UpdateQuantityRequest.builder().quantity(100).build();
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 100L)).thenReturn(Optional.of(cartItem));
 
@@ -692,7 +667,6 @@ class CartServiceTest {
             // Given
             request = UpdateQuantityRequest.builder().quantity(5).build();
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.empty());
 
             // When & Then
@@ -710,7 +684,6 @@ class CartServiceTest {
             // Given
             request = UpdateQuantityRequest.builder().quantity(5).build();
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdAndProductSkuId(1L, 999L)).thenReturn(Optional.empty());
 
@@ -738,7 +711,6 @@ class CartServiceTest {
             cart.getItems().add(CartItem.builder().id(1L).quantity(2).build());
             cart.getItems().add(CartItem.builder().id(2L).quantity(3).build());
 
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
             // When
@@ -753,7 +725,6 @@ class CartServiceTest {
         @DisplayName("Cart không tồn tại → throw CART_NOT_FOUND")
         void shouldThrowCartNotFound_whenCartDoesNotExist() {
             // Given
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.empty());
 
             // When & Then

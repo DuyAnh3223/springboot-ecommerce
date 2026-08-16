@@ -5,6 +5,7 @@ import java.util.List;
 import jakarta.validation.Valid;
 
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,7 @@ public class VoucherController {
     VoucherService voucherService;
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create voucher", description = "Create a new voucher. Requires ADMIN role")
     @ApiResponse(responseCode = "200", description = "Voucher created")
     @ApiResponse(responseCode = "400", description = "Voucher code already exists or validation error")
@@ -50,9 +52,8 @@ public class VoucherController {
     @GetMapping
     @Operation(
             summary = "Get vouchers (paginated)",
-            description = "Retrieve a paginated list of vouchers with optional search. Requires ADMIN role")
+            description = "Retrieve a paginated list of vouchers with optional search")
     @ApiResponse(responseCode = "200", description = "Vouchers retrieved")
-    @ApiResponse(responseCode = "403", description = "Access denied")
     ApiResult<Page<VoucherResponse>> getVouchers(@Valid @ModelAttribute VoucherSearchRequest request) {
         return ApiResult.<Page<VoucherResponse>>builder()
                 .result(voucherService.getVouchers(request))
@@ -71,6 +72,7 @@ public class VoucherController {
     }
 
     @PatchMapping("/{code}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update voucher", description = "Update a voucher's configuration. Requires ADMIN role")
     @ApiResponse(responseCode = "200", description = "Voucher updated")
     @ApiResponse(responseCode = "404", description = "Voucher not found")
@@ -84,6 +86,7 @@ public class VoucherController {
     }
 
     @DeleteMapping("/{code}")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Delete voucher", description = "Delete a voucher by code. Requires ADMIN role")
     @ApiResponse(responseCode = "200", description = "Voucher deleted")
     @ApiResponse(responseCode = "404", description = "Voucher not found")
@@ -93,11 +96,26 @@ public class VoucherController {
         return ApiResult.<Void>builder().build();
     }
 
+    @PatchMapping("/{code}/reactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+            summary = "Reactivate voucher",
+            description = "Reactivate a soft-deleted voucher by code. Requires ADMIN role")
+    @ApiResponse(responseCode = "200", description = "Voucher reactivated")
+    @ApiResponse(responseCode = "404", description = "Voucher not found")
+    @ApiResponse(responseCode = "403", description = "Access denied")
+    ApiResult<VoucherResponse> reactivateVoucher(@Parameter(description = "Voucher code") @PathVariable String code) {
+        return ApiResult.<VoucherResponse>builder()
+                .result(voucherService.reactivate(code))
+                .build();
+    }
+
     @GetMapping("/{code}/products")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(
             summary = "Get applicable SKUs",
             description =
-                    "List all product SKUs that this voucher can be applied to (only relevant when applyScope = SPECIFIC_SKUS)")
+                    "List all product SKUs that this voucher can be applied to (only relevant when applyScope = SPECIFIC)")
     @ApiResponse(responseCode = "200", description = "Applicable SKUs retrieved")
     @ApiResponse(responseCode = "404", description = "Voucher not found")
     ApiResult<List<ProductSkuResponse>> getProductSkusByVoucherCode(
@@ -107,11 +125,13 @@ public class VoucherController {
                 .build();
     }
 
+    @Deprecated(since = "Plan-Commerce-02", forRemoval = false)
     @PostMapping("/validate")
+    @PreAuthorize("isAuthenticated()")
     @Operation(
-            summary = "Validate and calculate discount",
+            summary = "Validate and calculate discount (Legacy / Advisory Only)",
             description =
-                    "Validate a voucher code against a given order subtotal and return the computed discount amount")
+                    "Legacy client-total voucher validation. Authoritative discount calculation happens server-side in checkout review and order creation.")
     @ApiResponse(responseCode = "200", description = "Voucher valid, discount calculated")
     @ApiResponse(responseCode = "400", description = "Voucher expired, exhausted, or below minimum order value")
     @ApiResponse(responseCode = "404", description = "Voucher not found")

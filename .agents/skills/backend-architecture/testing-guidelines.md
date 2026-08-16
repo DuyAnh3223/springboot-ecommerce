@@ -1,33 +1,12 @@
 # Unit Testing Guidelines & Mockito Conventions
 
-> **Verified against commit `5e44606` on 2026-07-25**
+> Reference snapshot: verify relevant symbols against current code and tests.
 
-## Test-Level Selection Policy
+## Test-Level Selection
 
-Use the fastest test that can prove the behavior. Service branching, validation,
-mapping, null handling, casting, calculation, and JPA `Specification` filter
-assembly are unit-test responsibilities; do not start Spring or Testcontainers
-for them. Verify the generated JPA/PostgreSQL query itself with a focused
-integration test when query translation is the risk.
-
-Use a MVC slice for HTTP binding, validation, JSON/error contracts, and security
-filter behavior. Use PostgreSQL-backed repository/integration tests only when
-the assertion depends on real SQL/JSONB, JPA mappings, constraints, transaction
-rollback, or an end-to-end boundary. Integration tests are a small smoke suite
-for risk areas, not a duplicate of every service test in each module; a module
-may need no integration test at all.
-
-See `.agents/rules/testing-workflow.md` for the execution order, integration
-test selection criteria, and Testcontainers policy.
-
-### Anti-Duplication Rule
-
-Assign each behavior one primary test level: unit for pure logic, MVC slice for
-HTTP/security contracts, and PostgreSQL integration for an unmockable database
-or transaction boundary. A behavior may appear at another level only if that
-test asserts a different risk. For example, test null-safe filter assembly as a
-unit test and test one representative JSONB query in PostgreSQL; do not repeat
-every filter combination end-to-end.
+The canonical test-level selection, execution order, integration criteria, and
+Testcontainers policy live in `.agents/rules/testing-workflow.md`. This document
+only owns backend Mockito and unit-test implementation conventions.
 
 ## 1. Unit Test Architecture & Setup
 

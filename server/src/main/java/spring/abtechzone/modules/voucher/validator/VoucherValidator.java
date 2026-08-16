@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
@@ -27,14 +28,24 @@ public class VoucherValidator {
 
     public void validateCreate(VoucherCreateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
+        validateFutureStartDate(request.getStartDate());
+        validateValue(request.getType(), request.getValue(), request.getMaxDiscountAmount());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
     }
 
     public void validateUpdate(VoucherUpdateRequest request) {
         validateDates(request.getStartDate(), request.getEndDate());
-        validateValue(request.getType(), request.getValue());
+        validateValue(request.getType(), request.getValue(), request.getMaxDiscountAmount());
         validateApplyScope(request.getApplyScope(), request.getProductSkuIds());
+    }
+
+    public void validateForCheckout(Voucher voucher, User user, BigDecimal fullSubtotal, BigDecimal eligibleSubtotal) {
+        validateActive(voucher);
+        validateExpiry(voucher);
+        validateUsageLimit(voucher);
+        validatePerUserLimit(voucher, user);
+        validateMinOrderValue(voucher, fullSubtotal);
+        validateSpecificScopeEligibility(voucher, eligibleSubtotal);
     }
 
     public void validateVoucher(Voucher voucher, BigDecimal totalOrder) {
@@ -45,7 +56,7 @@ public class VoucherValidator {
     }
 
     private void validateActive(Voucher voucher) {
-        if (!voucher.isActive()) {
+        if (!Boolean.TRUE.equals(voucher.getIsActive())) {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
         }
     }
@@ -67,10 +78,29 @@ public class VoucherValidator {
         }
     }
 
+    private void validatePerUserLimit(Voucher voucher, User user) {
+        if (voucher.getMaxPerUser() == null || user == null) {
+            return;
+        }
+        long userUsageCount = voucherRepository.countUsageByVoucherIdAndUserId(voucher.getId(), user.getId());
+        if (userUsageCount >= voucher.getMaxPerUser()) {
+            throw new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED);
+        }
+    }
+
     private void validateMinOrderValue(Voucher voucher, BigDecimal totalOrder) {
         BigDecimal orderVal = totalOrder != null ? totalOrder : BigDecimal.ZERO;
         if (voucher.getMinOrderValue() != null && orderVal.compareTo(voucher.getMinOrderValue()) < 0) {
             throw new AppException(ErrorCode.VOUCHER_MIN_ORDER_VALUE_INVALID);
+        }
+    }
+
+    private void validateSpecificScopeEligibility(Voucher voucher, BigDecimal eligibleSubtotal) {
+        if (voucher.getApplyScope() == VoucherApplyScope.SPECIFIC) {
+            BigDecimal eligible = eligibleSubtotal != null ? eligibleSubtotal : BigDecimal.ZERO;
+            if (eligible.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new AppException(ErrorCode.VOUCHER_SCOPE_INVALID);
+            }
         }
     }
 
@@ -84,17 +114,9 @@ public class VoucherValidator {
         }
     }
 
-    private void validateValue(VoucherType type, BigDecimal value) {
-        if (type == null || value == null) {
-            return;
-        }
-
-        if (value.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
-        }
-
-        if (type == VoucherType.PERCENTAGE && value.compareTo(ONE_HUNDRED) >= 0) {
-            throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
+    private void validateFutureStartDate(LocalDateTime startDate) {
+        if (startDate != null && startDate.isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.VOUCHER_DATE_INVALID);
         }
     }
 
@@ -111,6 +133,28 @@ public class VoucherValidator {
 
         if (applyScope == VoucherApplyScope.SPECIFIC && !hasProductSkus) {
             throw new AppException(ErrorCode.VOUCHER_SCOPE_INVALID);
+        }
+    }
+
+    public void validateValue(VoucherType type, BigDecimal value, BigDecimal maxDiscountAmount) {
+        if (type == null || value == null) return;
+
+        if (value.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
+        }
+
+        if (type == VoucherType.FIXED_AMOUNT && maxDiscountAmount != null) {
+            throw new AppException(ErrorCode.VOUCHER_MAX_DISCOUNT_INVALID);
+        }
+
+        if (type == VoucherType.PERCENTAGE) {
+            if (value.compareTo(ONE_HUNDRED) >= 0) {
+                throw new AppException(ErrorCode.VOUCHER_VALUE_INVALID);
+            }
+
+            if (maxDiscountAmount != null && maxDiscountAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new AppException(ErrorCode.VOUCHER_MAX_DISCOUNT_INVALID);
+            }
         }
     }
 }

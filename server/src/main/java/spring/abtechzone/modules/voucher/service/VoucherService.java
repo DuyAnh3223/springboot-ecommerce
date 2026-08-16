@@ -4,6 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
@@ -77,6 +80,7 @@ public class VoucherService {
     public Page<VoucherResponse> getVouchers(VoucherSearchRequest request) {
         Specification<Voucher> spec = Specification.where(VoucherSpecifications.hasActive(request.getActive()))
                 .and(VoucherSpecifications.hasStatus(request.getStatus()))
+                .and(VoucherSpecifications.hasCodeOrNameLike(request.getSearch()))
                 .and(VoucherSpecifications.fetchProductSkus());
 
         Page<Voucher> vouchersPage = voucherRepository.findAll(spec, request.toPageable());
@@ -91,10 +95,6 @@ public class VoucherService {
     @Transactional
     public VoucherResponse update(String code, VoucherUpdateRequest request) {
         Voucher voucher = findVoucherByCode(code);
-
-        if (!voucher.getCode().equals(request.getCode()) && voucherRepository.existsByCode(request.getCode())) {
-            throw new AppException(ErrorCode.VOUCHER_EXISTED);
-        }
 
         voucherValidator.validateUpdate(request);
         voucherMapper.updateVoucher(voucher, request);
@@ -114,8 +114,15 @@ public class VoucherService {
 
     public void delete(String code) {
         Voucher voucher = findVoucherByCode(code);
-        voucher.setActive(false);
+        voucher.setIsActive(false);
         voucherRepository.save(voucher);
+    }
+
+    @Transactional
+    public VoucherResponse reactivate(String code) {
+        Voucher voucher = findVoucherByCode(code);
+        voucher.setIsActive(true);
+        return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
     }
 
     @Transactional(readOnly = true)
@@ -132,6 +139,29 @@ public class VoucherService {
         return productSkuService.toSkuResponseList(skus);
     }
 
+    public BigDecimal calculateEligibleSubtotal(
+            Voucher voucher, Map<Long, BigDecimal> skuSubtotals, BigDecimal fullSubtotal) {
+        if (voucher == null || voucher.getApplyScope() == null || voucher.getApplyScope() == VoucherApplyScope.ALL) {
+            return fullSubtotal != null ? fullSubtotal : BigDecimal.ZERO;
+        }
+
+        if (skuSubtotals == null || skuSubtotals.isEmpty() || voucher.getProductSkus() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        Set<Long> eligibleSkuIds =
+                voucher.getProductSkus().stream().map(ProductSku::getId).collect(Collectors.toSet());
+
+        BigDecimal eligibleSubtotal = BigDecimal.ZERO;
+        for (Map.Entry<Long, BigDecimal> entry : skuSubtotals.entrySet()) {
+            if (entry.getKey() != null && eligibleSkuIds.contains(entry.getKey()) && entry.getValue() != null) {
+                eligibleSubtotal = eligibleSubtotal.add(entry.getValue());
+            }
+        }
+        return eligibleSubtotal;
+    }
+
+    @Deprecated(since = "Plan-Commerce-02", forRemoval = false)
     public VoucherDiscountResponse calculateDiscount(VoucherDiscountRequest request) {
         Voucher voucher = findVoucherByCode(request.getCode());
 
@@ -150,18 +180,33 @@ public class VoucherService {
                 .build();
     }
 
-    private static BigDecimal getDiscount(Voucher voucher, BigDecimal totalOrder) {
-        BigDecimal discountAmount = BigDecimal.ZERO;
-        if (voucher.getType() == VoucherType.FIXED_AMOUNT) {
-            discountAmount = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
-        } else if (voucher.getType() == VoucherType.PERCENTAGE) {
-            BigDecimal percentage = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
-            discountAmount = totalOrder.multiply(percentage).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    public BigDecimal getDiscount(Voucher voucher, BigDecimal eligibleSubtotal) {
+        if (voucher == null || eligibleSubtotal == null || eligibleSubtotal.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
         }
 
-        if (discountAmount.compareTo(totalOrder) > 0) {
-            discountAmount = totalOrder;
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        BigDecimal voucherValue = voucher.getValue() != null ? voucher.getValue() : BigDecimal.ZERO;
+
+        if (voucher.getType() == VoucherType.FIXED_AMOUNT) {
+            discountAmount = voucherValue.min(eligibleSubtotal);
+        } else if (voucher.getType() == VoucherType.PERCENTAGE) {
+            discountAmount =
+                    eligibleSubtotal.multiply(voucherValue).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+
+            if (voucher.getMaxDiscountAmount() != null
+                    && voucher.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                discountAmount = discountAmount.min(voucher.getMaxDiscountAmount());
+            }
         }
-        return discountAmount;
+
+        // Discount Amount must not higher than eligibleSubtotal (applies to both FIXED_AMOUNT and PERCENTAGE)
+        if (discountAmount.compareTo(eligibleSubtotal) > 0) {
+            discountAmount = eligibleSubtotal;
+        }
+        if (discountAmount.compareTo(BigDecimal.ZERO) < 0) {
+            discountAmount = BigDecimal.ZERO;
+        }
+        return discountAmount.setScale(2, RoundingMode.HALF_UP);
     }
 }
