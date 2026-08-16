@@ -60,7 +60,9 @@ public class Voucher {
     @Column(precision = 12, scale = 2)
     BigDecimal minOrderValue; // Giá trị đơn hàng tối thiểu
 
-    boolean isActive;
+    @Column(name = "is_active")
+    @Builder.Default
+    Boolean isActive = true;
 
     @Column(precision = 12, scale = 2)
     BigDecimal maxDiscountAmount;

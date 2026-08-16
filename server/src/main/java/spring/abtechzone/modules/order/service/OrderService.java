@@ -125,12 +125,15 @@ public class OrderService {
         String appliedVoucherCode = null;
 
         if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
-            Voucher voucher = voucherRepository
-                    .findByCode(request.getVoucherCode())
-                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+            Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
+            for (CartItem item : cart.getItems()) {
+                BigDecimal itemTotal = item.getProductSku().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+                skuSubtotals.merge(item.getProductSku().getId(), itemTotal, BigDecimal::add);
+            }
 
-            voucherValidator.validateVoucher(voucher, subtotal);
-            totalDiscount = voucherService.getDiscount(voucher, subtotal);
+            Voucher voucher = loadAndValidateCheckoutVoucher(request.getVoucherCode(), user, skuSubtotals, subtotal);
+            BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
+            totalDiscount = voucherService.getDiscount(voucher, eligibleSubtotal);
             appliedVoucherCode = voucher.getCode();
         }
 
@@ -234,7 +237,13 @@ public class OrderService {
         ProcessedItems processed = processCartItems(freshCart);
 
         // Step 4: Validate & Apply Voucher
-        AppliedVoucherInfo voucherInfo = applyVoucher(request, user, processed.subtotal());
+        Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
+        for (OrderItem item : processed.orderItems()) {
+            BigDecimal itemTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            skuSubtotals.merge(item.getSku().getId(), itemTotal, BigDecimal::add);
+        }
+        AppliedVoucherInfo voucherInfo =
+                applyVoucher(request.getVoucherCode(), user, skuSubtotals, processed.subtotal());
 
         // Step 5: Build Order & Link Order Items
         Order order = buildOrder(
@@ -296,20 +305,30 @@ public class OrderService {
         return new ProcessedItems(orderItems, subtotal, skuMap);
     }
 
-    private AppliedVoucherInfo applyVoucher(CreateOrderRequest request, User user, BigDecimal subtotal) {
-        if (request.getVoucherCode() == null || request.getVoucherCode().isBlank()) {
+    private AppliedVoucherInfo applyVoucher(
+            String voucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
+        if (voucherCode == null || voucherCode.isBlank()) {
             return new AppliedVoucherInfo(null, BigDecimal.ZERO);
         }
 
-        Voucher appliedVoucher = voucherRepository
-                .findByCode(request.getVoucherCode())
+        Voucher voucher = loadAndValidateCheckoutVoucher(voucherCode, user, skuSubtotals, subtotal);
+        BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
+        BigDecimal discountAmount = voucherService.getDiscount(voucher, eligibleSubtotal);
+
+        return new AppliedVoucherInfo(voucher, discountAmount);
+    }
+
+    private Voucher loadAndValidateCheckoutVoucher(
+            String voucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal fullSubtotal) {
+        String normalizedCode = voucherCode != null ? voucherCode.trim().toUpperCase(java.util.Locale.ROOT) : null;
+        Voucher voucher = voucherRepository
+                .findByCode(normalizedCode)
+                .or(() -> voucherRepository.findByCode(voucherCode))
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
 
-        voucherValidator.validateVoucher(appliedVoucher, subtotal);
-        validateVoucherPerUser(appliedVoucher, user);
-        BigDecimal discountAmount = voucherService.getDiscount(appliedVoucher, subtotal);
-
-        return new AppliedVoucherInfo(appliedVoucher, discountAmount);
+        BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, fullSubtotal);
+        voucherValidator.validateForCheckout(voucher, user, fullSubtotal, eligibleSubtotal);
+        return voucher;
     }
 
     private Order buildOrder(
@@ -423,17 +442,6 @@ public class OrderService {
     private void validateStock(ProductSku sku, int requestedQuantity) {
         if (sku.getStock() == null || sku.getStock() < requestedQuantity) {
             throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
-        }
-    }
-
-    private void validateVoucherPerUser(Voucher voucher, User user) {
-        if (voucher.getMaxPerUser() == null) return;
-
-        // Fix N+1
-        long userUsageCount = voucherRepository.countUsageByVoucherIdAndUserId(voucher.getId(), user.getId());
-
-        if (userUsageCount >= voucher.getMaxPerUser()) {
-            throw new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED);
         }
     }
 
