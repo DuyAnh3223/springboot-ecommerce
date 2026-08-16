@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { updateVoucher } from "../services/voucher.service";
 import { VoucherUpdateRequest } from "../voucher.type";
+import { mapVoucherError } from "../utils/voucher-error.mapper";
 
 export async function updateVoucherAction(
   voucherCode: string,
@@ -11,9 +12,9 @@ export async function updateVoucherAction(
     const result = await updateVoucher(voucherCode, values);
     revalidatePath("/admin/vouchers");
     return { success: true, voucher: result };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
-      error: error.response?.data?.message || "Cập nhập voucher thất bại",
+      error: mapVoucherError(error, "Cập nhật mã giảm giá thất bại"),
     };
   }
 }

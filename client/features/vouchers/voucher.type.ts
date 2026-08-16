@@ -21,7 +21,7 @@ export interface VoucherResponse {
 
 export interface ProductSkuSummary {
   id: number;
-  skuCode: string;
+  sku: string;
   price: number;
   stock: number;
   productName?: string;
@@ -39,16 +39,17 @@ export interface VoucherCreateRequest {
   maxUses?: number | null;
   maxPerUser?: number | null;
   minOrderValue?: number | null;
-  isActive?: boolean;
+  active?: boolean;
   applyScope: VoucherApplyScope;
   productSkuIds?: number[];
 }
 
-export interface VoucherUpdateRequest extends VoucherCreateRequest {}
+export type VoucherUpdateRequest = Omit<VoucherCreateRequest, "code">;
 
 export interface VoucherSearchParams {
+  search?: string;
   active?: boolean;
-  status?: "active" | "expired";
+  status?: "active" | "expired" | "disabled";
   page?: number;
   size?: number;
   sortBy?: string;

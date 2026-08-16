@@ -1,15 +1,16 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { deleteVoucher } from "../services/voucher.service";
+import { mapVoucherError } from "../utils/voucher-error.mapper";
 
 export async function deleteVoucherAction(voucherCode: string) {
   try {
-    const result = await deleteVoucher(voucherCode);
+    await deleteVoucher(voucherCode);
     revalidatePath("/admin/vouchers");
-    return { success: true, voucher: result };
-  } catch (error: any) {
+    return { success: true };
+  } catch (error: unknown) {
     return {
-      error: error.response?.data?.message || "Xóa voucher thất bại",
+      error: mapVoucherError(error, "Ngừng kích hoạt mã giảm giá thất bại"),
     };
   }
 }

@@ -42,6 +42,13 @@ export async function deleteVoucher(voucherCode: string): Promise<void> {
   await api.delete(`/vouchers/${voucherCode}`);
 }
 
+export async function reactivateVoucher(
+  voucherCode: string,
+): Promise<VoucherResponse> {
+  const response = await api.patch(`/vouchers/${voucherCode}/reactivate`);
+  return response.data.result;
+}
+
 export async function validateVoucher(
   values: VoucherDiscountRequest,
 ): Promise<VoucherDiscountResponse> {
