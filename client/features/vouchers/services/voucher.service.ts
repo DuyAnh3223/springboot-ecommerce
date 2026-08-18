@@ -5,8 +5,6 @@ import {
   VoucherSearchParams,
   VoucherCreateRequest,
   VoucherUpdateRequest,
-  VoucherDiscountRequest,
-  VoucherDiscountResponse,
 } from "../voucher.type";
 
 export async function getVouchers(
@@ -46,12 +44,5 @@ export async function reactivateVoucher(
   voucherCode: string,
 ): Promise<VoucherResponse> {
   const response = await api.patch(`/vouchers/${voucherCode}/reactivate`);
-  return response.data.result;
-}
-
-export async function validateVoucher(
-  values: VoucherDiscountRequest,
-): Promise<VoucherDiscountResponse> {
-  const response = await api.post("/vouchers/validate", values);
   return response.data.result;
 }

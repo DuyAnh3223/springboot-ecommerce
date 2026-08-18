@@ -18,10 +18,8 @@ import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResult;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
-import spring.abtechzone.modules.voucher.dto.request.VoucherDiscountRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherSearchRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
-import spring.abtechzone.modules.voucher.dto.response.VoucherDiscountResponse;
 import spring.abtechzone.modules.voucher.dto.response.VoucherResponse;
 import spring.abtechzone.modules.voucher.service.VoucherService;
 
@@ -122,22 +120,6 @@ public class VoucherController {
             @Parameter(description = "Voucher code") @PathVariable String code) {
         return ApiResult.<List<ProductSkuResponse>>builder()
                 .result(voucherService.getAllProductSkusByVoucherCode(code))
-                .build();
-    }
-
-    @Deprecated(since = "Plan-Commerce-02", forRemoval = false)
-    @PostMapping("/validate")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(
-            summary = "Validate and calculate discount (Legacy / Advisory Only)",
-            description =
-                    "Legacy client-total voucher validation. Authoritative discount calculation happens server-side in checkout review and order creation.")
-    @ApiResponse(responseCode = "200", description = "Voucher valid, discount calculated")
-    @ApiResponse(responseCode = "400", description = "Voucher expired, exhausted, or below minimum order value")
-    @ApiResponse(responseCode = "404", description = "Voucher not found")
-    ApiResult<VoucherDiscountResponse> validateVoucher(@RequestBody @Valid VoucherDiscountRequest request) {
-        return ApiResult.<VoucherDiscountResponse>builder()
-                .result(voucherService.calculateDiscount(request))
                 .build();
     }
 }

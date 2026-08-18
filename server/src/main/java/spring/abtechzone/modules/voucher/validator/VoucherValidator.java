@@ -48,13 +48,6 @@ public class VoucherValidator {
         validateSpecificScopeEligibility(voucher, eligibleSubtotal);
     }
 
-    public void validateVoucher(Voucher voucher, BigDecimal totalOrder) {
-        validateActive(voucher);
-        validateExpiry(voucher);
-        validateUsageLimit(voucher);
-        validateMinOrderValue(voucher, totalOrder);
-    }
-
     private void validateActive(Voucher voucher) {
         if (!Boolean.TRUE.equals(voucher.getIsActive())) {
             throw new AppException(ErrorCode.VOUCHER_EXPIRED);
