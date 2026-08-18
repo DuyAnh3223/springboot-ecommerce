@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -37,6 +38,7 @@ import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
 import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
 import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
+import spring.abtechzone.modules.order.dto.response.VoucherReviewResponse;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
 import spring.abtechzone.modules.order.entity.OrderStatusHistory;
@@ -77,7 +79,7 @@ public class OrderService {
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
 
-    static BigDecimal FLAT_SHIPPING_FEE = BigDecimal.valueOf(30000);
+    BigDecimal checkoutShippingFee = BigDecimal.valueOf(30000);
 
     // ────────────────────────────────────────────────────────
     // 0. Get Orders by User ID
@@ -97,64 +99,162 @@ public class OrderService {
         // Step 1: Auth User
         User user = getAuthenticatedUser();
 
-        // Step 2: Get Actice Cart, existed and not null
-        Cart cart = getActiveCart(user);
-        validateCartNotEmpty(cart);
-
-        // Step 3: Validate each CartItem
-        List<CheckoutItemResponse> items = new ArrayList<>();
-        BigDecimal subtotal = BigDecimal.ZERO;
-
-        for (CartItem cartItem : cart.getItems()) {
-            ProductSku sku = cartItem.getProductSku();
-
-            // Product existed & is selling?
-            validateProductAvailable(sku);
-
-            // stock?
-            validateStock(sku, cartItem.getQuantity());
-
-            items.add(orderMapper.toCheckoutItemResponse(cartItem));
-
-            BigDecimal totalPrice = sku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-            subtotal = subtotal.add(totalPrice);
+        // Step 1b: Selection must be present, non-empty and positive (service-level guard for non-controller callers)
+        if (request.getSelectedSkuIds() == null
+                || request.getSelectedSkuIds().isEmpty()
+                || request.getSelectedSkuIds().stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        // Step 4: Validate & calc discount from voucher
-        BigDecimal totalDiscount = BigDecimal.ZERO;
-        String appliedVoucherCode = null;
+        // Step 2: Get active cart
+        Cart cart = getActiveCart(user);
 
-        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
-            Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
-            for (CartItem item : cart.getItems()) {
-                BigDecimal itemTotal = item.getProductSku().getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
-                skuSubtotals.merge(item.getProductSku().getId(), itemTotal, BigDecimal::add);
+        // Step 3: Normalize selection: deduplicate + sort ascending
+        List<Long> selectedSkuIds =
+                request.getSelectedSkuIds().stream().distinct().sorted().toList();
+
+        // Step 4: Map cart items by SKU ID; every selected ID must belong to the active cart
+        Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
+
+        List<CartItem> selectedItems = new ArrayList<>();
+        for (Long skuId : selectedSkuIds) {
+            CartItem cartItem = cartItemBySkuId.get(skuId);
+            if (cartItem == null) {
+                // Ownership-safe: selected SKU not in this user's active cart (400, never leaks other carts)
+                throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
+            }
+            selectedItems.add(cartItem);
+        }
+
+        // Step 5: Evaluate each selected line: sellability issues are typed review results, not exceptions
+        List<CheckoutItemResponse> items = new ArrayList<>();
+        Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        boolean allLinesSellable = true;
+
+        for (CartItem cartItem : selectedItems) {
+            Long skuId = cartItem.getProductSku().getId();
+            String issueCode = null;
+            ProductSku freshSku = null;
+            BigDecimal lineTotal = null;
+
+            if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
+                issueCode = ErrorCode.CART_ITEM_QUANTITY_INVALID.name();
+            } else {
+                // Re-fetch SKU from DB for authoritative price/stock/sellability
+                freshSku = productSkuRepository.findById(skuId).orElse(null);
+
+                if (freshSku == null) {
+                    issueCode = ErrorCode.SKU_NOT_FOUND.name();
+                } else if (!freshSku.isActive()) {
+                    issueCode = ErrorCode.PRODUCT_NOT_AVAILABLE.name();
+                } else if (freshSku.getProduct() == null
+                        || !freshSku.getProduct().isPublished()
+                        || freshSku.getProduct().isDraft()) {
+                    issueCode = ErrorCode.PRODUCT_NOT_AVAILABLE.name();
+                } else if (freshSku.getStock() == null || freshSku.getStock() < cartItem.getQuantity()) {
+                    issueCode = ErrorCode.INSUFFICIENT_STOCK.name();
+                }
+
+                if (freshSku != null && freshSku.getPrice() != null) {
+                    // lineTotal = database unit price × cart quantity, sellable or not
+                    lineTotal = freshSku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
+                    subtotal = subtotal.add(lineTotal);
+                    skuSubtotals.merge(skuId, lineTotal, BigDecimal::add);
+                }
             }
 
-            Voucher voucher = loadAndValidateCheckoutVoucher(request.getVoucherCode(), user, skuSubtotals, subtotal);
-            BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
-            totalDiscount = voucherService.getDiscount(voucher, eligibleSubtotal);
-            appliedVoucherCode = voucher.getCode();
+            if (issueCode != null) {
+                allLinesSellable = false;
+            }
+
+            CheckoutItemResponse.CheckoutItemResponseBuilder itemBuilder =
+                    CheckoutItemResponse.builder().skuId(skuId).quantity(cartItem.getQuantity());
+            if (freshSku != null) {
+                itemBuilder
+                        .skuCode(freshSku.getSku())
+                        .productName(
+                                freshSku.getProduct() != null
+                                        ? freshSku.getProduct().getName()
+                                        : null)
+                        .imageUrl(freshSku.getImageUrl())
+                        .unitPrice(freshSku.getPrice())
+                        .availableStock(freshSku.getStock());
+            }
+            if (lineTotal != null) {
+                itemBuilder.lineTotal(lineTotal);
+            }
+            items.add(itemBuilder.issueCode(issueCode).build());
         }
 
-        // Step 5: Calc shipping fee
-        BigDecimal shippingFee = FLAT_SHIPPING_FEE;
+        // Step 6: Evaluate voucher (typed review result; invalid voucher is expected, not an exception)
+        VoucherReview voucherReview = evaluateVoucherReview(request.getVoucherCode(), user, skuSubtotals, subtotal);
 
-        // Step 6: Calc total
-        BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(totalDiscount);
-        if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
-            totalCheckout = BigDecimal.ZERO;
+        // Step 7: Shipping fee — property-backed, always part of the breakdown
+        BigDecimal shippingFee = checkoutShippingFee;
+        boolean canPlaceOrder = allLinesSellable && voucherReview.applicable();
+
+        // Step 8: Total — server-authoritative, consistent with the displayed shipping fee, never negative
+        BigDecimal totalAmount = subtotal.add(shippingFee).subtract(voucherReview.discountAmount());
+        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            totalAmount = BigDecimal.ZERO;
         }
 
-        // Step 7: Return CheckoutResponse
+        // Step 9: Reviewed snapshot (no fingerprint/token/expiry)
         return CheckoutResponse.builder()
                 .items(items)
                 .subtotal(subtotal)
+                .eligibleSubtotal(voucherReview.eligibleSubtotal())
                 .shippingFee(shippingFee)
-                .totalDiscount(totalDiscount)
-                .totalCheckout(totalCheckout)
-                .voucherCode(appliedVoucherCode)
+                .discountAmount(voucherReview.discountAmount())
+                .totalAmount(totalAmount)
+                .voucher(
+                        voucherReview.normalizedCode() == null
+                                ? null
+                                : VoucherReviewResponse.builder()
+                                        .code(voucherReview.normalizedCode())
+                                        .applicable(voucherReview.applicable())
+                                        .issueCode(voucherReview.issueCode())
+                                        .build())
+                .canPlaceOrder(canPlaceOrder)
                 .build();
+    }
+
+    private record VoucherReview(
+            String normalizedCode,
+            BigDecimal eligibleSubtotal,
+            BigDecimal discountAmount,
+            boolean applicable,
+            String issueCode) {}
+
+    private VoucherReview evaluateVoucherReview(
+            String rawVoucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
+        if (rawVoucherCode == null || rawVoucherCode.isBlank()) {
+            return new VoucherReview(null, subtotal, BigDecimal.ZERO, true, null);
+        }
+
+        String normalizedCode = rawVoucherCode.trim().toUpperCase(java.util.Locale.ROOT);
+
+        try {
+            Voucher voucher = voucherRepository
+                    .findByCode(normalizedCode)
+                    .or(() -> voucherRepository.findByCode(rawVoucherCode))
+                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+            BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
+            voucherValidator.validateForCheckout(voucher, user, subtotal, eligibleSubtotal);
+
+            BigDecimal discountAmount = voucherService.getDiscount(voucher, eligibleSubtotal);
+            return new VoucherReview(normalizedCode, eligibleSubtotal, discountAmount, true, null);
+        } catch (AppException e) {
+            return new VoucherReview(
+                    normalizedCode,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    false,
+                    e.getErrorCode().name());
+        }
     }
 
     // ────────────────────────────────────────────────────────
@@ -339,7 +439,7 @@ public class OrderService {
             BigDecimal discountAmount,
             List<OrderItem> orderItems) {
 
-        BigDecimal shippingFee = FLAT_SHIPPING_FEE;
+        BigDecimal shippingFee = checkoutShippingFee;
         BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(discountAmount);
         if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
             totalCheckout = BigDecimal.ZERO;

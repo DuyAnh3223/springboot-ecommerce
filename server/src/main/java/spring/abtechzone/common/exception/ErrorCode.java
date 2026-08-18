@@ -38,6 +38,7 @@ public enum ErrorCode {
     CART_EXISTS(1027, "Cart already exists", HttpStatus.BAD_REQUEST),
     CART_ITEM_NOT_FOUND(1028, "Cart item not found", HttpStatus.NOT_FOUND),
     CART_ITEM_QUANTITY_INVALID(1029, "Cart item quantity must be at least 1", HttpStatus.BAD_REQUEST),
+    CART_ITEM_NOT_IN_CART(1066, "Selected SKU is not in the active cart", HttpStatus.BAD_REQUEST),
     CART_NOT_FOUND(1030, "Cart not found", HttpStatus.NOT_FOUND),
     CART_IS_EMPTY(1031, "Cart is empty", HttpStatus.BAD_REQUEST),
     INSUFFICIENT_STOCK(1032, "Insufficient stock for product", HttpStatus.BAD_REQUEST),

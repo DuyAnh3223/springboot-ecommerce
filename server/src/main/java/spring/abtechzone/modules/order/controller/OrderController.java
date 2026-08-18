@@ -37,9 +37,13 @@ public class OrderController {
     @Operation(
             summary = "Checkout review",
             description =
-                    "Read-only pre-order summary: validates cart items (stock, availability), applies voucher discount, and returns the final price breakdown. Does NOT create an order or modify any state")
-    @ApiResponse(responseCode = "200", description = "Checkout summary returned")
-    @ApiResponse(responseCode = "400", description = "Cart is empty, insufficient stock, or invalid voucher")
+                    "Read-only pre-order summary for the selected cart items (selectedSkuIds). Returns a reviewed snapshot "
+                            + "with server-authoritative amounts, typed sellability/voucher issues and canPlaceOrder. "
+                            + "Does NOT create an order or modify any state")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Checkout review returned (business issues are typed in the response)")
+    @ApiResponse(responseCode = "400", description = "Invalid selection, or selected SKU not in the active cart")
     @ApiResponse(responseCode = "401", description = "Unauthenticated")
     ApiResult<CheckoutResponse> checkoutReview(@RequestBody @Valid CheckoutRequest request) {
         return ApiResult.<CheckoutResponse>builder()
