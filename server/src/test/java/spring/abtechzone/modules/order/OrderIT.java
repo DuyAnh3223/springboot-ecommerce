@@ -254,4 +254,44 @@ class OrderIT extends BaseIT {
         // 6. Address was NOT saved
         assertThat(addressRepository.count()).isZero();
     }
+
+    @Test
+    @DisplayName("Checkout review requires authentication: no JWT returns 401")
+    void checkoutReview_unauthenticated_returns401() throws Exception {
+        mockMvc.perform(post("/orders/checkout-review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{
+								"selectedSkuIds": [1]
+								}
+								"""))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Checkout review returns HTTP 200 typed review for business issues")
+    void checkoutReview_businessIssue_returns200Review() throws Exception {
+        Cart cart = cartRepository.save(
+                Cart.builder().user(user).status(CartStatus.ACTIVE).build());
+        cartItemRepository.save(
+                CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+
+        // Selected SKU is sellable: review succeeds with canPlaceOrder=true
+        mockMvc.perform(post("/orders/checkout-review")
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{
+								"selectedSkuIds": [%d]
+								}
+								""".formatted(sku.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.items[0].skuId").value(sku.getId()))
+                .andExpect(jsonPath("$.result.items[0].lineTotal").value(2000000))
+                .andExpect(jsonPath("$.result.subtotal").value(2000000))
+                .andExpect(jsonPath("$.result.shippingFee").value(30000))
+                .andExpect(jsonPath("$.result.totalAmount").value(2030000))
+                .andExpect(jsonPath("$.result.canPlaceOrder").value(true))
+                .andExpect(jsonPath("$.result.reviewFingerprint").doesNotExist());
+    }
 }

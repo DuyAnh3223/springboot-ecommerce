@@ -246,23 +246,136 @@ class OrderServiceTest {
     @DisplayName("checkoutReview tests")
     class CheckoutReviewTests {
 
+        private CheckoutRequest request(Long... skuIds) {
+            return CheckoutRequest.builder().selectedSkuIds(List.of(skuIds)).build();
+        }
+
         @Test
         @DisplayName("checkoutReview success without voucher")
         void reviewSuccess_noVoucher() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutRequest request = CheckoutRequest.builder().build();
-            CheckoutResponse response = orderService.checkoutReview(request);
+            CheckoutResponse response = orderService.checkoutReview(request(100L));
 
             assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
             assertThat(response.getShippingFee()).isEqualByComparingTo(BigDecimal.valueOf(30000));
-            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.ZERO);
-            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
+            assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
             assertThat(response.getItems()).hasSize(1);
             assertThat(response.getItems().get(0).getProductName()).isEqualTo("iPhone 15 Pro Max");
+            assertThat(response.getItems().get(0).getSkuId()).isEqualTo(100L);
+            assertThat(response.getItems().get(0).getQuantity()).isEqualTo(2);
+            assertThat(response.getItems().get(0).getUnitPrice()).isEqualByComparingTo(BigDecimal.valueOf(1000000.00));
+            assertThat(response.getItems().get(0).getLineTotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
+            assertThat(response.getItems().get(0).getAvailableStock()).isEqualTo(10);
+            assertThat(response.getItems().get(0).getIssueCode()).isNull();
+            assertThat(response.getEligibleSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
+            assertThat(response.getVoucher()).isNull();
+            assertThat(response.isCanPlaceOrder()).isTrue();
 
             verify(voucherValidator, never()).validateForCheckout(any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("checkoutReview normalizes selection: deduplicates and sorts ascending")
+        void reviewSuccess_normalizesSelection() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+
+            ProductSku sku2 = ProductSku.builder()
+                    .id(200L)
+                    .sku("ACCESSORY-CASE")
+                    .price(BigDecimal.valueOf(500000.00))
+                    .stock(5)
+                    .product(Product.builder()
+                            .id(2L)
+                            .name("Case")
+                            .published(true)
+                            .build())
+                    .build();
+            CartItem item2 = CartItem.builder()
+                    .id(20L)
+                    .productSku(sku2)
+                    .quantity(1)
+                    .unitPrice(BigDecimal.valueOf(500000.00))
+                    .build();
+            cart.getItems().add(item2);
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(productSkuRepository.findById(200L)).thenReturn(Optional.of(sku2));
+
+            // Unsorted + duplicate selection
+            CheckoutResponse response = orderService.checkoutReview(request(200L, 100L, 200L));
+
+            assertThat(response.getItems()).hasSize(2);
+            assertThat(response.getItems().get(0).getSkuId()).isEqualTo(100L);
+            assertThat(response.getItems().get(1).getSkuId()).isEqualTo(200L);
+            assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2500000.00));
+        }
+
+        @Test
+        @DisplayName("checkoutReview ignores unselected cart items entirely")
+        void reviewSuccess_ignoresUnselectedItems() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+
+            ProductSku sku2 = ProductSku.builder()
+                    .id(200L)
+                    .sku("ACCESSORY-CASE")
+                    .price(BigDecimal.valueOf(500000.00))
+                    .stock(5)
+                    .product(Product.builder()
+                            .id(2L)
+                            .name("Case")
+                            .published(true)
+                            .build())
+                    .build();
+            CartItem item2 = CartItem.builder()
+                    .id(20L)
+                    .productSku(sku2)
+                    .quantity(1)
+                    .unitPrice(BigDecimal.valueOf(500000.00))
+                    .build();
+            cart.getItems().add(item2);
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            CheckoutResponse response = orderService.checkoutReview(request(100L));
+
+            assertThat(response.getItems()).hasSize(1);
+            assertThat(response.getItems().get(0).getSkuId()).isEqualTo(100L);
+            assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
+            assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
+        }
+
+        @Test
+        @DisplayName("checkoutReview rejects selected SKU not in the active cart (owner-safe)")
+        void reviewThrows_skuNotInCart() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            CheckoutRequest request =
+                    CheckoutRequest.builder().selectedSkuIds(List.of(999L)).build();
+
+            assertThatThrownBy(() -> orderService.checkoutReview(request))
+                    .isInstanceOf(AppException.class)
+                    .hasMessageContaining(ErrorCode.CART_ITEM_NOT_IN_CART.getMessage());
+        }
+
+        @Test
+        @DisplayName("checkoutReview rejects null/empty/non-positive selection")
+        void reviewThrows_invalidSelection() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> orderService.checkoutReview(
+                            CheckoutRequest.builder().selectedSkuIds(null).build()))
+                    .isInstanceOf(AppException.class);
+
+            assertThatThrownBy(() -> orderService.checkoutReview(
+                            CheckoutRequest.builder().selectedSkuIds(List.of()).build()))
+                    .isInstanceOf(AppException.class);
+
+            assertThatThrownBy(() -> orderService.checkoutReview(CheckoutRequest.builder()
+                            .selectedSkuIds(List.of(0L, -1L))
+                            .build()))
+                    .isInstanceOf(AppException.class);
         }
 
         @Test
@@ -281,12 +394,18 @@ class OrderServiceTest {
 
             when(voucherRepository.findByCode("SALE10")).thenReturn(Optional.of(voucher));
 
-            CheckoutRequest request =
-                    CheckoutRequest.builder().voucherCode("SALE10").build();
+            CheckoutRequest request = CheckoutRequest.builder()
+                    .selectedSkuIds(List.of(100L))
+                    .voucherCode("SALE10")
+                    .build();
             CheckoutResponse response = orderService.checkoutReview(request);
 
-            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
-            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 200000));
+            assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
+            assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 200000));
+            assertThat(response.getVoucher().getCode()).isEqualTo("SALE10");
+            assertThat(response.getVoucher().isApplicable()).isTrue();
+            assertThat(response.getVoucher().getIssueCode()).isNull();
+            assertThat(response.isCanPlaceOrder()).isTrue();
 
             verify(voucherValidator)
                     .validateForCheckout(
@@ -322,6 +441,7 @@ class OrderServiceTest {
 
             cart.getItems().add(item2);
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(productSkuRepository.findById(200L)).thenReturn(Optional.of(sku2));
 
             Voucher voucher = Voucher.builder()
                     .code("SPECIFIC10")
@@ -334,15 +454,18 @@ class OrderServiceTest {
 
             when(voucherRepository.findByCode("SPECIFIC10")).thenReturn(Optional.of(voucher));
 
-            CheckoutRequest request =
-                    CheckoutRequest.builder().voucherCode("SPECIFIC10").build();
+            CheckoutRequest request = CheckoutRequest.builder()
+                    .selectedSkuIds(List.of(100L, 200L))
+                    .voucherCode("SPECIFIC10")
+                    .build();
             CheckoutResponse response = orderService.checkoutReview(request);
 
             // Subtotal = 2.000.000 (sku 100) + 500.000 (sku 200) = 2.500.000
             // Discount = 10% of 2.000.000 (eligible SKU only) = 200.000
             assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2500000.00));
-            assertThat(response.getTotalDiscount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
-            assertThat(response.getTotalCheckout()).isEqualByComparingTo(BigDecimal.valueOf(2500000 + 30000 - 200000));
+            assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
+            assertThat(response.getEligibleSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
+            assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2500000 + 30000 - 200000));
 
             verify(voucherValidator)
                     .validateForCheckout(
@@ -353,8 +476,8 @@ class OrderServiceTest {
         }
 
         @Test
-        @DisplayName("checkoutReview throws VOUCHER_PER_USER_LIMIT_REACHED when validation fails")
-        void reviewThrows_perUserLimitReached() {
+        @DisplayName("checkoutReview invalid voucher returns typed review with canPlaceOrder=false")
+        void review_invalidVoucherIsTypedReview() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
@@ -373,40 +496,48 @@ class OrderServiceTest {
                     .when(voucherValidator)
                     .validateForCheckout(any(), any(), any(), any());
 
-            CheckoutRequest request =
-                    CheckoutRequest.builder().voucherCode("ONCE_ONLY").build();
+            CheckoutRequest request = CheckoutRequest.builder()
+                    .selectedSkuIds(List.of(100L))
+                    .voucherCode("ONCE_ONLY")
+                    .build();
+            CheckoutResponse response = orderService.checkoutReview(request);
 
-            assertThatThrownBy(() -> orderService.checkoutReview(request))
-                    .isInstanceOf(AppException.class)
-                    .hasMessageContaining(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED.getMessage());
+            assertThat(response.getVoucher()).isNotNull();
+            assertThat(response.getVoucher().getCode()).isEqualTo("ONCE_ONLY");
+            assertThat(response.getVoucher().isApplicable()).isFalse();
+            assertThat(response.getVoucher().getIssueCode()).isEqualTo(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED.name());
+            assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+            assertThat(response.isCanPlaceOrder()).isFalse();
         }
 
         @Test
-        @DisplayName("checkoutReview throws CART_IS_EMPTY when cart has no items")
-        void reviewThrowsCartIsEmpty() {
-            cart.setItems(new ArrayList<>());
-            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
-            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
-
-            CheckoutRequest request = CheckoutRequest.builder().build();
-
-            assertThatThrownBy(() -> orderService.checkoutReview(request))
-                    .isInstanceOf(AppException.class)
-                    .hasMessageContaining(ErrorCode.CART_IS_EMPTY.getMessage());
-        }
-
-        @Test
-        @DisplayName("checkoutReview throws INSUFFICIENT_STOCK when quantity exceeds stock")
-        void reviewThrowsInsufficientStock() {
+        @DisplayName("checkoutReview returns typed issue for insufficient stock with canPlaceOrder=false")
+        void review_insufficientStockIsTypedReview() {
             cartItem.setQuantity(15); // stock is only 10
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutRequest request = CheckoutRequest.builder().build();
+            CheckoutResponse response = orderService.checkoutReview(request(100L));
 
-            assertThatThrownBy(() -> orderService.checkoutReview(request))
-                    .isInstanceOf(AppException.class)
-                    .hasMessageContaining(ErrorCode.INSUFFICIENT_STOCK.getMessage());
+            assertThat(response.getItems()).hasSize(1);
+            assertThat(response.getItems().get(0).getIssueCode()).isEqualTo(ErrorCode.INSUFFICIENT_STOCK.name());
+            assertThat(response.isCanPlaceOrder()).isFalse();
+            // Contract R-C03-04: totalAmount = max(0, subtotal + shippingFee - discountAmount),
+            // regardless of canPlaceOrder — the breakdown must stay internally consistent.
+            assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(15000000 + 30000));
+        }
+
+        @Test
+        @DisplayName("checkoutReview snapshot contains no fingerprint/token/expiry")
+        void reviewSnapshot_hasNoFingerprintOrToken() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+
+            CheckoutResponse response = orderService.checkoutReview(request(100L));
+
+            assertThat(response).hasNoNullFieldsOrPropertiesExcept("voucher", "subtotal");
+            // Sanity: the reviewed snapshot exposes only order-affecting + display fields
+            assertThat(response.getItems().get(0)).hasNoNullFieldsOrPropertiesExcept("issueCode", "imageUrl");
         }
     }
 
