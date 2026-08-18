@@ -11,11 +11,13 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CheckoutItemResponse {
-    Long productSkuId;
-    String productName;
+    Long skuId;
     String skuCode;
+    String productName;
     String imageUrl;
     int quantity;
     BigDecimal unitPrice;
-    BigDecimal totalPrice;
+    BigDecimal lineTotal;
+    Integer availableStock;
+    String issueCode;
 }
