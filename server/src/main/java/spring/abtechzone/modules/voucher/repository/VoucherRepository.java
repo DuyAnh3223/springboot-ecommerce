@@ -27,20 +27,9 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
                     + "WHERE id = :id "
                     + "  AND (max_uses IS NULL OR COALESCE(used_count, 0) < max_uses) "
                     + "  AND (max_per_user IS NULL OR ( "
-                    + "      SELECT COUNT(*) FROM voucher_user vu WHERE vu.voucher_id = :id AND vu.user_id = :userId "
+                    + "      SELECT COUNT(*) FROM voucher_redemption vr "
+                    + "      WHERE vr.voucher_id = :id AND vr.user_id = :userId AND vr.status = 'REDEEMED' "
                     + "  ) < max_per_user)",
             nativeQuery = true)
     int increaseUsedCount(@Param("id") Long id, @Param("userId") UUID userId);
-
-    @Modifying
-    @Query(value = "INSERT INTO voucher_user (voucher_id, user_id) VALUES (:voucherId, :userId)", nativeQuery = true)
-    void insertVoucherUser(@Param("voucherId") Long voucherId, @Param("userId") UUID userId);
-
-    /**
-     * Count user's voucher usage
-     */
-    @Query(
-            value = "SELECT COUNT(*) FROM voucher_user WHERE voucher_id = :voucherId AND user_id = :userId",
-            nativeQuery = true)
-    long countUsageByVoucherIdAndUserId(@Param("voucherId") Long voucherId, @Param("userId") UUID userId);
 }
