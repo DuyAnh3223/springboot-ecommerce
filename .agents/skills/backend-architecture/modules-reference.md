@@ -12,8 +12,8 @@
 | **category** | `CategoryService`, `AttributeService` | `Category`, `Attribute`, `CategoryAttribute` | Parent-child taxonomy, category-attribute mapping, slug generation |
 | **cart** | `CartService` | `Cart`, `CartItem` | Active cart management (`findByUserIdAndStatus`), quantity accumulation, price sync |
 | **order** | `OrderService` | `Order`, `OrderItem`, `OrderStatusHistory` | Checkout execution, Redisson lock coordination, status transition lifecycle |
-| **inventory** | `InventoryService` | `ProductSku`, `Reservation` | Stock deduction, stock reservation locking & release |
-| **voucher** | `VoucherService`, `VoucherValidator` | `Voucher`, `VoucherType`, `VoucherApplyScope` | Coupon validation (PERCENTAGE / FIXED), min order threshold, per-user usage caps |
+| **inventory** | `InventoryService` | `ProductSku`, `StockMovement` | Atomic stock deduction and auditable stock movements; committed quantities live on `OrderItem` |
+| **voucher** | `VoucherService`, `VoucherValidator` | `Voucher`, `VoucherRedemption`, `VoucherType`, `VoucherApplyScope` | Coupon validation, atomic aggregate limits, and canonical per-order usage ledger |
 | **common** | `AwsS3FileService` | `AwsS3FileResponse`, `AwsS3AccessUrlResponse`, `ErrorCode` | Storage (dual-mode CloudFront public/signed URL), exception handling, app initialization |
 
 ---
@@ -62,18 +62,19 @@
 
 ### 2.6 Order Module (`spring.abtechzone.modules.order`)
 - **`OrderService`**:
-  - Main entry: `createOrder(CreateOrderRequest)`.
+  - Main entry: `createOrder(CreateOrderRequest, String idempotencyKey)`.
   - Uses Redisson distributed locks and `TransactionTemplate.execute(...)`. (See `checkout-flow.md` for full sequence details).
 
 ### 2.7 Inventory Module (`spring.abtechzone.modules.inventory`)
 - **`InventoryService`**:
-  - Atomic stock validation and reservation holding during checkout execution.
+  - Atomic stock validation/decrement during checkout; no committed-order reservation row.
 
 ### 2.8 Voucher Module (`spring.abtechzone.modules.voucher`)
 - **`VoucherService` & `VoucherValidator`**:
   - `VoucherType`: `PERCENTAGE` or `FIXED_AMOUNT`.
   - `VoucherApplyScope`: `ALL`, `SPECIFIC`.
-  - `VoucherValidator`: Validates start/end dates, `minOrderValue`, `maxUses`, and per-user usage limits (`maxPerUser`).
+  - `VoucherValidator`: Validates start/end dates, `minOrderValue`, `maxUses`, and `maxPerUser` from active `VoucherRedemption` rows.
+  - `VoucherRedemption`: Canonical per-order/user usage ledger (`REDEEMED`/`REVERSED`); there is no `voucher_user` usage table.
 
 ### 2.9 Common Package (`spring.abtechzone.common`)
 - **`AwsS3FileService`**:
