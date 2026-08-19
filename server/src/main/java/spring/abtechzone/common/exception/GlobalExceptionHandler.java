@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -50,12 +51,34 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(apiResult);
     }
 
+    @ExceptionHandler(value = MissingRequestHeaderException.class)
+    ResponseEntity<ApiResult<?>> handlingMissingRequestHeaderException(MissingRequestHeaderException exception) {
+        ErrorCode errorCode = ErrorCode.INVALID_KEY;
+        ApiResult<?> apiResult = ApiResult.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .build();
+        return ResponseEntity.badRequest().body(apiResult);
+    }
+
     @ExceptionHandler(value = AppException.class)
     ResponseEntity<ApiResult<?>> handlingAppException(AppException exception) {
         ErrorCode errorCode = exception.getErrorCode();
         ApiResult<?> apiResult = ApiResult.builder()
                 .code(errorCode.getCode())
                 .message(errorCode.getMessage())
+                .build();
+
+        return ResponseEntity.status(errorCode.getStatusCode()).body(apiResult);
+    }
+
+    @ExceptionHandler(value = CheckoutChangedException.class)
+    ResponseEntity<ApiResult<?>> handlingCheckoutChangedException(CheckoutChangedException exception) {
+        ErrorCode errorCode = exception.getErrorCode();
+        ApiResult<?> apiResult = ApiResult.builder()
+                .code(errorCode.getCode())
+                .message(errorCode.getMessage())
+                .result(exception.getLatestReview())
                 .build();
 
         return ResponseEntity.status(errorCode.getStatusCode()).body(apiResult);

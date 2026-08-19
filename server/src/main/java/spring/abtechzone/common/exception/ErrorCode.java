@@ -77,6 +77,8 @@ public enum ErrorCode {
     VOUCHER_SCOPE_INVALID(1063, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_MAX_DISCOUNT_INVALID(1064, "Voucher max discount amount is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_CODE_IMMUTABLE(1065, "Voucher code cannot be modified after creation", HttpStatus.BAD_REQUEST),
+    IDEMPOTENCY_KEY_REUSED(1067, "Idempotency key was already used with a different request", HttpStatus.CONFLICT),
+    CHECKOUT_CHANGED(1068, "Checkout state changed since review; please review again", HttpStatus.CONFLICT),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

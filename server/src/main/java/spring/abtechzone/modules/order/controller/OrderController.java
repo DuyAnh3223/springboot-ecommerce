@@ -54,19 +54,26 @@ public class OrderController {
     @PostMapping
     @Operation(
             summary = "Create order",
-            description = "Place an order from the authenticated user's active cart. "
-                    + "Uses distributed locking (Redisson) to prevent race conditions: "
-                    + "user-level deduplication, SKU stock protection, and voucher oversell prevention. "
-                    + "Stock is atomically reserved on success")
+            description =
+                    "Place a COD order from a reviewed checkout snapshot (see POST /orders/checkout-review). "
+                            + "Idempotency-Key must be a UUID; the same key with the same request replays the original order, "
+                            + "the same key with a different request returns 409. Distributed locks (Redisson) are acquired "
+                            + "before the transaction; stock/voucher/cart/order mutations share one rollback boundary. "
+                            + "If any order-affecting state changed since review, 409 CHECKOUT_CHANGED returns the latest review")
     @ApiResponse(responseCode = "200", description = "Order created successfully")
     @ApiResponse(
             responseCode = "400",
-            description = "Cart empty, insufficient stock, invalid voucher, or address required")
-    @ApiResponse(responseCode = "400", description = "System busy — lock could not be acquired (retry after a moment)")
+            description = "Invalid Idempotency-Key, invalid reviewed checkout, address XOR violation, or COD only")
     @ApiResponse(responseCode = "401", description = "Unauthenticated")
-    ApiResult<OrderResponse> createOrder(@RequestBody @Valid CreateOrderRequest request) {
+    @ApiResponse(
+            responseCode = "409",
+            description = "IDEMPOTENCY_KEY_REUSED or CHECKOUT_CHANGED (latest review in result)")
+    @ApiResponse(responseCode = "503", description = "System busy — lock could not be acquired (retry after a moment)")
+    ApiResult<OrderResponse> createOrder(
+            @RequestHeader(name = "Idempotency-Key") String idempotencyKey,
+            @RequestBody @Valid CreateOrderRequest request) {
         return ApiResult.<OrderResponse>builder()
-                .result(orderService.createOrder(request))
+                .result(orderService.createOrder(request, idempotencyKey))
                 .build();
     }
 
