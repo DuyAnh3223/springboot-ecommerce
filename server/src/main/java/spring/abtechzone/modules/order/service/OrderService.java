@@ -7,7 +7,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -24,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
+import spring.abtechzone.common.exception.CheckoutChangedException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.cart.constant.CartStatus;
@@ -32,9 +36,11 @@ import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
+import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
 import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
 import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
@@ -51,21 +57,27 @@ import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
+import spring.abtechzone.modules.voucher.constant.VoucherRedemptionStatus;
 import spring.abtechzone.modules.voucher.entity.Voucher;
+import spring.abtechzone.modules.voucher.entity.VoucherRedemption;
+import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 import spring.abtechzone.modules.voucher.service.VoucherService;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 @Service
-@Transactional
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class OrderService {
 
+    private static final long LOCK_WAIT_SECONDS = 5;
+    private static final int IDEMPOTENCY_RETRY_LIMIT = 3;
+
     UserRepository userRepository;
     CartRepository cartRepository;
     VoucherRepository voucherRepository;
+    VoucherRedemptionRepository voucherRedemptionRepository;
     OrderRepository orderRepository;
     AddressRepository addressRepository;
     VoucherValidator voucherValidator;
@@ -79,6 +91,7 @@ public class OrderService {
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
 
+    @Value("${app.checkout.shipping-fee:30000}")
     BigDecimal checkoutShippingFee = BigDecimal.valueOf(30000);
 
     // ────────────────────────────────────────────────────────
@@ -106,35 +119,193 @@ public class OrderService {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
 
-        // Step 2: Get active cart
-        Cart cart = getActiveCart(user);
-
-        // Step 3: Normalize selection: deduplicate + sort ascending
+        // Step 2: Normalize selection: deduplicate + sort ascending
         List<Long> selectedSkuIds =
                 request.getSelectedSkuIds().stream().distinct().sorted().toList();
 
-        // Step 4: Map cart items by SKU ID; every selected ID must belong to the active cart
+        // Step 3: Authoritative recomputation shared with create order (R-C04-03)
+        return recomputeCheckout(user, selectedSkuIds, request.getVoucherCode()).response();
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 2. Create Order
+    // ────────────────────────────────────────────────────────
+    public OrderResponse createOrder(CreateOrderRequest request, String rawIdempotencyKey) {
+        // Step 1: Auth User (idempotency is scoped to the authenticated user)
+        User user = getAuthenticatedUser();
+
+        // Step 2: Canonical idempotency key and request hash
+        String idempotencyKey = canonicalKey(rawIdempotencyKey);
+        String requestHash = CreateOrderRequestHash.compute(request, user.getId());
+
+        // Step 3: Replay lookup BEFORE reading the active cart (R-C04-01 / AC-C04-01)
+        Order existing = orderRepository
+                .findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
+                .orElse(null);
+        if (existing != null) {
+            return replayOrConflict(existing, requestHash);
+        }
+
+        // Step 4: Lock keys derive from the reviewed SKU IDs only (R-C04-02).
+        // The cart is NOT read outside the transaction: with OSIV enabled the
+        // pre-lock read would seed the persistence context, and a query inside
+        // the transaction could then return the stale cart instead of the
+        // current row. The cart is loaded and validated for the first time
+        // inside the transaction, after locks are held (R-C04-03).
+        List<Long> selectedSkuIds = deriveSelectedSkuIds(request);
+
+        // Step 5: Lock keys from the selected SKUs only
+        List<String> lockKeys = buildLockKeys(user, selectedSkuIds, request);
+        List<RLock> locks = lockKeys.stream().map(redissonClient::getLock).toList();
+
+        try {
+            // Step 6: Acquire locks with the Redisson watchdog overload (no fixed 10s lease)
+            acquireLocks(locks);
+
+            // Step 7: Transaction starts only after all locks are held
+            return executeWithIdempotencyRetry(
+                    () -> transactionTemplate.execute(
+                            status -> doCreateOrder(request, user, idempotencyKey, requestHash)),
+                    user,
+                    idempotencyKey,
+                    requestHash);
+
+        } finally {
+            // Step 8: Release only locks held by the current thread
+            for (RLock lock : locks) {
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
+            }
+        }
+    }
+
+    private OrderResponse executeWithIdempotencyRetry(
+            TransactionCallback callback, User user, String idempotencyKey, String requestHash) {
+        for (int attempt = 0; attempt < IDEMPOTENCY_RETRY_LIMIT; attempt++) {
+            try {
+                return callback.run();
+            } catch (DataIntegrityViolationException e) {
+                // Concurrent insert hit the unique (user_id, idempotency_key) constraint:
+                // reload the winning order and replay-or-conflict; bounded retry, no infinite loop.
+                Order concurrent = orderRepository
+                        .findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
+                        .orElse(null);
+                if (concurrent != null) {
+                    return replayOrConflict(concurrent, requestHash);
+                }
+                if (attempt + 1 >= IDEMPOTENCY_RETRY_LIMIT) {
+                    throw new AppException(ErrorCode.SYSTEM_ERROR);
+                }
+            }
+        }
+        throw new AppException(ErrorCode.SYSTEM_ERROR);
+    }
+
+    private OrderResponse doCreateOrder(
+            CreateOrderRequest request, User user, String idempotencyKey, String requestHash) {
+        // Step 1: Recheck idempotency inside the transaction, after locks
+        Order replayed = orderRepository
+                .findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
+                .orElse(null);
+        if (replayed != null) {
+            return replayOrConflict(replayed, requestHash);
+        }
+
+        // Step 2: Reload active cart and selected items with authoritative state
+        Cart freshCart = getActiveCart(user);
+        validateCartNotEmpty(freshCart);
+        List<Long> selectedSkuIds = deriveSelectedSkuIds(request);
+        validateSelectionInCart(freshCart, selectedSkuIds);
+
+        // Step 3: Recompute authoritative checkout review from server state
+        AuthoritativeCheckout authoritative = recomputeCheckout(user, selectedSkuIds, normalizeVoucherCode(request));
+
+        // Step 4: Semantic-compare reviewed snapshot against the authoritative review (R-C04-07)
+        CheckoutChangedException mismatch = findMismatch(request, selectedSkuIds, freshCart, authoritative);
+        if (mismatch != null) {
+            throw mismatch;
+        }
+
+        // Step 5: Resolve address (existing must belong to user; new address must pass validation)
+        AddressInfo addressInfo = resolveAddress(request, user);
+
+        // Step 6: Build order with authoritative amounts only (never client money)
+        Order order = buildOrder(request, user, addressInfo, idempotencyKey, requestHash, authoritative);
+
+        // Step 7: Save order (cascade saves items) + initial history fromStatus=null -> toStatus=PENDING
+        Order savedOrder = orderRepository.save(order);
+        createOrderStatusHistory(savedOrder, user);
+
+        // Step 8: Atomic stock decrement + SALE_OUT movement, per sorted SKU.
+        // Persisted OrderItems are the committed quantity source (ADR-003).
+        allocateInventory(authoritative, savedOrder);
+
+        // Step 9: Voucher atomic redemption (guarded increment + per-user recheck + REDEEMED ledger)
+        if (authoritative.voucher() != null) {
+            redeemVoucher(authoritative.voucher(), user, savedOrder);
+        }
+
+        // Step 10: Remove exactly the selected cart items; keep ACTIVE if any remain, else COMPLETED
+        removeSelectedCartItems(freshCart, selectedSkuIds);
+
+        // Step 11: Flush at a point that surfaces constraint violations inside the transaction
+        orderRepository.flush();
+
+        return orderMapper.toOrderResponse(savedOrder);
+    }
+
+    private void acquireLocks(List<RLock> locks) {
+        for (int i = 0; i < locks.size(); i++) {
+            RLock lock = locks.get(i);
+            boolean acquired;
+            try {
+                acquired = lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                releaseAcquired(locks, i);
+                throw new AppException(ErrorCode.SYSTEM_BUSY);
+            }
+            if (!acquired) {
+                // Release already-acquired locks in reverse order (R-C04-02)
+                releaseAcquired(locks, i);
+                throw new AppException(ErrorCode.SYSTEM_BUSY);
+            }
+        }
+    }
+
+    private void releaseAcquired(List<RLock> locks, int upToExclusive) {
+        for (int j = upToExclusive - 1; j >= 0; j--) {
+            RLock lock = locks.get(j);
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private OrderResponse replayOrConflict(Order existing, String requestHash) {
+        if (existing.getRequestHash().equals(requestHash)) {
+            return orderMapper.toOrderResponse(existing);
+        }
+        throw new AppException(ErrorCode.IDEMPOTENCY_KEY_REUSED);
+    }
+
+    private AuthoritativeCheckout recomputeCheckout(User user, List<Long> selectedSkuIds, String voucherCode) {
+        Cart cart = getActiveCart(user);
         Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
                 .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
 
-        List<CartItem> selectedItems = new ArrayList<>();
-        for (Long skuId : selectedSkuIds) {
-            CartItem cartItem = cartItemBySkuId.get(skuId);
-            if (cartItem == null) {
-                // Ownership-safe: selected SKU not in this user's active cart (400, never leaks other carts)
-                throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
-            }
-            selectedItems.add(cartItem);
-        }
-
-        // Step 5: Evaluate each selected line: sellability issues are typed review results, not exceptions
         List<CheckoutItemResponse> items = new ArrayList<>();
         Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
         BigDecimal subtotal = BigDecimal.ZERO;
         boolean allLinesSellable = true;
+        List<AuthoritativeLine> lines = new ArrayList<>();
 
-        for (CartItem cartItem : selectedItems) {
-            Long skuId = cartItem.getProductSku().getId();
+        for (Long skuId : selectedSkuIds) {
+            CartItem cartItem = cartItemBySkuId.get(skuId);
+            if (cartItem == null) {
+                throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
+            }
             String issueCode = null;
             ProductSku freshSku = null;
             BigDecimal lineTotal = null;
@@ -142,7 +313,6 @@ public class OrderService {
             if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
                 issueCode = ErrorCode.CART_ITEM_QUANTITY_INVALID.name();
             } else {
-                // Re-fetch SKU from DB for authoritative price/stock/sellability
                 freshSku = productSkuRepository.findById(skuId).orElse(null);
 
                 if (freshSku == null) {
@@ -158,7 +328,6 @@ public class OrderService {
                 }
 
                 if (freshSku != null && freshSku.getPrice() != null) {
-                    // lineTotal = database unit price × cart quantity, sellable or not
                     lineTotal = freshSku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
                     subtotal = subtotal.add(lineTotal);
                     skuSubtotals.merge(skuId, lineTotal, BigDecimal::add);
@@ -186,23 +355,22 @@ public class OrderService {
                 itemBuilder.lineTotal(lineTotal);
             }
             items.add(itemBuilder.issueCode(issueCode).build());
+            lines.add(new AuthoritativeLine(
+                    skuId, cartItem.getQuantity(), freshSku != null ? freshSku.getPrice() : null, lineTotal));
         }
 
-        // Step 6: Evaluate voucher (typed review result; invalid voucher is expected, not an exception)
-        VoucherReview voucherReview = evaluateVoucherReview(request.getVoucherCode(), user, skuSubtotals, subtotal);
+        // Voucher review: typed result (invalid voucher is an expected review outcome, not an exception)
+        VoucherReview voucherReview = evaluateVoucherReview(voucherCode, user, skuSubtotals, subtotal);
 
-        // Step 7: Shipping fee — property-backed, always part of the breakdown
         BigDecimal shippingFee = checkoutShippingFee;
         boolean canPlaceOrder = allLinesSellable && voucherReview.applicable();
 
-        // Step 8: Total — server-authoritative, consistent with the displayed shipping fee, never negative
         BigDecimal totalAmount = subtotal.add(shippingFee).subtract(voucherReview.discountAmount());
         if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
             totalAmount = BigDecimal.ZERO;
         }
 
-        // Step 9: Reviewed snapshot (no fingerprint/token/expiry)
-        return CheckoutResponse.builder()
+        CheckoutResponse response = CheckoutResponse.builder()
                 .items(items)
                 .subtotal(subtotal)
                 .eligibleSubtotal(voucherReview.eligibleSubtotal())
@@ -219,236 +387,142 @@ public class OrderService {
                                         .build())
                 .canPlaceOrder(canPlaceOrder)
                 .build();
+
+        return new AuthoritativeCheckout(
+                response,
+                lines,
+                voucherReview.voucher(),
+                voucherReview.normalizedCode(),
+                subtotal,
+                voucherReview.applicable());
     }
 
-    private record VoucherReview(
-            String normalizedCode,
-            BigDecimal eligibleSubtotal,
-            BigDecimal discountAmount,
-            boolean applicable,
-            String issueCode) {}
-
-    private VoucherReview evaluateVoucherReview(
-            String rawVoucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
-        if (rawVoucherCode == null || rawVoucherCode.isBlank()) {
-            return new VoucherReview(null, subtotal, BigDecimal.ZERO, true, null);
+    /**
+     * Returns a 409 CHECKOUT_CHANGED exception when any order-affecting value in the
+     * reviewed snapshot differs from the authoritative review, else null.
+     */
+    private CheckoutChangedException findMismatch(
+            CreateOrderRequest request,
+            List<Long> selectedSkuIds,
+            Cart freshCart,
+            AuthoritativeCheckout authoritative) {
+        // Exact selected SKU set
+        List<Long> reviewedSkuIds = request.getReviewedCheckout().getItems().stream()
+                .map(ReviewedCheckoutItemRequest::getSkuId)
+                .distinct()
+                .sorted()
+                .toList();
+        if (!reviewedSkuIds.equals(selectedSkuIds)) {
+            return new CheckoutChangedException(authoritative.response());
         }
 
-        String normalizedCode = rawVoucherCode.trim().toUpperCase(java.util.Locale.ROOT);
-
-        try {
-            Voucher voucher = voucherRepository
-                    .findByCode(normalizedCode)
-                    .or(() -> voucherRepository.findByCode(rawVoucherCode))
-                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
-            BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
-            voucherValidator.validateForCheckout(voucher, user, subtotal, eligibleSubtotal);
-
-            BigDecimal discountAmount = voucherService.getDiscount(voucher, eligibleSubtotal);
-            return new VoucherReview(normalizedCode, eligibleSubtotal, discountAmount, true, null);
-        } catch (AppException e) {
-            return new VoucherReview(
-                    normalizedCode,
-                    BigDecimal.ZERO,
-                    BigDecimal.ZERO,
-                    false,
-                    e.getErrorCode().name());
-        }
-    }
-
-    // ────────────────────────────────────────────────────────
-    // 2. Create Order
-    // ────────────────────────────────────────────────────────
-    public OrderResponse createOrder(CreateOrderRequest request) {
-        // Step 1: Auth User
-        User user = getAuthenticatedUser();
-
-        // Step 2: Get Cart ACTIVE and skus for locking
-        Cart initialCart = getActiveCart(user);
-        validateCartNotEmpty(initialCart);
-
-        // Collect all lock keys reliable to this transaction
-        List<String> lockKeys = new ArrayList<>();
-
-        // Lock 1: User Order Lock (Prohibit double-click / double-submit from same user)
-        lockKeys.add("lock:user-order:" + user.getId());
-
-        // Lock 2: SKU Locks (Race condition stock)
-        for (CartItem item : initialCart.getItems()) {
-            lockKeys.add("lock:product-sku:" + item.getProductSku().getId());
-        }
-
-        // Lock 3: Voucher Lock (Race condition oversell voucher / over max uses)
-        if (request.getVoucherCode() != null && !request.getVoucherCode().isBlank()) {
-            lockKeys.add("lock:voucher:" + request.getVoucherCode());
-        }
-
-        // Deduplicate and sort to alphabet for no deadlock
-        List<String> sortedLockKeys = lockKeys.stream().distinct().sorted().toList();
-
-        List<RLock> locks = sortedLockKeys.stream().map(redissonClient::getLock).toList();
-
-        // Save SKU và default stock for comparetion after locking
-        Map<Long, Integer> initialSkuQtyMap = initialCart.getItems().stream()
-                .collect(Collectors.toMap(item -> item.getProductSku().getId(), CartItem::getQuantity, Integer::sum));
-
-        try {
-            // Step 4: try to acquire Locks
-            for (RLock lock : locks) {
-                // Wait max 5s to get lock, free after 10s if crash
-                boolean acquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
-                if (!acquired) {
-                    throw new AppException(ErrorCode.SYSTEM_BUSY);
-                }
-            }
-
-            // Step 5: Call createOrder in Transaction through TransactionTemplate
-
-            return transactionTemplate.execute(status -> doCreateOrder(request, user, initialSkuQtyMap));
-
-        } catch (Exception e) {
-            if (e instanceof AppException appException) {
-                throw appException;
-            }
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            throw new AppException(ErrorCode.SYSTEM_ERROR);
-        } finally {
-            // Step 6: Free all lock
-            for (RLock lock : locks) {
-                if (lock.isHeldByCurrentThread()) {
-                    lock.unlock();
-                }
+        // Cart quantity + unit price + line total per line (any unit price change, up or down, mismatches)
+        Map<Long, CartItem> cartItemBySkuId = freshCart.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
+        for (ReviewedCheckoutItemRequest reviewedItem :
+                request.getReviewedCheckout().getItems()) {
+            CartItem cartItem = cartItemBySkuId.get(reviewedItem.getSkuId());
+            AuthoritativeLine line = authoritative.lines().stream()
+                    .filter(l -> l.skuId().equals(reviewedItem.getSkuId()))
+                    .findFirst()
+                    .orElse(null);
+            if (cartItem == null
+                    || line == null
+                    || !eq(reviewedItem.getQuantity(), cartItem.getQuantity())
+                    || !eq(reviewedItem.getUnitPrice(), line.unitPrice())
+                    || !eq(reviewedItem.getLineTotal(), line.lineTotal())) {
+                return new CheckoutChangedException(authoritative.response());
             }
         }
-    }
 
-    private OrderResponse doCreateOrder(CreateOrderRequest request, User user, Map<Long, Integer> initialSkuQtyMap) {
-        // Step 1: Reload Cart & Validate Cart State
-        Cart freshCart = getActiveCart(user);
-        validateCartState(freshCart, initialSkuQtyMap);
-
-        // Step 2: Resolve Shipping Address
-        AddressInfo addressInfo = resolveAddress(request, user);
-
-        // Step 3: Process Cart Items (validate stock & price, calculate subtotal)
-        ProcessedItems processed = processCartItems(freshCart);
-
-        // Step 4: Validate & Apply Voucher
-        Map<Long, BigDecimal> skuSubtotals = new HashMap<>();
-        for (OrderItem item : processed.orderItems()) {
-            BigDecimal itemTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
-            skuSubtotals.merge(item.getSku().getId(), itemTotal, BigDecimal::add);
+        // Voucher identity/applicability
+        String reviewedCode = request.getReviewedCheckout().getVoucher() != null
+                ? normalizeCode(request.getReviewedCheckout().getVoucher().getCode())
+                : null;
+        boolean reviewedApplicable = request.getReviewedCheckout().getVoucher() != null
+                && Boolean.TRUE.equals(
+                        request.getReviewedCheckout().getVoucher().getApplicable());
+        boolean noVoucher = reviewedCode == null && authoritative.normalizedVoucherCode() == null;
+        if (!noVoucher
+                && (!Objects.equals(reviewedCode, authoritative.normalizedVoucherCode())
+                        || reviewedApplicable != authoritative.applicable())) {
+            return new CheckoutChangedException(authoritative.response());
         }
-        AppliedVoucherInfo voucherInfo =
-                applyVoucher(request.getVoucherCode(), user, skuSubtotals, processed.subtotal());
 
-        // Step 5: Build Order & Link Order Items
-        Order order = buildOrder(
-                request, user, addressInfo, processed.subtotal(), voucherInfo.discountAmount(), processed.orderItems());
-
-        // Step 6: Clear Cart items and mark as COMPLETED
-        freshCart.getItems().clear();
-        freshCart.setStatus(CartStatus.COMPLETED);
-        cartRepository.save(freshCart);
-
-        // Step 7: Update Voucher usage
-        updateVoucherUsage(voucherInfo.voucher(), user);
-
-        // Step 8: Save Order (cascade saves OrderItems)
-        Order savedOrder = orderRepository.save(order);
-
-        // Step 9: Save Order Status History
-        createOrderStatusHistory(savedOrder, user);
-
-        // Step 10: Reserve Inventory (uses processed.orderItems instead of empty cart)
-        reserveInventory(processed.orderItems(), processed.skuMap(), savedOrder);
-
-        // Step 11: Return Response
-        return orderMapper.toOrderResponse(savedOrder);
-    }
-
-    private void validateCartState(Cart freshCart, Map<Long, Integer> initialSkuQtyMap) {
-        validateCartNotEmpty(freshCart);
-
-        Map<Long, Integer> freshSkuQtyMap = freshCart.getItems().stream()
-                .collect(Collectors.toMap(item -> item.getProductSku().getId(), CartItem::getQuantity, Integer::sum));
-
-        if (!initialSkuQtyMap.equals(freshSkuQtyMap)) {
-            throw new AppException(ErrorCode.SYSTEM_BUSY);
+        // Monetary outcome (BigDecimal.compareTo, scale-independent)
+        if (!eq(
+                        request.getReviewedCheckout().getSubtotal(),
+                        authoritative.response().getSubtotal())
+                || !eq(
+                        request.getReviewedCheckout().getEligibleSubtotal(),
+                        authoritative.response().getEligibleSubtotal())
+                || !eq(
+                        request.getReviewedCheckout().getShippingFee(),
+                        authoritative.response().getShippingFee())
+                || !eq(
+                        request.getReviewedCheckout().getDiscountAmount(),
+                        authoritative.response().getDiscountAmount())
+                || !eq(
+                        request.getReviewedCheckout().getTotalAmount(),
+                        authoritative.response().getTotalAmount())
+                || !authoritative.response().isCanPlaceOrder()) {
+            return new CheckoutChangedException(authoritative.response());
         }
+
+        return null;
     }
 
-    private ProcessedItems processCartItems(Cart freshCart) {
-        BigDecimal subtotal = BigDecimal.ZERO;
-        List<OrderItem> orderItems = new ArrayList<>();
-        Map<Long, ProductSku> skuMap = new HashMap<>();
-
-        for (CartItem cartItem : freshCart.getItems()) {
-            // Re-fetch ProductSku from DB for newest  Price & Stock
+    private void allocateInventory(AuthoritativeCheckout authoritative, Order order) {
+        for (AuthoritativeLine line : authoritative.lines()) {
             ProductSku sku = productSkuRepository
-                    .findById(cartItem.getProductSku().getId())
+                    .findById(line.skuId())
                     .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
-            skuMap.put(sku.getId(), sku);
-
-            validateProductAvailable(sku);
-            validateStock(sku, cartItem.getQuantity());
-
-            orderItems.add(orderMapper.toOrderItem(cartItem, sku));
-
-            BigDecimal totalPrice = sku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-            subtotal = subtotal.add(totalPrice);
+            inventoryService.reserveStock(sku, line.quantity(), order);
         }
-
-        return new ProcessedItems(orderItems, subtotal, skuMap);
     }
 
-    private AppliedVoucherInfo applyVoucher(
-            String voucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
-        if (voucherCode == null || voucherCode.isBlank()) {
-            return new AppliedVoucherInfo(null, BigDecimal.ZERO);
+    private void redeemVoucher(Voucher voucher, User user, Order order) {
+        // Atomic guarded increment (max uses + per-user count) inside the voucher lock
+        int updated = voucherRepository.increaseUsedCount(voucher.getId(), user.getId());
+        if (updated == 0) {
+            throw new AppException(ErrorCode.VOUCHER_ARE_OUT);
         }
-
-        Voucher voucher = loadAndValidateCheckoutVoucher(voucherCode, user, skuSubtotals, subtotal);
-        BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
-        BigDecimal discountAmount = voucherService.getDiscount(voucher, eligibleSubtotal);
-
-        return new AppliedVoucherInfo(voucher, discountAmount);
+        VoucherRedemption redemption = new VoucherRedemption();
+        redemption.setVoucher(voucher);
+        redemption.setUser(user);
+        redemption.setOrder(order);
+        redemption.setStatus(VoucherRedemptionStatus.REDEEMED);
+        redemption.setCreatedAt(OffsetDateTime.now());
+        voucherRedemptionRepository.save(redemption);
     }
 
-    private Voucher loadAndValidateCheckoutVoucher(
-            String voucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal fullSubtotal) {
-        String normalizedCode = voucherCode != null ? voucherCode.trim().toUpperCase(java.util.Locale.ROOT) : null;
-        Voucher voucher = voucherRepository
-                .findByCode(normalizedCode)
-                .or(() -> voucherRepository.findByCode(voucherCode))
-                .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
-
-        BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, fullSubtotal);
-        voucherValidator.validateForCheckout(voucher, user, fullSubtotal, eligibleSubtotal);
-        return voucher;
+    private void removeSelectedCartItems(Cart cart, List<Long> selectedSkuIds) {
+        cart.getItems()
+                .removeIf(item -> selectedSkuIds.contains(item.getProductSku().getId()));
+        if (cart.getItems().isEmpty()) {
+            cart.setStatus(CartStatus.COMPLETED);
+        }
+        cartRepository.save(cart);
     }
 
     private Order buildOrder(
             CreateOrderRequest request,
             User user,
             AddressInfo addressInfo,
-            BigDecimal subtotal,
-            BigDecimal discountAmount,
-            List<OrderItem> orderItems) {
+            String idempotencyKey,
+            String requestHash,
+            AuthoritativeCheckout authoritative) {
 
-        BigDecimal shippingFee = checkoutShippingFee;
-        BigDecimal totalCheckout = subtotal.add(shippingFee).subtract(discountAmount);
-        if (totalCheckout.compareTo(BigDecimal.ZERO) < 0) {
-            totalCheckout = BigDecimal.ZERO;
-        }
+        BigDecimal subtotal = authoritative.subtotal();
+        BigDecimal discountAmount = authoritative.response().getDiscountAmount();
+        BigDecimal shippingFee = authoritative.response().getShippingFee();
+        BigDecimal totalCheckout = authoritative.response().getTotalAmount();
 
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
-                .paymentReference(request.getPaymentMethod())
+                .paymentMethod(request.getPaymentMethod())
+                .paymentStatus(PaymentStatus.UNPAID)
                 .subtotalAmount(subtotal)
                 .shippingFee(shippingFee)
                 .discountAmount(discountAmount)
@@ -458,26 +532,31 @@ public class OrderService {
                 .fullAddress(addressInfo.fullAddress)
                 .userId(user.getId())
                 .shippingAddressId(addressInfo.addressId)
-                .voucherCode(request.getVoucherCode())
+                .voucherCode(authoritative.normalizedVoucherCode())
+                .voucher(authoritative.voucher())
+                .idempotencyKey(idempotencyKey)
+                .requestHash(requestHash)
                 .items(new ArrayList<>())
                 .build();
 
-        for (OrderItem orderItem : orderItems) {
-            orderItem.setOrder(order);
+        for (AuthoritativeLine line : authoritative.lines()) {
+            ProductSku sku = productSkuRepository
+                    .findById(line.skuId())
+                    .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .sku(sku)
+                    .productNameSnapshot(
+                            sku.getProduct() != null ? sku.getProduct().getName() : null)
+                    .skuSnapshot(sku.getSku())
+                    .unitPrice(line.unitPrice())
+                    .quantity(line.quantity())
+                    .imageUrl(sku.getImageUrl())
+                    .build();
             order.getItems().add(orderItem);
         }
 
         return order;
-    }
-
-    private void updateVoucherUsage(Voucher appliedVoucher, User user) {
-        if (appliedVoucher == null) return;
-
-        int updated = voucherRepository.increaseUsedCount(appliedVoucher.getId(), user.getId());
-        if (updated == 0) {
-            throw new AppException(ErrorCode.VOUCHER_ARE_OUT);
-        }
-        voucherRepository.insertVoucherUser(appliedVoucher.getId(), user.getId());
     }
 
     private void createOrderStatusHistory(Order order, User user) {
@@ -490,24 +569,52 @@ public class OrderService {
         orderStatusHistoryRepository.save(history);
     }
 
-    private void reserveInventory(List<OrderItem> orderItems, Map<Long, ProductSku> skuMap, Order order) {
-        for (OrderItem orderItem : orderItems) {
-            ProductSku sku = skuMap.get(orderItem.getSku().getId());
-            inventoryService.reserveStock(sku, orderItem.getQuantity(), order);
+    private record AuthoritativeCheckout(
+            CheckoutResponse response,
+            List<AuthoritativeLine> lines,
+            Voucher voucher,
+            String normalizedVoucherCode,
+            BigDecimal subtotal,
+            boolean applicable) {}
+
+    private record AuthoritativeLine(Long skuId, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {}
+
+    private record VoucherReview(
+            String normalizedCode,
+            BigDecimal eligibleSubtotal,
+            BigDecimal discountAmount,
+            boolean applicable,
+            String issueCode,
+            Voucher voucher) {}
+
+    private VoucherReview evaluateVoucherReview(
+            String rawVoucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
+        if (rawVoucherCode == null || rawVoucherCode.isBlank()) {
+            return new VoucherReview(null, subtotal, BigDecimal.ZERO, true, null, null);
+        }
+
+        String normalizedCode = normalizeCode(rawVoucherCode);
+
+        try {
+            Voucher voucher = voucherRepository
+                    .findByCode(normalizedCode)
+                    .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
+
+            BigDecimal eligibleSubtotal = voucherService.calculateEligibleSubtotal(voucher, skuSubtotals, subtotal);
+            voucherValidator.validateForCheckout(voucher, user, subtotal, eligibleSubtotal);
+
+            BigDecimal discountAmount = voucherService.getDiscount(voucher, eligibleSubtotal);
+            return new VoucherReview(normalizedCode, eligibleSubtotal, discountAmount, true, null, voucher);
+        } catch (AppException e) {
+            return new VoucherReview(
+                    normalizedCode,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    false,
+                    e.getErrorCode().name(),
+                    null);
         }
     }
-
-    private record ProcessedItems(List<OrderItem> orderItems, BigDecimal subtotal, Map<Long, ProductSku> skuMap) {}
-
-    private record AppliedVoucherInfo(Voucher voucher, BigDecimal discountAmount) {}
-
-    // ────────────────────────────────────────────────────────
-    // 3. Cancel Order by User
-    // ────────────────────────────────────────────────────────
-
-    // ────────────────────────────────────────────────────────
-    // 4. Update Order Status by Admin
-    // ────────────────────────────────────────────────────────
 
     // ════════════════════════════════════════════════════════
     // PRIVATE HELPERS
@@ -530,29 +637,75 @@ public class OrderService {
         }
     }
 
-    private void validateProductAvailable(ProductSku sku) {
-        if (sku.getProduct() == null) {
-            throw new AppException(ErrorCode.PRODUCT_NOT_FOUND);
-        }
-        if (!sku.getProduct().isPublished()) {
-            throw new AppException(ErrorCode.PRODUCT_NOT_AVAILABLE);
+    private List<Long> deriveSelectedSkuIds(CreateOrderRequest request) {
+        return request.getReviewedCheckout().getItems().stream()
+                .map(ReviewedCheckoutItemRequest::getSkuId)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private void validateSelectionInCart(Cart cart, List<Long> selectedSkuIds) {
+        Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
+                .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
+        for (Long skuId : selectedSkuIds) {
+            if (!cartItemBySkuId.containsKey(skuId)) {
+                throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
+            }
         }
     }
 
-    private void validateStock(ProductSku sku, int requestedQuantity) {
-        if (sku.getStock() == null || sku.getStock() < requestedQuantity) {
-            throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
+    private List<String> buildLockKeys(User user, List<Long> selectedSkuIds, CreateOrderRequest request) {
+        List<String> keys = new ArrayList<>();
+        keys.add("lock:user-order:" + user.getId());
+        for (Long skuId : selectedSkuIds) {
+            keys.add("lock:product-sku:" + skuId);
+        }
+        String voucherCode = normalizeVoucherCode(request);
+        if (voucherCode != null) {
+            keys.add("lock:voucher:" + voucherCode);
+        }
+        return keys.stream().distinct().sorted().toList();
+    }
+
+    private String normalizeVoucherCode(CreateOrderRequest request) {
+        if (request.getReviewedCheckout() == null
+                || request.getReviewedCheckout().getVoucher() == null) {
+            return null;
+        }
+        String code = request.getReviewedCheckout().getVoucher().getCode();
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        return normalizeCode(code);
+    }
+
+    private String normalizeCode(String code) {
+        return code.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String canonicalKey(String rawKey) {
+        try {
+            return UUID.fromString(rawKey).toString();
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.INVALID_KEY);
         }
     }
 
     /**
      * Resolve địa chỉ giao hàng:
-     * - Nếu có addressId → dùng địa chỉ đã lưu
-     * - Nếu có newAddress → dùng địa chỉ mới (tùy chọn lưu lại)
+     * - Có addressId → dùng địa chỉ đã lưu (phải thuộc current user)
+     * - Có newAddress → dùng địa chỉ mới (tùy chọn lưu lại)
+     * - Đúng một trong hai (XOR)
      */
     private AddressInfo resolveAddress(CreateOrderRequest request, User user) {
-        if (request.getAddressId() != null) {
-            // User cũ: chọn địa chỉ đã lưu
+        boolean hasAddressId = request.getAddressId() != null;
+        boolean hasNewAddress = request.getNewUserAddress() != null;
+        if (hasAddressId == hasNewAddress) {
+            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
+        }
+
+        if (hasAddressId) {
             Address address = addressRepository
                     .findById(request.getAddressId())
                     .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
@@ -565,12 +718,10 @@ public class OrderService {
 
             return new AddressInfo(address.getId(), address.getRecipientName(), address.getPhone(), fullAddress);
 
-        } else if (request.getNewUserAddress() != null) {
-            // User mới: nhận địa chỉ từ request
+        } else {
             AddressRequest addr = request.getNewUserAddress();
 
             UUID savedAddressId = null;
-            // Tùy chọn lưu địa chỉ mới
             if (addr.isSaveAddress()) {
                 Address newAddress = Address.builder()
                         .recipientName(addr.getRecipientName())
@@ -588,9 +739,6 @@ public class OrderService {
             String fullAddress = String.join(", ", addr.getStreet(), addr.getWard(), addr.getProvince());
 
             return new AddressInfo(savedAddressId, addr.getRecipientName(), addr.getPhone(), fullAddress);
-
-        } else {
-            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
         }
     }
 
@@ -603,8 +751,24 @@ public class OrderService {
         return "ORD-" + datePart + "-" + randomPart;
     }
 
+    private boolean eq(BigDecimal a, BigDecimal b) {
+        if (a == null || b == null) {
+            return a == b;
+        }
+        return a.compareTo(b) == 0;
+    }
+
+    private boolean eq(Integer a, int b) {
+        return a != null && a == b;
+    }
+
     /**
      * Record nội bộ chứa thông tin địa chỉ đã resolve
      */
     private record AddressInfo(UUID addressId, String recipientName, String phone, String fullAddress) {}
+
+    @FunctionalInterface
+    private interface TransactionCallback {
+        OrderResponse run();
+    }
 }
