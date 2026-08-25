@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -97,7 +98,7 @@ class OrderIT extends BaseIT {
     @Autowired
     private OrderStatusHistoryRepository orderStatusHistoryRepository;
 
-    @Autowired
+    @MockitoSpyBean
     private VoucherRepository voucherRepository;
 
     @MockitoSpyBean
@@ -115,11 +116,22 @@ class OrderIT extends BaseIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private spring.abtechzone.modules.auth.repository.RoleRepository roleRepository;
+
+    @Autowired
+    private spring.abtechzone.modules.auth.repository.UserRoleRepository userRoleRepository;
+
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
     private User user;
     private Product product;
     private ProductSku sku;
+    private User admin;
 
     private static final String IDEMPOTENCY_KEY = "550e8400-e29b-41d4-a716-446655440000";
+    private static final UUID GLOBAL_SCOPE_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     @BeforeEach
     void setUp() {
@@ -135,6 +147,7 @@ class OrderIT extends BaseIT {
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
         categoryRepository.deleteAll();
+        userRoleRepository.deleteAll();
         userRepository.deleteAll();
 
         Category category = new Category();
@@ -152,6 +165,28 @@ class OrderIT extends BaseIT {
                 .lastName("User")
                 .isActive(true)
                 .roles(new HashSet<>())
+                .build());
+
+        spring.abtechzone.modules.auth.entity.Role adminRole = roleRepository
+                .findByName("ADMIN")
+                .orElseGet(() -> roleRepository.save(spring.abtechzone.modules.auth.entity.Role.builder()
+                        .name("ADMIN")
+                        .description("Administrator")
+                        .build()));
+        admin = userRepository.save(User.builder()
+                .username("adminuser")
+                .passwordHash(passwordEncoder.encode("Admin123!Pass"))
+                .email("admin-it@example.com")
+                .firstName("Admin")
+                .lastName("User")
+                .isActive(true)
+                .roles(new HashSet<>())
+                .build());
+        userRoleRepository.save(spring.abtechzone.modules.auth.entity.UserRole.builder()
+                .id(new spring.abtechzone.modules.auth.entity.UserRoleId(
+                        admin.getId(), adminRole.getId(), GLOBAL_SCOPE_ID))
+                .user(admin)
+                .role(adminRole)
                 .build());
 
         product = productRepository.save(Product.builder()
@@ -681,5 +716,358 @@ class OrderIT extends BaseIT {
                 Integer.class,
                 tableName);
         return count == null ? 0 : count;
+    }
+
+    // ────────────────────────────────────────────────────────
+    // CP-C05-05/06 — Cancellation compensation exact-once + delivery
+    // ────────────────────────────────────────────────────────
+
+    /** Creates an order via the API and returns its code. */
+    private String createOrderViaApi(String voucherCode, String discountAmount) throws Exception {
+        Cart cart = cartRepository.save(
+                Cart.builder().user(user).status(CartStatus.ACTIVE).build());
+        cartItemRepository.save(
+                CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+
+        mockMvc.perform(post("/orders")
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createOrderBody(voucherCode, discountAmount)))
+                .andExpect(status().isOk());
+
+        return orderRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
+                .get(0)
+                .getOrderCode();
+    }
+
+    /** Real production-path admin token: signs in via /auth/sign-in with the seeded admin user. */
+    private String adminToken() throws Exception {
+        String body = mockMvc.perform(post("/auth/sign-in")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"username": "adminuser", "password": "Admin123!Pass"}
+								"""))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return com.jayway.jsonpath.JsonPath.read(body, "$.result.token");
+    }
+
+    @Test
+    @DisplayName("Customer cancel of PENDING order restores stock once and records one history entry")
+    void cancelPending_restoresStockExactlyOnce() throws Exception {
+        String orderCode = createOrderViaApi(null, "0");
+        ProductSku before = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(before.getStock()).isEqualTo(48);
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "Tôi muốn thay đổi sản phẩm"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("CANCELLED"));
+
+        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(50);
+
+        List<StockMovement> returns = stockMovementRepository.findAll().stream()
+                .filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason()))
+                .toList();
+        assertThat(returns).hasSize(1);
+        assertThat(returns.get(0).getChangeQty()).isEqualTo(2);
+
+        Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(cancelled.getPaymentStatus().name()).isEqualTo("CANCELLED");
+        assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
+                .hasSize(2); // created + cancelled
+    }
+
+    @Test
+    @DisplayName("Repeated cancel does not restore stock or write a second cancellation history")
+    void repeatedCancel_isIdempotent() throws Exception {
+        String orderCode = createOrderViaApi(null, "0");
+        String body = """
+				{"reason": "again"}
+				""";
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(50);
+        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+                .hasSize(1);
+        Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Cancel reverses voucher redemption exactly once and decrements usedCount once")
+    void cancelWithVoucher_reversesExactlyOnce() throws Exception {
+        Voucher voucher = voucherRepository.save(Voucher.builder()
+                .name("Cancel Voucher")
+                .code("CANCEL10")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(100000.00))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .usedCount(0)
+                .build());
+
+        String orderCode = createOrderViaApi("CANCEL10", "100000");
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "cancel voucher order"}
+								"""))
+                .andExpect(status().isOk());
+
+        Voucher updated = voucherRepository.findById(voucher.getId()).orElseThrow();
+        assertThat(updated.getUsedCount()).isZero();
+
+        List<VoucherRedemption> redemptions = voucherRedemptionRepository.findAll();
+        assertThat(redemptions).hasSize(1);
+        assertThat(redemptions.get(0).getStatus().name()).isEqualTo("REVERSED");
+    }
+
+    @Test
+    @DisplayName("Cancellation compensation failure rolls back stock, voucher, order, and history")
+    void cancelCompensationFailure_rollsBackWholeTransaction() throws Exception {
+        Voucher voucher = voucherRepository.save(Voucher.builder()
+                .name("Rollback Cancel Voucher")
+                .code("CANCEL-ROLLBACK")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(100000.00))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .usedCount(0)
+                .build());
+
+        String orderCode = createOrderViaApi("CANCEL-ROLLBACK", "100000");
+        doThrow(new AppException(ErrorCode.SYSTEM_ERROR))
+                .when(voucherRepository)
+                .decreaseUsedCount(anyLong());
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "force compensation rollback"}
+								"""))
+                .andExpect(status().isInternalServerError());
+
+        Order unchanged = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(unchanged.getPaymentStatus().name()).isEqualTo("UNPAID");
+        assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(unchanged.getId()))
+                .hasSize(1); // create history only
+
+        assertThat(productSkuRepository.findById(sku.getId()).orElseThrow().getStock())
+                .isEqualTo(48);
+        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+                .isEmpty();
+        assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
+                .isEqualTo(1);
+        List<VoucherRedemption> redemptions = voucherRedemptionRepository.findAll();
+        assertThat(redemptions).hasSize(1);
+        assertThat(redemptions.get(0).getStatus()).isEqualTo(VoucherRedemptionStatus.REDEEMED);
+    }
+
+    @Test
+    @DisplayName("Customer cancel of a non-owned order returns 404 without disclosure")
+    void cancelNonOwned_returns404() throws Exception {
+        String orderCode = createOrderViaApi(null, "0");
+
+        User other = userRepository.save(User.builder()
+                .username("other-user")
+                .passwordHash("password123")
+                .email("other@example.com")
+                .firstName("Other")
+                .lastName("User")
+                .isActive(true)
+                .roles(new HashSet<>())
+                .build());
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject(other.getUsername())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "not mine"}
+								"""))
+                .andExpect(status().isNotFound());
+
+        Order unchanged = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(OrderStatus.PENDING);
+        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(48);
+    }
+
+    @Test
+    @DisplayName("Two concurrent cancels produce exactly one compensation")
+    void concurrentCancels_singleCompensation() throws Exception {
+        String orderCode = createOrderViaApi(null, "0");
+
+        int threads = 2;
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch done = new CountDownLatch(threads);
+        List<org.springframework.mock.web.MockHttpServletResponse> responses =
+                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        for (int i = 0; i < threads; i++) {
+            executor.submit(() -> {
+                ready.countDown();
+                try {
+                    start.await();
+                    responses.add(mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                                    .with(jwt().jwt(j -> j.subject("testuser")))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("""
+											{"reason": "concurrent"}
+											"""))
+                            .andReturn()
+                            .getResponse());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        ready.await();
+        start.countDown();
+        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+
+        assertThat(responses).hasSize(threads);
+        assertThat(responses.stream().filter(r -> r.getStatus() == 200)).hasSize(threads);
+
+        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(50);
+        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+                .hasSize(1);
+        Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Admin SHIPPING -> DELIVERED marks COD payment PAID; terminal transitions rejected")
+    void delivered_setsPaymentPaid_andTerminalIsRejected() throws Exception {
+        String orderCode = createOrderViaApi(null, "0");
+        String adminBearer = "Bearer " + adminToken();
+
+        // Non-admin (customer JWT) is forbidden from the admin endpoint
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "CONFIRMED", "note": "confirmed"}
+								"""))
+                .andExpect(status().isForbidden());
+
+        // Real admin token drives the lifecycle
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "CONFIRMED", "note": "confirmed"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("CONFIRMED"));
+
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "SHIPPING"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("SHIPPING"));
+
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "DELIVERED"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("DELIVERED"));
+
+        Order delivered = orderRepository.findByOrderCode(orderCode).orElseThrow();
+        assertThat(delivered.getPaymentStatus().name()).isEqualTo("PAID");
+
+        // Terminal state: no further transition
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "CANCELLED"}
+								"""))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ORDER_STATUS_CONFLICT.getCode()));
+
+        assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(delivered.getId()))
+                .hasSize(4); // created + confirmed + shipping + delivered
+    }
+
+    @Test
+    @DisplayName("Admin cancel of CONFIRMED order restores stock and reverses voucher")
+    void adminCancelConfirmed_compensates() throws Exception {
+        Voucher voucher = voucherRepository.save(Voucher.builder()
+                .name("Admin Cancel Voucher")
+                .code("ADMCANCEL10")
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(100000.00))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .usedCount(0)
+                .build());
+
+        String orderCode = createOrderViaApi("ADMCANCEL10", "100000");
+        String adminBearer = "Bearer " + adminToken();
+
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "CONFIRMED"}
+								"""))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)
+                        .header("Authorization", adminBearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"status": "CANCELLED", "note": "admin cancels"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("CANCELLED"));
+
+        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
+        assertThat(after.getStock()).isEqualTo(50);
+        Voucher updatedVoucher = voucherRepository.findById(voucher.getId()).orElseThrow();
+        assertThat(updatedVoucher.getUsedCount()).isZero();
+        assertThat(voucherRedemptionRepository.findAll().get(0).getStatus().name())
+                .isEqualTo("REVERSED");
     }
 }
