@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.dto.ApiResult;
@@ -87,6 +88,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     ResponseEntity<ApiResult<?>> handlingAccessDeniedException(AccessDeniedException exception) {
         ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
+        return ResponseEntity.status(errorCode.getStatusCode())
+                .body(ApiResult.builder()
+                        .code(errorCode.getCode())
+                        .message(errorCode.getMessage())
+                        .build());
+    }
+
+    @ExceptionHandler(value = NoResourceFoundException.class)
+    ResponseEntity<ApiResult<?>> handlingNoResourceFoundException(NoResourceFoundException exception) {
+        ErrorCode errorCode = ErrorCode.ORDER_NOT_FOUND;
         return ResponseEntity.status(errorCode.getStatusCode())
                 .body(ApiResult.builder()
                         .code(errorCode.getCode())

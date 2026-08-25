@@ -32,4 +32,10 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>, JpaSpec
                     + "  ) < max_per_user)",
             nativeQuery = true)
     int increaseUsedCount(@Param("id") Long id, @Param("userId") UUID userId);
+
+    /** Atomic decrement with a non-negative guard; only called when the redemption was reversed. */
+    @Modifying
+    @Query("UPDATE Voucher v SET v.usedCount = COALESCE(v.usedCount, 0) - 1 "
+            + "WHERE v.id = :id AND COALESCE(v.usedCount, 0) >= 1")
+    int decreaseUsedCount(@Param("id") Long id);
 }

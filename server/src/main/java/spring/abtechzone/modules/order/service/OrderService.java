@@ -18,6 +18,11 @@ import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -34,16 +39,21 @@ import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
+import spring.abtechzone.modules.inventory.entity.StockMovement;
+import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
+import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
 import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
 import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
 import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
+import spring.abtechzone.modules.order.dto.response.OrderDetailResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
+import spring.abtechzone.modules.order.dto.response.OrderSummaryResponse;
 import spring.abtechzone.modules.order.dto.response.VoucherReviewResponse;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
@@ -51,6 +61,7 @@ import spring.abtechzone.modules.order.entity.OrderStatusHistory;
 import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.order.service.OrderTransitionPolicy.Actor;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.Address;
@@ -73,6 +84,7 @@ public class OrderService {
 
     private static final long LOCK_WAIT_SECONDS = 5;
     private static final int IDEMPOTENCY_RETRY_LIMIT = 3;
+    private static final int MAX_PAGE_SIZE = 50;
 
     UserRepository userRepository;
     CartRepository cartRepository;
@@ -91,17 +103,231 @@ public class OrderService {
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
 
+    StockMovementRepository stockMovementRepository;
+
     @Value("${app.checkout.shipping-fee:30000}")
     BigDecimal checkoutShippingFee = BigDecimal.valueOf(30000);
 
     // ────────────────────────────────────────────────────────
-    // 0. Get Orders by User ID
+    // 0b. Order Lifecycle: Customer reads, Cancel, Admin Transitions
     // ────────────────────────────────────────────────────────
+
+    /** Customer order list: current user, optional status filter, newest first. */
     @Transactional(readOnly = true)
-    public List<OrderResponse> getOrdersByUserId(UUID userId) {
-        return orderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(orderMapper::toOrderResponse)
-                .toList();
+    public Page<OrderSummaryResponse> getMyOrders(OrderStatus status, int page, int size, User user) {
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Pageable pageable =
+                PageRequest.of(Math.max(page, 0), safeSize, Sort.by("createdAt").descending());
+        Page<Order> orders = status == null
+                ? orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
+                : orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), status, pageable);
+        return orders.map(order -> toSummary(order, Actor.CUSTOMER));
+    }
+
+    /** Customer order detail: owner-safe, non-owned code returns 404 (R-C05-02). */
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getMyOrderDetail(String orderCode, User user) {
+        Order order = orderRepository
+                .findWithItemsByOrderCodeAndUserId(orderCode, user.getId())
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        OrderDetailResponse detail = toDetail(order, Actor.CUSTOMER);
+        detail.setHistory(orderStatusHistoryRepository.findByOrderIdOrdered(order.getId()).stream()
+                .map(orderMapper::toOrderHistoryResponse)
+                .toList());
+        return detail;
+    }
+
+    /** Admin order detail: full snapshot with history. */
+    @Transactional(readOnly = true)
+    public OrderDetailResponse getAdminOrderDetail(String orderCode) {
+        Order order = orderRepository
+                .findWithItemsByOrderCode(orderCode)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        OrderDetailResponse detail = toDetail(order, Actor.ADMIN);
+        detail.setHistory(orderStatusHistoryRepository.findByOrderIdOrdered(order.getId()).stream()
+                .map(orderMapper::toOrderHistoryResponse)
+                .toList());
+        return detail;
+    }
+
+    private OrderSummaryResponse toSummary(Order order, Actor actor) {
+        OrderSummaryResponse summary = orderMapper.toOrderSummaryResponse(order);
+        summary.setAllowedTransitions(OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor).stream()
+                .map(Enum::name)
+                .toList());
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            summary.setPreviewItem(
+                    orderMapper.toOrderItemResponse(order.getItems().get(0)));
+        }
+        return summary;
+    }
+
+    private OrderDetailResponse toDetail(Order order, Actor actor) {
+        OrderDetailResponse detail = orderMapper.toOrderDetailResponse(order);
+        detail.setAllowedTransitions(OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor).stream()
+                .map(Enum::name)
+                .toList());
+        detail.setItems(orderMapper.toOrderItemResponses(order.getItems()));
+        return detail;
+    }
+
+    /** Admin order list with null-safe filters (R-C05-03). */
+    @Transactional(readOnly = true)
+    public Page<OrderSummaryResponse> getAdminOrders(AdminOrderSearchRequest request) {
+        if (request.getPage() < 0 || request.getSize() < 1) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            parseStatus(request.getStatus());
+        }
+        if (request.getFromDate() != null
+                && request.getToDate() != null
+                && request.getFromDate().isAfter(request.getToDate())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        int safeSize = Math.min(Math.max(request.getSize(), 1), MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(
+                Math.max(request.getPage(), 0), safeSize, Sort.by("createdAt").descending());
+        Specification<Order> spec = Specification.where(buildAdminOrderSpec(request));
+        return orderRepository.findAll(spec, pageable).map(order -> toSummary(order, Actor.ADMIN));
+    }
+
+    private Specification<Order> buildAdminOrderSpec(AdminOrderSearchRequest request) {
+        return (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            String search = request.getSearch();
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("orderCode")), pattern),
+                        cb.like(cb.lower(root.get("recipientName")), pattern),
+                        cb.like(cb.lower(root.get("phone")), pattern)));
+            }
+            if (request.getStatus() != null && !request.getStatus().isBlank()) {
+                OrderStatus status = parseStatus(request.getStatus());
+                if (status != null) {
+                    predicates.add(cb.equal(root.get("status"), status));
+                }
+            }
+            if (request.getFromDate() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getFromDate()));
+            }
+            if (request.getToDate() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getToDate()));
+            }
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    private OrderStatus parseStatus(String raw) {
+        try {
+            return OrderStatus.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+    }
+
+    /**
+     * Customer cancel: owner + current status PENDING only (R-C05-02).
+     * Runs inside one transaction after acquiring the order's pessimistic
+     * write lock; stock/voucher/status compensation commits together and the
+     * single successful status transition is the exact-once guard
+     * (R-C05-04, ADR-003).
+     */
+    @Transactional
+    public OrderResponse cancelOrder(String orderCode, String reason, User user) {
+        Order order = orderRepository
+                .findByOrderCodeForUpdate(orderCode)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        if (!order.getUserId().equals(user.getId())) {
+            throw new AppException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            return orderMapper.toOrderResponse(order);
+        }
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
+        }
+        compensateCancellation(order);
+        applyTransition(
+                order, OrderStatus.CANCELLED, Actor.CUSTOMER, user.getId().toString(), normalizeNote(reason));
+        orderRepository.save(order);
+        orderRepository.flush();
+        return orderMapper.toOrderResponse(order);
+    }
+
+    /**
+     * Admin status transition (R-C05-01/03): calls the same shared
+     * transition policy; the controller stays a thin HTTP adapter. Cancelling
+     * to CANCELLED runs the same exact-once compensation as customer cancel.
+     */
+    @Transactional
+    public OrderResponse updateOrderStatus(String orderCode, OrderStatus target, String note, User admin) {
+        Order order = orderRepository
+                .findByOrderCodeForUpdate(orderCode)
+                .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        if (order.getStatus() != OrderStatus.CANCELLED && target == OrderStatus.CANCELLED) {
+            compensateCancellation(order);
+        }
+        applyTransition(order, target, Actor.ADMIN, admin.getId().toString(), normalizeNote(note));
+        orderRepository.save(order);
+        orderRepository.flush();
+        return orderMapper.toOrderResponse(order);
+    }
+
+    /**
+     * Exact-once cancellation compensation (R-C05-04). Caller has locked the
+     * order row and validated the current status is not CANCELLED.
+     */
+    private void compensateCancellation(Order order) {
+        // 1. Restore SKU stock from persisted OrderItem quantities (ADR-003)
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                if (item.getSku() == null || item.getSku().getId() == null || item.getQuantity() <= 0) {
+                    throw new AppException(ErrorCode.SYSTEM_ERROR);
+                }
+                int updated = productSkuRepository.increaseStock(item.getSku().getId(), item.getQuantity());
+                if (updated != 1) {
+                    throw new AppException(ErrorCode.SYSTEM_ERROR);
+                }
+                StockMovement movement = new StockMovement();
+                movement.setSku(item.getSku());
+                movement.setChangeQty(item.getQuantity());
+                movement.setReason("ORDER_CANCEL_RETURN");
+                movement.setReferenceId(String.valueOf(order.getId()));
+                movement.setCreatedAt(OffsetDateTime.now());
+                stockMovementRepository.save(movement);
+            }
+        }
+
+        // 2. Reverse the canonical voucher redemption, if any (ADR-004).
+        // A voucher-bearing order must have exactly one active redemption. A
+        // missing/already-reversed ledger row is an integrity failure, not a
+        // reason to silently leave the aggregate count unchanged.
+        boolean voucherBearing = order.getVoucher() != null
+                || (order.getVoucherCode() != null && !order.getVoucherCode().isBlank());
+        if (voucherBearing) {
+            if (order.getVoucher() == null || order.getVoucher().getId() == null) {
+                throw new AppException(ErrorCode.SYSTEM_ERROR);
+            }
+            int reversed = voucherRedemptionRepository.reverseRedemptionByOrderId(order.getId());
+            if (reversed != 1) {
+                throw new AppException(ErrorCode.SYSTEM_ERROR);
+            }
+            int decremented =
+                    voucherRepository.decreaseUsedCount(order.getVoucher().getId());
+            if (decremented != 1) {
+                throw new AppException(ErrorCode.SYSTEM_ERROR);
+            }
+        }
+    }
+
+    private String normalizeNote(String note) {
+        if (note == null) {
+            return null;
+        }
+        String trimmed = note.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // ────────────────────────────────────────────────────────
@@ -563,10 +789,59 @@ public class OrderService {
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrder(order);
         history.setStatus(OrderStatus.PENDING.name());
+        history.setFromStatus(null);
+        history.setToStatus(OrderStatus.PENDING.name());
+        history.setActorType(OrderStatusHistoryActor.CUSTOMER.name());
+        history.setActorId(user.getId().toString());
         history.setNote("Order created");
         history.setCreatedBy(user);
         history.setCreatedAt(OffsetDateTime.now());
         orderStatusHistoryRepository.save(history);
+    }
+
+    /**
+     * Apply the shared transition policy (R-C05-01) to an order within the
+     * current transaction. The caller is responsible for holding the order's
+     * pessimistic write lock (mutation path) or a read snapshot (read path).
+     *
+     * <p>Same-target requests return the order idempotently without writing a
+     * new history entry; terminal-state transitions throw
+     * {@link ErrorCode#ORDER_STATUS_CONFLICT}; history is always ordered by
+     * timestamp then id.
+     */
+    private Order applyTransition(Order order, OrderStatus target, Actor actor, String actorId, String note) {
+        if (order.getStatus() == target) {
+            return order;
+        }
+        OrderStatus from = order.getStatus();
+        if (OrderTransitionPolicy.isTerminal(from)) {
+            throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
+        }
+        if (!OrderTransitionPolicy.isAllowed(from, target, actor)) {
+            throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
+        }
+        order.setStatus(target);
+        if (target == OrderStatus.CANCELLED) {
+            order.setPaymentStatus(PaymentStatus.CANCELLED);
+        } else if (target == OrderStatus.DELIVERED) {
+            order.setPaymentStatus(PaymentStatus.PAID);
+        }
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrder(order);
+        history.setStatus(target.name());
+        history.setFromStatus(from.name());
+        history.setToStatus(target.name());
+        history.setActorType(actor.name());
+        history.setActorId(actorId);
+        history.setNote(note);
+        history.setCreatedAt(OffsetDateTime.now());
+        orderStatusHistoryRepository.save(history);
+        return order;
+    }
+
+    private enum OrderStatusHistoryActor {
+        CUSTOMER,
+        ADMIN
     }
 
     private record AuthoritativeCheckout(

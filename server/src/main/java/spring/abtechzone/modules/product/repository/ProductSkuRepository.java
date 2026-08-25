@@ -47,4 +47,9 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
     @Modifying
     @Query("UPDATE ProductSku s SET s.stock = s.stock - :quantity WHERE s.id = :id AND s.stock >= :quantity")
     int decreaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    // Atomic compensation: never drive stock negative (R-C05-04 / CP-C05-05)
+    @Modifying
+    @Query("UPDATE ProductSku s SET s.stock = s.stock + :quantity WHERE s.id = :id AND s.stock + :quantity >= 0")
+    int increaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
 }
