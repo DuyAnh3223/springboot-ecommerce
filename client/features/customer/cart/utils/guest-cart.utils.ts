@@ -1,6 +1,7 @@
-import { CartItem } from "../types/cart.types";
+import type { CartItem } from "../types/cart.types";
 
 const GUEST_CART_STORAGE_KEY = "abtechzone_guest_cart";
+const GUEST_CART_MERGE_ID_STORAGE_KEY = "abtechzone_guest_cart_merge_id";
 export const MAX_GUEST_CART_ITEMS = 20;
 
 export function getGuestCart(): CartItem[] {
@@ -88,5 +89,39 @@ export function clearGuestCart(): void {
     localStorage.removeItem(GUEST_CART_STORAGE_KEY);
   } catch (error) {
     console.error("Error clearing guest cart from localStorage:", error);
+  }
+}
+
+export function getGuestCartMergeId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(GUEST_CART_MERGE_ID_STORAGE_KEY);
+  } catch (error) {
+    console.error("Error reading guest cart merge ID from localStorage:", error);
+    return null;
+  }
+}
+
+export function getOrCreateGuestCartMergeId(): string {
+  const existingId = getGuestCartMergeId();
+  if (existingId) return existingId;
+
+  const mergeId = crypto.randomUUID();
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(GUEST_CART_MERGE_ID_STORAGE_KEY, mergeId);
+    } catch (error) {
+      console.error("Error saving guest cart merge ID to localStorage:", error);
+    }
+  }
+  return mergeId;
+}
+
+export function clearGuestCartMergeId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(GUEST_CART_MERGE_ID_STORAGE_KEY);
+  } catch (error) {
+    console.error("Error clearing guest cart merge ID from localStorage:", error);
   }
 }
