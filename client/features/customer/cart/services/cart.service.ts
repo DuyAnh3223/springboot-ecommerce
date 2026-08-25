@@ -2,7 +2,13 @@ import "server-only";
 import { cache } from "react";
 import { api } from "@/shared/http/api";
 import { isAxiosError } from "axios";
-import { CartSnapshot, CartItem, AddCartItemInput } from "../types/cart.types";
+import {
+  CartSnapshot,
+  CartItem,
+  AddCartItemInput,
+  CartMergeItemInput,
+  CartMergeResponse,
+} from "../types/cart.types";
 
 export class ApiError extends Error {
   code?: number;
@@ -73,6 +79,32 @@ export const cartService = {
           error.response.data.message || "Lỗi thêm giỏ hàng",
           error.response.data.code,
           error.response.status
+        );
+      }
+      throw error;
+    }
+  },
+
+  async mergeGuestCart(
+    mergeId: string,
+    items: CartMergeItemInput[],
+  ): Promise<CartMergeResponse> {
+    try {
+      const response = await api.post("/cart/merge", { mergeId, items });
+      if (response.data.code !== 1000) {
+        throw new ApiError(
+          response.data.message || "Không thể đồng bộ giỏ hàng",
+          response.data.code,
+          response.status,
+        );
+      }
+      return response.data.result;
+    } catch (error: unknown) {
+      if (isAxiosError(error) && error.response?.data?.code) {
+        throw new ApiError(
+          error.response.data.message || "Không thể đồng bộ giỏ hàng",
+          error.response.data.code,
+          error.response.status,
         );
       }
       throw error;
