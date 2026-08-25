@@ -79,6 +79,8 @@ public enum ErrorCode {
     VOUCHER_CODE_IMMUTABLE(1065, "Voucher code cannot be modified after creation", HttpStatus.BAD_REQUEST),
     IDEMPOTENCY_KEY_REUSED(1067, "Idempotency key was already used with a different request", HttpStatus.CONFLICT),
     CHECKOUT_CHANGED(1068, "Checkout state changed since review; please review again", HttpStatus.CONFLICT),
+    ORDER_STATUS_CONFLICT(1069, "Order status transition is not allowed", HttpStatus.CONFLICT),
+    MERGE_ID_REUSED(1070, "Merge ID was already used with a different request", HttpStatus.CONFLICT),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
