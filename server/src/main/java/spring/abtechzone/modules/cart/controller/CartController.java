@@ -13,8 +13,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResult;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
+import spring.abtechzone.modules.cart.dto.request.CartMergeRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
 import spring.abtechzone.modules.cart.dto.response.CartItemResponse;
+import spring.abtechzone.modules.cart.dto.response.CartMergeResponse;
 import spring.abtechzone.modules.cart.dto.response.CartResponse;
 import spring.abtechzone.modules.cart.service.CartService;
 
@@ -29,6 +31,20 @@ import spring.abtechzone.modules.cart.service.CartService;
 public class CartController {
 
     CartService cartService;
+
+    @PostMapping("/merge")
+    @Operation(
+            summary = "Merge guest cart",
+            description = "Merge all guest-cart items in one idempotent batch for the authenticated user")
+    @ApiResponse(responseCode = "200", description = "Guest cart merge result")
+    @ApiResponse(responseCode = "400", description = "Invalid merge request")
+    @ApiResponse(responseCode = "409", description = "Merge ID reused with a different request")
+    @ApiResponse(responseCode = "503", description = "Redis or merge lock unavailable")
+    ApiResult<CartMergeResponse> mergeGuestCart(@RequestBody @Valid CartMergeRequest request) {
+        return ApiResult.<CartMergeResponse>builder()
+                .result(cartService.mergeGuestCart(request))
+                .build();
+    }
 
     @PostMapping("/add")
     @Operation(

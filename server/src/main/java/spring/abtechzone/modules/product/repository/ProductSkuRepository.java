@@ -22,6 +22,10 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
     @EntityGraph(attributePaths = "product")
     Optional<ProductSku> findById(Long id);
 
+    @EntityGraph(attributePaths = "product")
+    @Query("select s from ProductSku s where s.id in :ids")
+    List<ProductSku> findAllWithProductByIdIn(@Param("ids") Collection<Long> ids);
+
     @Override
     @EntityGraph(attributePaths = "product")
     Page<ProductSku> findAll(Specification<ProductSku> spec, Pageable pageable);
