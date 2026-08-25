@@ -1,17 +1,23 @@
 package spring.abtechzone.modules.order.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +37,7 @@ import spring.abtechzone.common.config.SecurityConfig;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.CheckoutChangedException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.constant.PaymentMethod;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
@@ -59,6 +66,12 @@ class OrderControllerTest {
 
     @MockitoBean
     private CustomJwtDecoder customJwtDecoder;
+
+    @MockitoBean
+    private spring.abtechzone.modules.auth.service.AuthService authService;
+
+    @MockitoBean
+    private spring.abtechzone.modules.user.repository.UserRepository userRepository;
 
     @Test
     @DisplayName("POST /orders/checkout-review - success returns reviewed snapshot")
@@ -410,5 +423,114 @@ class OrderControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(ErrorCode.IDEMPOTENCY_KEY_REUSED.getCode()));
+    }
+
+    // ────────────────────────────────────────────────────────
+    // Customer order APIs (R-C05-02 / CP-C05-03)
+    // ────────────────────────────────────────────────────────
+
+    private static final UUID CURRENT_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+    private void stubCurrentUser() {
+        when(authService.getCurrentUsername()).thenReturn("test-user");
+        when(userRepository.findByUsername("test-user"))
+                .thenReturn(Optional.of(spring.abtechzone.modules.user.entity.User.builder()
+                        .id(CURRENT_USER_ID)
+                        .username("test-user")
+                        .isActive(true)
+                        .build()));
+    }
+
+    @Test
+    @DisplayName("GET /orders/me - resolves the user from auth context and never from the request")
+    void getMyOrders_resolvesUserFromContext() throws Exception {
+        stubCurrentUser();
+        spring.abtechzone.modules.order.dto.response.OrderSummaryResponse summary =
+                spring.abtechzone.modules.order.dto.response.OrderSummaryResponse.builder()
+                        .id(1L)
+                        .orderCode("ORD-20260818-ABCD1234")
+                        .status("PENDING")
+                        .itemCount(1)
+                        .allowedTransitions(List.of("CANCELLED"))
+                        .build();
+        when(orderService.getMyOrders(any(), anyInt(), anyInt(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(summary)));
+
+        mockMvc.perform(get("/orders/me")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content[0].orderCode").value("ORD-20260818-ABCD1234"))
+                .andExpect(jsonPath("$.result.content[0].status").value("PENDING"))
+                .andExpect(jsonPath("$.result.content[0].allowedTransitions[0]").value("CANCELLED"));
+
+        // The user must come from AuthService, not from a path/query id.
+        verify(orderService).getMyOrders(eq(OrderStatus.PENDING), eq(0), eq(10), argThat(u -> u.getId()
+                .equals(CURRENT_USER_ID)));
+    }
+
+    @Test
+    @DisplayName("GET /orders/{orderCode} - order of another user maps to 404 without disclosure")
+    void getOrderDetail_nonOwned_returns404() throws Exception {
+        stubCurrentUser();
+        when(orderService.getMyOrderDetail(eq("ORD-OTHER"), any()))
+                .thenThrow(new AppException(ErrorCode.ORDER_NOT_FOUND));
+
+        mockMvc.perform(get("/orders/ORD-OTHER").with(csrf()).with(jwt().jwt(jwt -> jwt.subject("test-user"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ORDER_NOT_FOUND.getCode()));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderCode}/cancel - missing reason returns 400")
+    void cancelOrder_missingReason_returns400() throws Exception {
+        stubCurrentUser();
+        mockMvc.perform(post("/orders/ORD-20260818-ABCD1234/cancel")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /orders/{orderCode}/cancel - success returns cancelled order")
+    void cancelOrder_success_returns200() throws Exception {
+        stubCurrentUser();
+        when(orderService.cancelOrder(eq("ORD-20260818-ABCD1234"), eq("Tôi muốn thay đổi sản phẩm"), any()))
+                .thenReturn(OrderResponse.builder()
+                        .id(1L)
+                        .orderCode("ORD-20260818-ABCD1234")
+                        .status("CANCELLED")
+                        .build());
+
+        mockMvc.perform(post("/orders/ORD-20260818-ABCD1234/cancel")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "Tôi muốn thay đổi sản phẩm"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("Legacy GET /orders/user/{userId} is no longer accessible (404)")
+    void legacyGetOrdersByUserId_isGone() throws Exception {
+        stubCurrentUser();
+        var response = mockMvc.perform(get("/orders/user/" + CURRENT_USER_ID)
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user"))))
+                .andReturn()
+                .getResponse();
+        System.out.println("LEGACY STATUS=" + response.getStatus() + " BODY=" + response.getContentAsString());
+        mockMvc.perform(get("/orders/user/" + CURRENT_USER_ID)
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user"))))
+                .andExpect(status().isNotFound());
     }
 }
