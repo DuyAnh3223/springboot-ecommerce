@@ -17,7 +17,9 @@ import spring.abtechzone.modules.user.entity.User;
 @Getter
 @Setter
 @Entity
-@Table(name = "order_status_history")
+@Table(
+        name = "order_status_history",
+        indexes = {@Index(name = "idx_order_status_history_order_id", columnList = "order_id")})
 public class OrderStatusHistory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,6 +36,22 @@ public class OrderStatusHistory {
     @NotNull
     @Column(name = "status", nullable = false, length = 20)
     private String status;
+
+    @Size(max = 20)
+    @Column(name = "from_status", length = 20)
+    private String fromStatus;
+
+    @Size(max = 20)
+    @Column(name = "to_status", length = 20)
+    private String toStatus;
+
+    @Size(max = 30)
+    @Column(name = "actor_type", length = 30)
+    private String actorType;
+
+    @Size(max = 100)
+    @Column(name = "actor_id", length = 100)
+    private String actorId;
 
     @Size(max = 500)
     @Column(name = "note", length = 500)
