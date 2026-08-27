@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:guest-cart": "node --experimental-strip-types --test test/guest-cart-merge.test.ts"
+    "test:guest-cart": "node --experimental-strip-types --test test/guest-cart-merge.test.ts",
+    "test:checkout": "node --experimental-strip-types --test test/checkout-flow.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
