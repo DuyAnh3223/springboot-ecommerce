@@ -18,6 +18,13 @@ interface SigninFormProps {
   callbackUrl?: string
 }
 
+function getSafeCallbackUrl(callbackUrl: string): string {
+  if (!callbackUrl || !callbackUrl.startsWith('/') || callbackUrl.startsWith('//')) {
+    return '/'
+  }
+  return callbackUrl
+}
+
 export function SigninForm({ prefilledUsername = '', callbackUrl = '' }: SigninFormProps) {
   const router = useRouter()
   const setUser = useAuthStore((s) => s.setUser)
@@ -37,11 +44,11 @@ export function SigninForm({ prefilledUsername = '', callbackUrl = '' }: SigninF
       setError('root', { message: result.error })
       return
     }
-    
+
     if (result?.success && result.user) {
       setUser(result.user)
 
-      router.push(callbackUrl || '/')
+      router.push(getSafeCallbackUrl(callbackUrl))
       router.refresh()
     }
   }
