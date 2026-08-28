@@ -25,8 +25,6 @@ import org.redisson.api.RedissonClient;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.cart.constant.CartMergeItemStatus;
@@ -48,6 +46,7 @@ import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.service.UserService;
+import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)

@@ -17,9 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -47,6 +44,8 @@ import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.service.UserService;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @Slf4j
@@ -352,7 +351,7 @@ public class CartService {
             return cached.response();
         } catch (AppException exception) {
             throw exception;
-        } catch (RuntimeException | JsonProcessingException exception) {
+        } catch (RuntimeException exception) {
             log.warn("Cannot read guest-cart merge cache {}", cacheKey, exception);
             throw new AppException(ErrorCode.SYSTEM_BUSY);
         }
@@ -362,7 +361,7 @@ public class CartService {
         try {
             String raw = objectMapper.writeValueAsString(new CachedMergeValue(requestHash, response));
             redissonClient.<String>getBucket(cacheKey).set(raw, MERGE_CACHE_TTL);
-        } catch (RuntimeException | JsonProcessingException exception) {
+        } catch (RuntimeException exception) {
             log.warn("Cannot write guest-cart merge cache {} after commit", cacheKey, exception);
         }
     }
@@ -373,7 +372,7 @@ public class CartService {
         }
         try {
             return objectMapper.readValue(ledger.getResultJson(), CartMergeResponse.class);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             log.error("Guest-cart merge ledger {} contains invalid JSON", ledger.getId(), exception);
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         }
@@ -382,7 +381,7 @@ public class CartService {
     private String toJson(CartMergeResponse response) {
         try {
             return objectMapper.writeValueAsString(response);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         }
     }
