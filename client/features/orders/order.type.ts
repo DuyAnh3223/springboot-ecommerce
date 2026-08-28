@@ -1,11 +1,70 @@
-export interface OrderResponse {
-  orderId: number;
+export type OrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "SHIPPING"
+  | "DELIVERED"
+  | "CANCELLED";
+
+export type OrderPaymentStatus = "UNPAID" | "PAID" | "CANCELLED";
+
+export interface OrderItemSnapshot {
+  skuId: number;
+  skuCode: string;
+  productName: string;
+  imageUrl: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface OrderSummaryResponse {
+  id: number;
   orderCode: string;
-  orderStatus: string;
-  subtotal: number;
+  status: OrderStatus;
+  paymentMethod: string;
+  paymentStatus: OrderPaymentStatus;
+  createdAt: string;
+  updatedAt: string;
+  subtotalAmount: number;
   shippingFee: number;
-  totalDiscount: number;
-  totalCheckout: number;
+  discountAmount: number;
+  totalAmount: number;
+  itemCount: number;
+  allowedTransitions: OrderStatus[];
+  previewItem: OrderItemSnapshot | null;
+}
+
+export interface OrderHistoryResponse {
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus | null;
+  status: OrderStatus | null;
+  actorType: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface OrderListQuery {
+  status?: OrderStatus;
+  page: number;
+  size: number;
+}
+
+export interface AdminOrderListQuery {
+  search?: string;
+  status?: OrderStatus;
+  fromDate?: string;
+  toDate?: string;
+  page: number;
+  size: number;
+}
+
+export interface AdminOrderStatusUpdateRequest {
+  status: OrderStatus;
+  note?: string;
+}
+
+export interface CancelOrderRequest {
+  reason: string;
 }
 
 export interface CheckoutReviewRequest {
@@ -91,12 +150,14 @@ export interface CheckoutOrderResponse {
   totalAmount: number;
 }
 
+export type OrderMutationResponse = CheckoutOrderResponse;
+
 export interface OrderDetailResponse {
   id: number;
   orderCode: string;
-  status: string;
+  status: OrderStatus;
   paymentMethod: string;
-  paymentStatus: string;
+  paymentStatus: OrderPaymentStatus;
   createdAt: string;
   updatedAt: string;
   subtotalAmount: number;
@@ -107,12 +168,7 @@ export interface OrderDetailResponse {
   phone: string;
   fullAddress: string;
   voucherCode: string | null;
-  items: Array<{
-    skuId: number;
-    skuCode: string;
-    productName: string;
-    quantity: number;
-    unitPrice: number;
-    lineTotal: number;
-  }>;
+  allowedTransitions: OrderStatus[];
+  items: OrderItemSnapshot[];
+  history: OrderHistoryResponse[];
 }

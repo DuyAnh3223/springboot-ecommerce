@@ -2,13 +2,19 @@ import "server-only";
 import { isAxiosError } from "axios";
 import { api } from "@/shared/http/api";
 import {
+  CancelOrderRequest,
+  AdminOrderListQuery,
+  AdminOrderStatusUpdateRequest,
   CheckoutOrderResponse,
   CheckoutResponse,
   CheckoutReviewRequest,
   CreateCheckoutOrderRequest,
+  OrderListQuery,
   OrderDetailResponse,
-  OrderResponse,
+  OrderSummaryResponse,
+  OrderMutationResponse,
 } from "../order.type";
+import type { PageResponse } from "@/shared/types/page.type";
 
 export class OrderApiError extends Error {
   constructor(
@@ -47,9 +53,65 @@ function rethrowOrderError(error: unknown): never {
   throw error;
 }
 
-export async function getUserOrders(userId: string): Promise<OrderResponse[]> {
-  const response = await api.get(`/orders/user/${userId}`);
-  return response.data.result;
+export async function getMyOrders(
+  query: OrderListQuery,
+): Promise<PageResponse<OrderSummaryResponse>> {
+  try {
+    const response = await api.get("/orders/me", {
+      params: {
+        page: query.page,
+        size: query.size,
+        status: query.status,
+      },
+    });
+    return unwrapResult<PageResponse<OrderSummaryResponse>>(response);
+  } catch (error: unknown) {
+    rethrowOrderError(error);
+  }
+}
+
+export async function getAdminOrders(
+  query: AdminOrderListQuery,
+): Promise<PageResponse<OrderSummaryResponse>> {
+  try {
+    const response = await api.get("/admin/orders", {
+      params: {
+        search: query.search,
+        status: query.status,
+        fromDate: query.fromDate,
+        toDate: query.toDate,
+        page: query.page,
+        size: query.size,
+      },
+    });
+    return unwrapResult<PageResponse<OrderSummaryResponse>>(response);
+  } catch (error: unknown) {
+    rethrowOrderError(error);
+  }
+}
+
+export async function getAdminOrderDetail(orderCode: string): Promise<OrderDetailResponse> {
+  try {
+    const response = await api.get(`/admin/orders/${encodeURIComponent(orderCode)}`);
+    return unwrapResult<OrderDetailResponse>(response);
+  } catch (error: unknown) {
+    rethrowOrderError(error);
+  }
+}
+
+export async function updateAdminOrderStatus(
+  orderCode: string,
+  request: AdminOrderStatusUpdateRequest,
+): Promise<OrderMutationResponse> {
+  try {
+    const response = await api.patch(
+      `/admin/orders/${encodeURIComponent(orderCode)}/status`,
+      request,
+    );
+    return unwrapResult<OrderMutationResponse>(response);
+  } catch (error: unknown) {
+    rethrowOrderError(error);
+  }
 }
 
 export async function reviewCheckout(
@@ -81,6 +143,21 @@ export async function getOrderDetail(orderCode: string): Promise<OrderDetailResp
   try {
     const response = await api.get(`/orders/${encodeURIComponent(orderCode)}`);
     return unwrapResult<OrderDetailResponse>(response);
+  } catch (error: unknown) {
+    rethrowOrderError(error);
+  }
+}
+
+export async function cancelOrder(
+  orderCode: string,
+  request: CancelOrderRequest,
+): Promise<CheckoutOrderResponse> {
+  try {
+    const response = await api.post(
+      `/orders/${encodeURIComponent(orderCode)}/cancel`,
+      request,
+    );
+    return unwrapResult<CheckoutOrderResponse>(response);
   } catch (error: unknown) {
     rethrowOrderError(error);
   }
