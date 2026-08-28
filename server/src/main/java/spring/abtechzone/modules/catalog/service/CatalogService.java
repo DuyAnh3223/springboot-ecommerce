@@ -1,8 +1,11 @@
 package spring.abtechzone.modules.catalog.service;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
@@ -19,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.catalog.dto.request.CatalogSearchRequest;
+import spring.abtechzone.modules.catalog.dto.response.CatalogProductDetailResponse;
 import spring.abtechzone.modules.catalog.dto.response.CategoryFacetResponse;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
@@ -26,6 +30,8 @@ import spring.abtechzone.modules.category.repository.CategoryAttributeRepository
 import spring.abtechzone.modules.category.repository.CategoryRepository;
 import spring.abtechzone.modules.product.dto.response.ProductResponse;
 import spring.abtechzone.modules.product.entity.Product;
+import spring.abtechzone.modules.product.entity.ProductImage;
+import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductImageRepository;
 import spring.abtechzone.modules.product.repository.ProductRepository;
 import spring.abtechzone.modules.product.repository.specification.CatalogSpecifications;
@@ -45,6 +51,159 @@ public class CatalogService {
     ProductService productService;
     ProductImageRepository productImageRepository;
     spring.abtechzone.common.service.AwsS3FileService awsS3FileService;
+
+    @Transactional(readOnly = true)
+    public CatalogProductDetailResponse getProductDetail(String slug) {
+        Product product = productRepository
+                .findBySlug(slug)
+                .filter(this::isPublicProduct)
+                .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
+
+        List<CategoryAttribute> categoryAttributes = categoryAttributeRepository.findByCategoryIdWithAttribute(
+                product.getCategory().getId());
+        List<CatalogProductDetailResponse.AttributeDefinition> specificationDefinitions =
+                categoryAttributes.stream().map(this::toAttributeDefinition).toList();
+        List<CatalogProductDetailResponse.AttributeDefinition> variantDefinitions = categoryAttributes.stream()
+                .filter(categoryAttribute -> Boolean.TRUE.equals(categoryAttribute.getIsVariantDefining()))
+                .map(this::toAttributeDefinition)
+                .toList();
+
+        List<ProductSku> activeSkus = product.getSkus() == null
+                ? List.of()
+                : product.getSkus().stream()
+                        .filter(ProductSku::isActive)
+                        .filter(sku -> sku.getDeletedAt() == null)
+                        .toList();
+        List<CatalogProductDetailResponse.Sku> skuResponses =
+                activeSkus.stream().map(sku -> toCustomerSku(product, sku)).toList();
+
+        BigDecimal priceMin = activeSkus.stream()
+                .map(ProductSku::getPrice)
+                .filter(Objects::nonNull)
+                .min(BigDecimal::compareTo)
+                .orElse(null);
+        BigDecimal priceMax = activeSkus.stream()
+                .map(ProductSku::getPrice)
+                .filter(Objects::nonNull)
+                .max(BigDecimal::compareTo)
+                .orElse(null);
+        int totalStock = Math.toIntExact(activeSkus.stream()
+                .map(ProductSku::getStock)
+                .filter(Objects::nonNull)
+                .mapToLong(stock -> Math.max(0, stock))
+                .sum());
+
+        return CatalogProductDetailResponse.builder()
+                .id(product.getId())
+                .name(product.getName())
+                .slug(product.getSlug())
+                .description(product.getDescription())
+                .primaryImageUrl(resolveProductPrimaryImage(product))
+                .rating(product.getRating())
+                .reviewCount(Objects.requireNonNullElse(product.getReviewCount(), 0))
+                .category(toReference(product.getCategory()))
+                .brand(
+                        product.getBrand() == null
+                                ? null
+                                : CatalogProductDetailResponse.Reference.builder()
+                                        .id(product.getBrand().getId())
+                                        .name(product.getBrand().getName())
+                                        .slug(product.getBrand().getSlug())
+                                        .build())
+                .attributes(copyAttributes(product.getAttributes()))
+                .specificationDefinitions(specificationDefinitions)
+                .variantDefinitions(variantDefinitions)
+                .priceMin(priceMin)
+                .priceMax(priceMax)
+                .totalStock(totalStock)
+                .skus(skuResponses)
+                .build();
+    }
+
+    private boolean isPublicProduct(Product product) {
+        return product != null
+                && product.isPublished()
+                && !product.isDraft()
+                && product.getDeletedAt() == null
+                && product.getCategory() != null
+                && Boolean.TRUE.equals(product.getCategory().getIsActive());
+    }
+
+    private CatalogProductDetailResponse.Reference toReference(Category category) {
+        return CatalogProductDetailResponse.Reference.builder()
+                .id(category.getId())
+                .name(category.getName())
+                .slug(category.getSlug())
+                .build();
+    }
+
+    private CatalogProductDetailResponse.AttributeDefinition toAttributeDefinition(
+            CategoryAttribute categoryAttribute) {
+        return CatalogProductDetailResponse.AttributeDefinition.builder()
+                .code(categoryAttribute.getAttribute().getCode())
+                .name(categoryAttribute.getAttribute().getName())
+                .unit(categoryAttribute.getAttribute().getUnit())
+                .dataType(categoryAttribute.getAttribute().getDataType())
+                .sortOrder(categoryAttribute.getSortOrder())
+                .build();
+    }
+
+    private CatalogProductDetailResponse.Sku toCustomerSku(Product product, ProductSku sku) {
+        List<ProductImage> orderedImages = sku.getImages() == null
+                ? List.of()
+                : sku.getImages().stream()
+                        .sorted(Comparator.comparing(ProductImage::isPrimary)
+                                .reversed()
+                                .thenComparing(image -> Objects.requireNonNullElse(image.getSortOrder(), 0))
+                                .thenComparing(image -> Objects.requireNonNullElse(image.getId(), Long.MAX_VALUE)))
+                        .toList();
+        List<CatalogProductDetailResponse.Image> images = orderedImages.stream()
+                .map(image -> CatalogProductDetailResponse.Image.builder()
+                        .id(image.getId())
+                        .url(resolveImageUrl(image.getUrl()))
+                        .altText(product.getName() + " - " + sku.getSku())
+                        .sortOrder(Objects.requireNonNullElse(image.getSortOrder(), 0))
+                        .primary(image.isPrimary())
+                        .build())
+                .toList();
+
+        String rawPrimaryImage = sku.getImageUrl();
+        if (rawPrimaryImage == null || rawPrimaryImage.isBlank()) {
+            rawPrimaryImage = orderedImages.stream()
+                    .filter(ProductImage::isPrimary)
+                    .findFirst()
+                    .or(() -> orderedImages.stream().findFirst())
+                    .map(ProductImage::getUrl)
+                    .orElse(null);
+        }
+
+        return CatalogProductDetailResponse.Sku.builder()
+                .id(sku.getId())
+                .sku(sku.getSku())
+                .price(sku.getPrice())
+                .stock(Math.max(0, Objects.requireNonNullElse(sku.getStock(), 0)))
+                .currency(sku.getCurrency())
+                .weightGram(sku.getWeightGram())
+                .attributes(copyAttributes(sku.getAttributes()))
+                .primaryImageUrl(resolveImageUrl(rawPrimaryImage))
+                .images(images)
+                .build();
+    }
+
+    private Map<String, Object> copyAttributes(Map<String, Object> attributes) {
+        return attributes == null ? Map.of() : new LinkedHashMap<>(attributes);
+    }
+
+    private String resolveProductPrimaryImage(Product product) {
+        List<ProductImageRepository.ProductPrimaryImageProjection> images =
+                productImageRepository.findPrimaryImagesByProductIds(List.of(product.getId()));
+        String rawUrl = images.stream()
+                .map(ProductImageRepository.ProductPrimaryImageProjection::getUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .findFirst()
+                .orElse(product.getThumbnail());
+        return resolveImageUrl(rawUrl);
+    }
 
     @Transactional(readOnly = true)
     public CategoryFacetResponse getCategoryFacets(String categorySlug) {
