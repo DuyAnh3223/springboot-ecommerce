@@ -37,10 +37,13 @@ full checkout callback URL.
 
 ### R-C07-01 - Selected-item URL and authentication flow
 
-- The cart checkout CTA navigates to `/checkout?skuIds=17,42` using selected
-  SKU IDs sorted ascending and deduplicated.
+- The cart checkout CTA navigates to `/checkout?skuIds=17%2C42` using selected
+  SKU IDs sorted ascending and deduplicated. When the cart has an applied
+  voucher, its normalized code is carried as `voucherCode` in the same URL so
+  checkout can perform an authoritative review without asking the customer to
+  select it again.
 - With no selected items, the CTA is disabled and does not navigate.
-- Refreshing checkout preserves the URL selection.
+- Refreshing checkout preserves the URL selection and applied voucher code.
 - Checkout is authenticated-only. A guest is redirected to sign-in with the
   complete encoded checkout callback URL, including its query string.
 - After sign-in, the existing guest-cart merge flow remains responsible for
@@ -133,10 +136,11 @@ full checkout callback URL.
 
 ### AC-C07-01 - Partial selection callback
 
-Given a cart with multiple rows and two selected SKU IDs, when the customer
-clicks checkout, then the URL contains the sorted, deduplicated selected IDs;
-when no row is selected, the button is disabled and the URL does not change.
-Maps to R-C07-01.
+Given a cart with multiple rows, selected SKU IDs, and an applied voucher, when
+the customer clicks checkout, then the URL contains the sorted, deduplicated
+selected IDs and normalized voucher code; checkout reviews with that code and
+does not require reselection. When no row is selected, the button is disabled
+and the URL does not change. Maps to R-C07-01 and R-C07-02.
 
 ### AC-C07-02 - Guest callback and refresh
 
@@ -153,9 +157,11 @@ from client-side arithmetic. Maps to R-C07-02 and R-C07-03.
 
 ### AC-C07-04 - Address XOR and COD
 
-Given the checkout form, when the customer submits, then exactly one existing
-address or new address is sent, and payment method is always COD. Invalid
-forms cannot call create-order. Maps to R-C07-03.
+Given the checkout form, when the customer submits, then only the selected
+address mode is validated, exactly one existing address or new address is
+sent, and payment method is always COD. Hidden fields from the inactive mode
+cannot block a valid submission; invalid active fields cannot call
+create-order. Maps to R-C07-03.
 
 ### AC-C07-05 - Invalid voucher remains recoverable
 
