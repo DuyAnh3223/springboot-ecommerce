@@ -35,6 +35,7 @@ import {
 
 interface CheckoutPageClientProps {
   selectedSkuIds: number[];
+  initialVoucherCode?: string;
   initialReview: CheckoutResponse | null;
   initialReviewError?: string | null;
   addresses: AddressResponse[];
@@ -162,6 +163,7 @@ function ReviewSummary({ review }: { review: CheckoutResponse }) {
 
 export function CheckoutPageClient({
   selectedSkuIds,
+  initialVoucherCode,
   initialReview,
   initialReviewError,
   addresses,
@@ -186,7 +188,7 @@ export function CheckoutPageClient({
       addressMode: defaultAddress ? "EXISTING" : "NEW",
       addressId: defaultAddress?.id,
       newAddress: DEFAULT_NEW_ADDRESS,
-      voucherCode: "",
+      voucherCode: initialVoucherCode || "",
     },
   });
 
@@ -237,8 +239,8 @@ export function CheckoutPageClient({
     if (reviewStartedRef.current) return;
 
     reviewStartedRef.current = true;
-    void refreshReview();
-  }, [guestMergeStatus, isHydrated, refreshReview]);
+    void refreshReview(initialVoucherCode);
+  }, [guestMergeStatus, initialVoucherCode, isHydrated, refreshReview]);
 
   const handleApplyVoucher = async () => {
     const normalized = normalizeVoucherCode(voucherCode);

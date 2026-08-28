@@ -15,29 +15,32 @@ export const checkoutNewAddressSchema = z.object({
   saveAddress: z.boolean(),
 });
 
-export const checkoutFormSchema = z
-  .object({
-    addressMode: z.enum(["EXISTING", "NEW"]),
-    addressId: z.string().trim().optional(),
-    newAddress: checkoutNewAddressSchema,
-    voucherCode: z.string().optional(),
-  })
-  .superRefine((values, context) => {
-    if (values.addressMode === "EXISTING" && !values.addressId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["addressId"],
-        message: "Vui lòng chọn địa chỉ nhận hàng.",
-      });
-    }
+const checkoutSharedFields = {
+  voucherCode: z.string().optional(),
+};
 
-    if (values.addressMode === "NEW" && values.addressId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["addressMode"],
-        message: "Vui lòng chỉ chọn một hình thức địa chỉ.",
-      });
-    }
-  });
+const inactiveNewAddressSchema = z.object({
+  recipientName: z.string().optional(),
+  phone: z.string().optional(),
+  province: z.string().optional(),
+  ward: z.string().optional(),
+  street: z.string().optional(),
+  saveAddress: z.boolean().optional(),
+});
+
+export const checkoutFormSchema = z.discriminatedUnion("addressMode", [
+  z.object({
+    ...checkoutSharedFields,
+    addressMode: z.literal("EXISTING"),
+    addressId: requiredText("Vui lòng chọn địa chỉ nhận hàng."),
+    newAddress: inactiveNewAddressSchema.optional(),
+  }),
+  z.object({
+    ...checkoutSharedFields,
+    addressMode: z.literal("NEW"),
+    addressId: z.string().trim().max(0, "Vui lòng chỉ chọn một hình thức địa chỉ.").optional(),
+    newAddress: checkoutNewAddressSchema,
+  }),
+]);
 
 export type CheckoutFormSchemaValues = z.infer<typeof checkoutFormSchema>;

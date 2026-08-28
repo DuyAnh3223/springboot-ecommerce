@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CartVoucherInput } from "./CartVoucherInput";
 import { getVoucher } from "@/features/vouchers/services/voucher.service";
 import { VoucherResponse } from "@/features/vouchers/voucher.type";
+import { buildCheckoutUrl } from "@/features/customer/checkout/utils/checkout.utils";
 
 interface CartSummaryProps {
   selectedCount: number;
@@ -106,10 +107,7 @@ export function CartSummary({
   const handleCheckout = () => {
     if (isCheckoutDisabled) return;
 
-    const normalizedSkuIds = [...new Set(selectedSkuIds)].sort(
-      (left, right) => left - right,
-    );
-    router.push(`/checkout?skuIds=${normalizedSkuIds.join(",")}`);
+    router.push(buildCheckoutUrl(selectedSkuIds, appliedVoucher?.code));
   };
 
   const totalCheckout = Math.max(0, subtotal + FLAT_SHIPPING_FEE - discountAmount);

@@ -8,10 +8,11 @@ import {
   buildCheckoutUrl,
   buildSignInCallbackUrl,
   normalizeSelectedSkuIds,
+  normalizeVoucherCode,
 } from "@/features/customer/checkout/utils/checkout.utils";
 
 interface CheckoutPageProps {
-  searchParams: Promise<{ skuIds?: string | string[] }>;
+  searchParams: Promise<{ skuIds?: string | string[]; voucherCode?: string | string[] }>;
 }
 
 export const metadata = {
@@ -40,6 +41,10 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
   const params = await searchParams;
   const selectedSkuIds = normalizeSelectedSkuIds(params.skuIds);
   const rawSkuIds = Array.isArray(params.skuIds) ? params.skuIds.join(",") : params.skuIds || "";
+  const rawVoucherCode = Array.isArray(params.voucherCode)
+    ? params.voucherCode[0]
+    : params.voucherCode;
+  const voucherCode = normalizeVoucherCode(rawVoucherCode);
 
   if (selectedSkuIds.length === 0) {
     return (
@@ -50,17 +55,17 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
   }
 
   if (rawSkuIds !== selectedSkuIds.join(",")) {
-    redirect(buildCheckoutUrl(selectedSkuIds));
+    redirect(buildCheckoutUrl(selectedSkuIds, voucherCode));
   }
 
-  const checkoutUrl = buildCheckoutUrl(selectedSkuIds);
+  const checkoutUrl = buildCheckoutUrl(selectedSkuIds, voucherCode);
   const session = await getUserSession();
   if (!session) {
     redirect(buildSignInCallbackUrl(checkoutUrl));
   }
 
   const [reviewResult, addressResult] = await Promise.all([
-    reviewCheckoutAction({ selectedSkuIds }),
+    reviewCheckoutAction({ selectedSkuIds, voucherCode }),
     getAddresses({ size: 50, sortBy: "id", order: "desc" }).catch(() => null),
   ]);
 
@@ -85,6 +90,7 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
 
       <CheckoutPageClient
         selectedSkuIds={selectedSkuIds}
+        initialVoucherCode={voucherCode}
         initialReview={reviewResult.success ? reviewResult.data : null}
         initialReviewError={reviewResult.success ? null : reviewResult.error.message}
         addresses={addresses}

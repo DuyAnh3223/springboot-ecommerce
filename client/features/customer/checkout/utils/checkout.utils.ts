@@ -20,9 +20,14 @@ export function normalizeSelectedSkuIds(value?: string | string[]): number[] {
   )].sort((left, right) => left - right);
 }
 
-export function buildCheckoutUrl(selectedSkuIds: number[]): string {
+export function buildCheckoutUrl(selectedSkuIds: number[], voucherCode?: string | null): string {
   const normalized = [...new Set(selectedSkuIds)].sort((left, right) => left - right);
-  return `/checkout?skuIds=${normalized.join(",")}`;
+  const params = new URLSearchParams({ skuIds: normalized.join(",") });
+  const normalizedVoucherCode = normalizeVoucherCode(voucherCode);
+  if (normalizedVoucherCode) {
+    params.set("voucherCode", normalizedVoucherCode);
+  }
+  return `/checkout?${params.toString()}`;
 }
 
 export function buildSignInCallbackUrl(checkoutUrl: string): string {
