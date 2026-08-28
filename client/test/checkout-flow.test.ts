@@ -12,6 +12,7 @@ import {
   normalizeSelectedSkuIds,
   normalizeVoucherCode,
 } from "../features/customer/checkout/utils/checkout.utils.ts";
+import { checkoutFormSchema } from "../features/customer/checkout/schemas/checkout.schema.ts";
 
 const review: CheckoutResponse = {
   items: [
@@ -41,12 +42,43 @@ test("normalizes, deduplicates, and sorts selected SKU IDs", () => {
 });
 
 test("builds a stable checkout URL and encoded sign-in callback", () => {
-  const checkoutUrl = buildCheckoutUrl([42, 17, 17]);
-  assert.equal(checkoutUrl, "/checkout?skuIds=17,42");
+  const checkoutUrl = buildCheckoutUrl([42, 17, 17], " summer 2026 ");
+  assert.equal(checkoutUrl, "/checkout?skuIds=17%2C42&voucherCode=SUMMER+2026");
   assert.equal(
     buildSignInCallbackUrl(checkoutUrl),
-    "/sign-in?callbackUrl=%2Fcheckout%3FskuIds%3D17%2C42",
+    "/sign-in?callbackUrl=%2Fcheckout%3FskuIds%3D17%252C42%26voucherCode%3DSUMMER%2B2026",
   );
+  assert.equal(buildCheckoutUrl([17]), "/checkout?skuIds=17");
+});
+
+test("validates only the address mode selected by the customer", () => {
+  const existingAddress = checkoutFormSchema.safeParse({
+    addressMode: "EXISTING",
+    addressId: "address-1",
+    newAddress: {
+      recipientName: "",
+      phone: "",
+      province: "",
+      ward: "",
+      street: "",
+      saveAddress: false,
+    },
+    voucherCode: "SUMMER2026",
+  });
+  assert.equal(existingAddress.success, true);
+
+  const blankNewAddress = checkoutFormSchema.safeParse({
+    addressMode: "NEW",
+    newAddress: {
+      recipientName: "",
+      phone: "",
+      province: "",
+      ward: "",
+      street: "",
+      saveAddress: false,
+    },
+  });
+  assert.equal(blankNewAddress.success, false);
 });
 
 test("maps form values to the reviewed snapshot create contract", () => {
