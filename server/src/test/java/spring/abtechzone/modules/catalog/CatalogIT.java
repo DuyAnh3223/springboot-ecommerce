@@ -67,6 +67,7 @@ class CatalogIT extends BaseIT {
     private Category category;
     private Brand brandA;
     private Brand brandB;
+    private Product productA;
 
     @BeforeEach
     void setUp() {
@@ -107,8 +108,8 @@ class CatalogIT extends BaseIT {
         createCategoryAttribute(category, colorAttr, true, true, false, false, 1);
         createCategoryAttribute(category, ramAttr, true, false, true, false, 2);
 
-        Product p1 = createProduct("Laptop A1", brandA, Map.of("RAM", 8, "Color", "Silver"), 10_000_000, 12_000_000);
-        createSku(p1, "SKU-A1-SILVER", 10_000_000, 5, Map.of("Color", "Silver"));
+        productA = createProduct("Laptop A1", brandA, Map.of("RAM", 8, "Color", "Silver"), 10_000_000, 12_000_000);
+        createSku(productA, "SKU-A1-SILVER", 10_000_000, 5, Map.of("Color", "Silver"));
 
         Product p2 = createProduct("Laptop A2", brandA, Map.of("RAM", 16, "Color", "Black"), 15_000_000, 15_000_000);
         createSku(p2, "SKU-A2-BLACK", 15_000_000, 0, Map.of("Color", "Black"));
@@ -150,6 +151,31 @@ class CatalogIT extends BaseIT {
                         .param("order", "desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.content[0].name").value("Laptop B1"));
+    }
+
+    @Test
+    void getProductDetail_anonymousCallerReceivesOnlyCustomerSafeActiveSkuData() throws Exception {
+        createSku(productA, "SKU-A1-INACTIVE", 9_000_000, 99, Map.of("Color", "Hidden"), false);
+
+        mockMvc.perform(get("/api/v1/public/catalog/products/laptop-a1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.name").value("Laptop A1"))
+                .andExpect(jsonPath("$.result.category.slug").value("laptop"))
+                .andExpect(jsonPath("$.result.variantDefinitions[0].code").value("Color"))
+                .andExpect(jsonPath("$.result.skus.length()").value(1))
+                .andExpect(jsonPath("$.result.skus[0].sku").value("SKU-A1-SILVER"))
+                .andExpect(jsonPath("$.result.draft").doesNotExist())
+                .andExpect(jsonPath("$.result.published").doesNotExist());
+    }
+
+    @Test
+    void getProductDetail_inactiveCategoryUsesSafeNotFoundContract() throws Exception {
+        category.setIsActive(false);
+        categoryRepository.save(category);
+
+        mockMvc.perform(get("/api/v1/public/catalog/products/laptop-a1"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(1008));
     }
 
     private Attribute createAttribute(String name, String code, String dataType) {
@@ -205,13 +231,18 @@ class CatalogIT extends BaseIT {
 
     private ProductSku createSku(
             Product product, String skuCode, long priceVal, int stock, Map<String, Object> attributes) {
+        return createSku(product, skuCode, priceVal, stock, attributes, true);
+    }
+
+    private ProductSku createSku(
+            Product product, String skuCode, long priceVal, int stock, Map<String, Object> attributes, boolean active) {
         ProductSku sku = ProductSku.builder()
                 .product(product)
                 .sku(skuCode)
                 .price(BigDecimal.valueOf(priceVal))
                 .stock(stock)
                 .attributes(attributes)
-                .active(true)
+                .active(active)
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
