@@ -56,11 +56,13 @@ public final class CreateOrderRequestHash {
                     appendField(sb, canonical(item.getLineTotal()));
                 });
 
-        appendField(sb, canonical(reviewed.getSubtotal()));
-        appendField(sb, canonical(reviewed.getEligibleSubtotal()));
-        appendField(sb, canonical(reviewed.getShippingFee()));
-        appendField(sb, canonical(reviewed.getDiscountAmount()));
-        appendField(sb, canonical(reviewed.getTotalAmount()));
+        appendFields(
+                sb,
+                canonical(reviewed.getSubtotal()),
+                canonical(reviewed.getEligibleSubtotal()),
+                canonical(reviewed.getShippingFee()),
+                canonical(reviewed.getDiscountAmount()),
+                canonical(reviewed.getTotalAmount()));
 
         if (reviewed.getVoucher() != null
                 && reviewed.getVoucher().getCode() != null
@@ -78,11 +80,13 @@ public final class CreateOrderRequestHash {
         } else if (request.getNewUserAddress() != null) {
             AddressRequest address = request.getNewUserAddress();
             appendField(sb, "new");
-            appendField(sb, trim(address.getRecipientName()));
-            appendField(sb, trim(address.getPhone()));
-            appendField(sb, trim(address.getProvince()));
-            appendField(sb, trim(address.getWard()));
-            appendField(sb, trim(address.getStreet()));
+            appendFields(
+                    sb,
+                    trim(address.getRecipientName()),
+                    trim(address.getPhone()),
+                    trim(address.getProvince()),
+                    trim(address.getWard()),
+                    trim(address.getStreet()));
             // saveAddress persists an Address row (side effect): it must be part of the hash
             appendField(sb, address.isSaveAddress());
         } else {
@@ -103,6 +107,12 @@ public final class CreateOrderRequestHash {
         sb.append(String.format(Locale.ROOT, "%08d", text.getBytes(StandardCharsets.UTF_8).length));
         sb.append(text);
         sb.append('\n');
+    }
+
+    private static void appendFields(StringBuilder sb, Object... values) {
+        for (Object value : values) {
+            appendField(sb, value);
+        }
     }
 
     private static String canonical(BigDecimal value) {
