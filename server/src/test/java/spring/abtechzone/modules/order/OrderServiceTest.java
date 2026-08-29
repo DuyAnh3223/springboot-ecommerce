@@ -33,6 +33,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -796,6 +797,76 @@ class OrderServiceTest {
             // Watchdog overload used, no fixed lease (AC-C04-05)
             verify(redissonClient.getLock(anyString()), atLeastOnce()).tryLock(anyLong(), any(TimeUnit.class));
             verify(redissonClient.getLock(anyString()), never()).tryLock(anyLong(), anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("createOrder releases acquired locks when a later lock times out")
+        void createOrder_partialLockFailure_releasesPreviouslyAcquiredLocks() throws Exception {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(orderRepository.findByUserIdAndIdempotencyKey(eq(userId), eq(IDEMPOTENCY_KEY)))
+                    .thenReturn(Optional.empty());
+
+            RLock firstLock = mock(RLock.class);
+            RLock secondLock = mock(RLock.class);
+            when(redissonClient.getLock(anyString())).thenReturn(firstLock, secondLock);
+            when(firstLock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
+            when(secondLock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(false);
+
+            assertThatThrownBy(() ->
+                            orderService.createOrder(requestWithSavedAddress(reviewedCheckout()), IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.SYSTEM_BUSY);
+
+            verify(firstLock).unlock();
+            verify(secondLock, never()).unlock();
+            verify(transactionTemplate, never()).execute(any());
+        }
+
+        @Test
+        @DisplayName("createOrder releases all locks in reverse order when the transaction fails")
+        void createOrder_transactionFailure_releasesAllLocksInReverseOrder() throws Exception {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(orderRepository.findByUserIdAndIdempotencyKey(eq(userId), eq(IDEMPOTENCY_KEY)))
+                    .thenReturn(Optional.empty());
+
+            RLock firstLock = mock(RLock.class);
+            RLock secondLock = mock(RLock.class);
+            when(redissonClient.getLock(anyString())).thenReturn(firstLock, secondLock);
+            when(firstLock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
+            when(secondLock.tryLock(anyLong(), any(TimeUnit.class))).thenReturn(true);
+            doThrow(new AppException(ErrorCode.SYSTEM_ERROR))
+                    .when(transactionTemplate)
+                    .execute(any());
+
+            assertThatThrownBy(() ->
+                            orderService.createOrder(requestWithSavedAddress(reviewedCheckout()), IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.SYSTEM_ERROR);
+
+            InOrder releaseOrder = inOrder(secondLock, firstLock);
+            releaseOrder.verify(secondLock).unlock();
+            releaseOrder.verify(firstLock).unlock();
+        }
+
+        @Test
+        @DisplayName("createOrder stops after the configured idempotency retry limit")
+        void createOrder_idempotencyConflictStopsAfterRetryLimit() {
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(orderRepository.findByUserIdAndIdempotencyKey(eq(userId), eq(IDEMPOTENCY_KEY)))
+                    .thenReturn(Optional.empty());
+            doThrow(new DataIntegrityViolationException("duplicate idempotency key"))
+                    .when(transactionTemplate)
+                    .execute(any());
+
+            assertThatThrownBy(() ->
+                            orderService.createOrder(requestWithSavedAddress(reviewedCheckout()), IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.SYSTEM_ERROR);
+
+            verify(transactionTemplate, times(3)).execute(any());
         }
 
         @Test

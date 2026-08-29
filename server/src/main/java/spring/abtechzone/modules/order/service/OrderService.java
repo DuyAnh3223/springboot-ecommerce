@@ -4,13 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -44,17 +38,8 @@ import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.constant.PaymentStatus;
-import spring.abtechzone.modules.order.dto.request.AddressRequest;
-import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
-import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
-import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
-import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
-import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
-import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
-import spring.abtechzone.modules.order.dto.response.OrderDetailResponse;
-import spring.abtechzone.modules.order.dto.response.OrderResponse;
-import spring.abtechzone.modules.order.dto.response.OrderSummaryResponse;
-import spring.abtechzone.modules.order.dto.response.VoucherReviewResponse;
+import spring.abtechzone.modules.order.dto.request.*;
+import spring.abtechzone.modules.order.dto.response.*;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.entity.OrderItem;
 import spring.abtechzone.modules.order.entity.OrderStatusHistory;
@@ -85,6 +70,7 @@ public class OrderService {
     private static final long LOCK_WAIT_SECONDS = 5;
     private static final int IDEMPOTENCY_RETRY_LIMIT = 3;
     private static final int MAX_PAGE_SIZE = 50;
+    private static final String CREATE_AT = "createdAt";
 
     UserRepository userRepository;
     CartRepository cartRepository;
@@ -112,19 +98,23 @@ public class OrderService {
     // 0b. Order Lifecycle: Customer reads, Cancel, Admin Transitions
     // ────────────────────────────────────────────────────────
 
-    /** Customer order list: current user, optional status filter, newest first. */
+    /**
+     * Customer order list: current user, optional status filter, newest first.
+     */
     @Transactional(readOnly = true)
     public Page<OrderSummaryResponse> getMyOrders(OrderStatus status, int page, int size, User user) {
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Pageable pageable =
-                PageRequest.of(Math.max(page, 0), safeSize, Sort.by("createdAt").descending());
+                PageRequest.of(Math.max(page, 0), safeSize, Sort.by(CREATE_AT).descending());
         Page<Order> orders = status == null
                 ? orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
                 : orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), status, pageable);
         return orders.map(order -> toSummary(order, Actor.CUSTOMER));
     }
 
-    /** Customer order detail: owner-safe, non-owned code returns 404 (R-C05-02). */
+    /**
+     * Customer order detail: owner-safe, non-owned code returns 404 (R-C05-02).
+     */
     @Transactional(readOnly = true)
     public OrderDetailResponse getMyOrderDetail(String orderCode, User user) {
         Order order = orderRepository
@@ -137,7 +127,9 @@ public class OrderService {
         return detail;
     }
 
-    /** Admin order detail: full snapshot with history. */
+    /**
+     * Admin order detail: full snapshot with history.
+     */
     @Transactional(readOnly = true)
     public OrderDetailResponse getAdminOrderDetail(String orderCode) {
         Order order = orderRepository
@@ -157,7 +149,7 @@ public class OrderService {
                 .toList());
         if (order.getItems() != null && !order.getItems().isEmpty()) {
             summary.setPreviewItem(
-                    orderMapper.toOrderItemResponse(order.getItems().get(0)));
+                    orderMapper.toOrderItemResponse(order.getItems().getFirst()));
         }
         return summary;
     }
@@ -171,7 +163,9 @@ public class OrderService {
         return detail;
     }
 
-    /** Admin order list with null-safe filters (R-C05-03). */
+    /**
+     * Admin order list with null-safe filters (R-C05-03).
+     */
     @Transactional(readOnly = true)
     public Page<OrderSummaryResponse> getAdminOrders(AdminOrderSearchRequest request) {
         if (request.getPage() < 0 || request.getSize() < 1) {
@@ -185,9 +179,9 @@ public class OrderService {
                 && request.getFromDate().isAfter(request.getToDate())) {
             throw new AppException(ErrorCode.INVALID_KEY);
         }
-        int safeSize = Math.min(Math.max(request.getSize(), 1), MAX_PAGE_SIZE);
+        int safeSize = Math.clamp(request.getSize(), 1, MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(
-                Math.max(request.getPage(), 0), safeSize, Sort.by("createdAt").descending());
+                Math.max(request.getPage(), 0), safeSize, Sort.by(CREATE_AT).descending());
         Specification<Order> spec = Specification.where(buildAdminOrderSpec(request));
         return orderRepository.findAll(spec, pageable).map(order -> toSummary(order, Actor.ADMIN));
     }
@@ -210,10 +204,10 @@ public class OrderService {
                 }
             }
             if (request.getFromDate() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getFromDate()));
+                predicates.add(cb.greaterThanOrEqualTo(root.get(CREATE_AT), request.getFromDate()));
             }
             if (request.getToDate() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getToDate()));
+                predicates.add(cb.lessThanOrEqualTo(root.get(CREATE_AT), request.getToDate()));
             }
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
@@ -280,45 +274,60 @@ public class OrderService {
      * order row and validated the current status is not CANCELLED.
      */
     private void compensateCancellation(Order order) {
-        // 1. Restore SKU stock from persisted OrderItem quantities (ADR-003)
-        if (order.getItems() != null) {
-            for (OrderItem item : order.getItems()) {
-                if (item.getSku() == null || item.getSku().getId() == null || item.getQuantity() <= 0) {
-                    throw new AppException(ErrorCode.SYSTEM_ERROR);
-                }
-                int updated = productSkuRepository.increaseStock(item.getSku().getId(), item.getQuantity());
-                if (updated != 1) {
-                    throw new AppException(ErrorCode.SYSTEM_ERROR);
-                }
-                StockMovement movement = new StockMovement();
-                movement.setSku(item.getSku());
-                movement.setChangeQty(item.getQuantity());
-                movement.setReason("ORDER_CANCEL_RETURN");
-                movement.setReferenceId(String.valueOf(order.getId()));
-                movement.setCreatedAt(OffsetDateTime.now());
-                stockMovementRepository.save(movement);
-            }
-        }
+        restoreCancellationStock(order);
+        reverseCancellationVoucher(order);
+    }
 
-        // 2. Reverse the canonical voucher redemption, if any (ADR-004).
+    private void restoreCancellationStock(Order order) {
+        if (order.getItems() == null) {
+            return;
+        }
+        order.getItems().forEach(item -> restoreCancellationStockItem(order, item));
+    }
+
+    private void restoreCancellationStockItem(Order order, OrderItem item) {
+        validateCancellationItem(item);
+        requireSingleUpdatedRow(productSkuRepository.increaseStock(item.getSku().getId(), item.getQuantity()));
+
+        StockMovement movement = new StockMovement();
+        movement.setSku(item.getSku());
+        movement.setChangeQty(item.getQuantity());
+        movement.setReason("ORDER_CANCEL_RETURN");
+        movement.setReferenceId(String.valueOf(order.getId()));
+        movement.setCreatedAt(OffsetDateTime.now());
+        stockMovementRepository.save(movement);
+    }
+
+    private void validateCancellationItem(OrderItem item) {
+        if (item.getSku() == null || item.getSku().getId() == null || item.getQuantity() <= 0) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+    }
+
+    private void reverseCancellationVoucher(Order order) {
         // A voucher-bearing order must have exactly one active redemption. A
         // missing/already-reversed ledger row is an integrity failure, not a
         // reason to silently leave the aggregate count unchanged.
-        boolean voucherBearing = order.getVoucher() != null
+        if (!isVoucherBearing(order)) {
+            return;
+        }
+        if (order.getVoucher() == null || order.getVoucher().getId() == null) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        requireSingleUpdatedRow(voucherRedemptionRepository.reverseRedemptionByOrderId(order.getId()));
+        requireSingleUpdatedRow(
+                voucherRepository.decreaseUsedCount(order.getVoucher().getId()));
+    }
+
+    private boolean isVoucherBearing(Order order) {
+        return order.getVoucher() != null
                 || (order.getVoucherCode() != null && !order.getVoucherCode().isBlank());
-        if (voucherBearing) {
-            if (order.getVoucher() == null || order.getVoucher().getId() == null) {
-                throw new AppException(ErrorCode.SYSTEM_ERROR);
-            }
-            int reversed = voucherRedemptionRepository.reverseRedemptionByOrderId(order.getId());
-            if (reversed != 1) {
-                throw new AppException(ErrorCode.SYSTEM_ERROR);
-            }
-            int decremented =
-                    voucherRepository.decreaseUsedCount(order.getVoucher().getId());
-            if (decremented != 1) {
-                throw new AppException(ErrorCode.SYSTEM_ERROR);
-            }
+    }
+
+    private void requireSingleUpdatedRow(int updatedRows) {
+        if (updatedRows != 1) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
         }
     }
 
@@ -384,31 +393,22 @@ public class OrderService {
         List<String> lockKeys = buildLockKeys(user, selectedSkuIds, request);
         List<RLock> locks = lockKeys.stream().map(redissonClient::getLock).toList();
 
-        try {
-            // Step 6: Acquire locks with the Redisson watchdog overload (no fixed 10s lease)
-            acquireLocks(locks);
-
-            // Step 7: Transaction starts only after all locks are held
-            return executeWithIdempotencyRetry(
-                    () -> transactionTemplate.execute(
-                            status -> doCreateOrder(request, user, idempotencyKey, requestHash)),
-                    user,
-                    idempotencyKey,
-                    requestHash);
-
-        } finally {
-            // Step 8: Release only locks held by the current thread
-            for (RLock lock : locks) {
-                if (lock.isHeldByCurrentThread()) {
-                    lock.unlock();
-                }
-            }
-        }
+        // Steps 6-8: Acquire every lock before the transaction and release it on
+        // the same method path, including timeout, interruption and callback failure.
+        return executeWithLocks(
+                locks,
+                0,
+                () -> executeWithIdempotencyRetry(
+                        () -> transactionTemplate.execute(
+                                status -> doCreateOrder(request, user, idempotencyKey, requestHash)),
+                        user,
+                        idempotencyKey,
+                        requestHash));
     }
 
     private OrderResponse executeWithIdempotencyRetry(
             TransactionCallback callback, User user, String idempotencyKey, String requestHash) {
-        for (int attempt = 0; attempt < IDEMPOTENCY_RETRY_LIMIT; attempt++) {
+        for (int attempt = 1; ; attempt++) {
             try {
                 return callback.run();
             } catch (DataIntegrityViolationException e) {
@@ -420,12 +420,11 @@ public class OrderService {
                 if (concurrent != null) {
                     return replayOrConflict(concurrent, requestHash);
                 }
-                if (attempt + 1 >= IDEMPOTENCY_RETRY_LIMIT) {
+                if (attempt >= IDEMPOTENCY_RETRY_LIMIT) {
                     throw new AppException(ErrorCode.SYSTEM_ERROR);
                 }
             }
         }
-        throw new AppException(ErrorCode.SYSTEM_ERROR);
     }
 
     private OrderResponse doCreateOrder(
@@ -481,31 +480,29 @@ public class OrderService {
         return orderMapper.toOrderResponse(savedOrder);
     }
 
-    private void acquireLocks(List<RLock> locks) {
-        for (int i = 0; i < locks.size(); i++) {
-            RLock lock = locks.get(i);
-            boolean acquired;
-            try {
-                acquired = lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                releaseAcquired(locks, i);
-                throw new AppException(ErrorCode.SYSTEM_BUSY);
-            }
-            if (!acquired) {
-                // Release already-acquired locks in reverse order (R-C04-02)
-                releaseAcquired(locks, i);
-                throw new AppException(ErrorCode.SYSTEM_BUSY);
-            }
+    private OrderResponse executeWithLocks(List<RLock> locks, int index, TransactionCallback callback) {
+        if (index >= locks.size()) {
+            return callback.run();
         }
+
+        RLock lock = locks.get(index);
+        return executeWithLock(lock, () -> executeWithLocks(locks, index + 1, callback));
     }
 
-    private void releaseAcquired(List<RLock> locks, int upToExclusive) {
-        for (int j = upToExclusive - 1; j >= 0; j--) {
-            RLock lock = locks.get(j);
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
+    private OrderResponse executeWithLock(RLock lock, TransactionCallback callback) {
+        try {
+            if (!lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                throw new AppException(ErrorCode.SYSTEM_BUSY);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AppException(ErrorCode.SYSTEM_BUSY);
+        }
+
+        try {
+            return callback.run();
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -528,75 +525,117 @@ public class OrderService {
         List<AuthoritativeLine> lines = new ArrayList<>();
 
         for (Long skuId : selectedSkuIds) {
-            CartItem cartItem = cartItemBySkuId.get(skuId);
-            if (cartItem == null) {
-                throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
-            }
-            String issueCode = null;
-            ProductSku freshSku = null;
-            BigDecimal lineTotal = null;
-
-            if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
-                issueCode = ErrorCode.CART_ITEM_QUANTITY_INVALID.name();
-            } else {
-                freshSku = productSkuRepository.findById(skuId).orElse(null);
-
-                if (freshSku == null) {
-                    issueCode = ErrorCode.SKU_NOT_FOUND.name();
-                } else if (!freshSku.isActive()) {
-                    issueCode = ErrorCode.PRODUCT_NOT_AVAILABLE.name();
-                } else if (freshSku.getProduct() == null
-                        || !freshSku.getProduct().isPublished()
-                        || freshSku.getProduct().isDraft()) {
-                    issueCode = ErrorCode.PRODUCT_NOT_AVAILABLE.name();
-                } else if (freshSku.getStock() == null || freshSku.getStock() < cartItem.getQuantity()) {
-                    issueCode = ErrorCode.INSUFFICIENT_STOCK.name();
-                }
-
-                if (freshSku != null && freshSku.getPrice() != null) {
-                    lineTotal = freshSku.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()));
-                    subtotal = subtotal.add(lineTotal);
-                    skuSubtotals.merge(skuId, lineTotal, BigDecimal::add);
-                }
-            }
-
-            if (issueCode != null) {
+            CheckoutLineReview lineReview = reviewCheckoutLine(skuId, cartItemBySkuId);
+            if (lineReview.issueCode() != null) {
                 allLinesSellable = false;
             }
-
-            CheckoutItemResponse.CheckoutItemResponseBuilder itemBuilder =
-                    CheckoutItemResponse.builder().skuId(skuId).quantity(cartItem.getQuantity());
-            if (freshSku != null) {
-                itemBuilder
-                        .skuCode(freshSku.getSku())
-                        .productName(
-                                freshSku.getProduct() != null
-                                        ? freshSku.getProduct().getName()
-                                        : null)
-                        .imageUrl(freshSku.getImageUrl())
-                        .unitPrice(freshSku.getPrice())
-                        .availableStock(freshSku.getStock());
+            if (lineReview.lineTotal() != null) {
+                subtotal = subtotal.add(lineReview.lineTotal());
+                skuSubtotals.merge(skuId, lineReview.lineTotal(), BigDecimal::add);
             }
-            if (lineTotal != null) {
-                itemBuilder.lineTotal(lineTotal);
-            }
-            items.add(itemBuilder.issueCode(issueCode).build());
-            lines.add(new AuthoritativeLine(
-                    skuId, cartItem.getQuantity(), freshSku != null ? freshSku.getPrice() : null, lineTotal));
+            items.add(lineReview.item());
+            lines.add(lineReview.authoritativeLine());
         }
 
         // Voucher review: typed result (invalid voucher is an expected review outcome, not an exception)
         VoucherReview voucherReview = evaluateVoucherReview(voucherCode, user, skuSubtotals, subtotal);
-
         BigDecimal shippingFee = checkoutShippingFee;
         boolean canPlaceOrder = allLinesSellable && voucherReview.applicable();
+        BigDecimal totalAmount = calculateCheckoutTotal(subtotal, shippingFee, voucherReview.discountAmount());
+        CheckoutResponse response =
+                buildCheckoutResponse(items, subtotal, shippingFee, voucherReview, totalAmount, canPlaceOrder);
 
-        BigDecimal totalAmount = subtotal.add(shippingFee).subtract(voucherReview.discountAmount());
-        if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
-            totalAmount = BigDecimal.ZERO;
+        return new AuthoritativeCheckout(
+                response,
+                lines,
+                voucherReview.voucher(),
+                voucherReview.normalizedCode(),
+                subtotal,
+                voucherReview.applicable());
+    }
+
+    private CheckoutLineReview reviewCheckoutLine(Long skuId, Map<Long, CartItem> cartItemBySkuId) {
+        CartItem cartItem = cartItemBySkuId.get(skuId);
+        if (cartItem == null) {
+            throw new AppException(ErrorCode.CART_ITEM_NOT_IN_CART);
         }
 
-        CheckoutResponse response = CheckoutResponse.builder()
+        ProductSku freshSku = null;
+        String issueCode;
+        if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
+            issueCode = ErrorCode.CART_ITEM_QUANTITY_INVALID.name();
+        } else {
+            freshSku = productSkuRepository.findById(skuId).orElse(null);
+            issueCode = resolveCheckoutLineIssue(freshSku, cartItem.getQuantity());
+        }
+
+        BigDecimal lineTotal = calculateLineTotal(freshSku, cartItem.getQuantity());
+        CheckoutItemResponse item = buildCheckoutItem(skuId, cartItem, freshSku, lineTotal, issueCode);
+        BigDecimal unitPrice = freshSku != null ? freshSku.getPrice() : null;
+        AuthoritativeLine authoritativeLine =
+                new AuthoritativeLine(skuId, cartItem.getQuantity(), unitPrice, lineTotal);
+        return new CheckoutLineReview(item, authoritativeLine, lineTotal, issueCode);
+    }
+
+    private String resolveCheckoutLineIssue(ProductSku freshSku, int quantity) {
+        if (freshSku == null) {
+            return ErrorCode.SKU_NOT_FOUND.name();
+        }
+        if (!freshSku.isActive()) {
+            return ErrorCode.PRODUCT_NOT_AVAILABLE.name();
+        }
+        if (freshSku.getProduct() == null
+                || !freshSku.getProduct().isPublished()
+                || freshSku.getProduct().isDraft()) {
+            return ErrorCode.PRODUCT_NOT_AVAILABLE.name();
+        }
+        if (freshSku.getStock() == null || freshSku.getStock() < quantity) {
+            return ErrorCode.INSUFFICIENT_STOCK.name();
+        }
+        return null;
+    }
+
+    private BigDecimal calculateLineTotal(ProductSku freshSku, Integer quantity) {
+        if (freshSku == null || freshSku.getPrice() == null) {
+            return null;
+        }
+        return freshSku.getPrice().multiply(BigDecimal.valueOf(quantity));
+    }
+
+    private CheckoutItemResponse buildCheckoutItem(
+            Long skuId, CartItem cartItem, ProductSku freshSku, BigDecimal lineTotal, String issueCode) {
+        CheckoutItemResponse.CheckoutItemResponseBuilder itemBuilder =
+                CheckoutItemResponse.builder().skuId(skuId).quantity(cartItem.getQuantity());
+        if (freshSku != null) {
+            itemBuilder
+                    .skuCode(freshSku.getSku())
+                    .productName(
+                            freshSku.getProduct() != null
+                                    ? freshSku.getProduct().getName()
+                                    : null)
+                    .imageUrl(freshSku.getImageUrl())
+                    .unitPrice(freshSku.getPrice())
+                    .availableStock(freshSku.getStock());
+        }
+        if (lineTotal != null) {
+            itemBuilder.lineTotal(lineTotal);
+        }
+        return itemBuilder.issueCode(issueCode).build();
+    }
+
+    private BigDecimal calculateCheckoutTotal(BigDecimal subtotal, BigDecimal shippingFee, BigDecimal discountAmount) {
+        BigDecimal totalAmount = subtotal.add(shippingFee).subtract(discountAmount);
+        return totalAmount.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : totalAmount;
+    }
+
+    private CheckoutResponse buildCheckoutResponse(
+            List<CheckoutItemResponse> items,
+            BigDecimal subtotal,
+            BigDecimal shippingFee,
+            VoucherReview voucherReview,
+            BigDecimal totalAmount,
+            boolean canPlaceOrder) {
+        return CheckoutResponse.builder()
                 .items(items)
                 .subtotal(subtotal)
                 .eligibleSubtotal(voucherReview.eligibleSubtotal())
@@ -613,14 +652,6 @@ public class OrderService {
                                         .build())
                 .canPlaceOrder(canPlaceOrder)
                 .build();
-
-        return new AuthoritativeCheckout(
-                response,
-                lines,
-                voucherReview.voucher(),
-                voucherReview.normalizedCode(),
-                subtotal,
-                voucherReview.applicable());
     }
 
     /**
@@ -632,70 +663,75 @@ public class OrderService {
             List<Long> selectedSkuIds,
             Cart freshCart,
             AuthoritativeCheckout authoritative) {
-        // Exact selected SKU set
-        List<Long> reviewedSkuIds = request.getReviewedCheckout().getItems().stream()
+        ReviewedCheckoutRequest reviewedCheckout = request.getReviewedCheckout();
+        boolean mismatch = hasSelectedSkuMismatch(reviewedCheckout, selectedSkuIds)
+                || hasLineMismatch(reviewedCheckout, freshCart, authoritative)
+                || hasVoucherMismatch(reviewedCheckout, authoritative)
+                || hasCheckoutOutcomeMismatch(reviewedCheckout, authoritative.response());
+
+        return mismatch ? new CheckoutChangedException(authoritative.response()) : null;
+    }
+
+    private boolean hasSelectedSkuMismatch(ReviewedCheckoutRequest reviewedCheckout, List<Long> selectedSkuIds) {
+        List<Long> reviewedSkuIds = reviewedCheckout.getItems().stream()
                 .map(ReviewedCheckoutItemRequest::getSkuId)
                 .distinct()
                 .sorted()
                 .toList();
-        if (!reviewedSkuIds.equals(selectedSkuIds)) {
-            return new CheckoutChangedException(authoritative.response());
-        }
+        return !reviewedSkuIds.equals(selectedSkuIds);
+    }
 
-        // Cart quantity + unit price + line total per line (any unit price change, up or down, mismatches)
+    private boolean hasLineMismatch(
+            ReviewedCheckoutRequest reviewedCheckout, Cart freshCart, AuthoritativeCheckout authoritative) {
         Map<Long, CartItem> cartItemBySkuId = freshCart.getItems().stream()
                 .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
-        for (ReviewedCheckoutItemRequest reviewedItem :
-                request.getReviewedCheckout().getItems()) {
+        Map<Long, AuthoritativeLine> authoritativeLineBySkuId = authoritative.lines().stream()
+                .collect(Collectors.toMap(AuthoritativeLine::skuId, line -> line, (a, b) -> a));
+
+        for (ReviewedCheckoutItemRequest reviewedItem : reviewedCheckout.getItems()) {
             CartItem cartItem = cartItemBySkuId.get(reviewedItem.getSkuId());
-            AuthoritativeLine line = authoritative.lines().stream()
-                    .filter(l -> l.skuId().equals(reviewedItem.getSkuId()))
-                    .findFirst()
-                    .orElse(null);
-            if (cartItem == null
-                    || line == null
-                    || !eq(reviewedItem.getQuantity(), cartItem.getQuantity())
-                    || !eq(reviewedItem.getUnitPrice(), line.unitPrice())
-                    || !eq(reviewedItem.getLineTotal(), line.lineTotal())) {
-                return new CheckoutChangedException(authoritative.response());
+            AuthoritativeLine line = authoritativeLineBySkuId.get(reviewedItem.getSkuId());
+            if (hasLineValueMismatch(reviewedItem, cartItem, line)) {
+                return true;
             }
         }
+        return false;
+    }
 
-        // Voucher identity/applicability
-        String reviewedCode = request.getReviewedCheckout().getVoucher() != null
-                ? normalizeCode(request.getReviewedCheckout().getVoucher().getCode())
+    private boolean hasLineValueMismatch(
+            ReviewedCheckoutItemRequest reviewedItem, CartItem cartItem, AuthoritativeLine line) {
+        return cartItem == null
+                || line == null
+                || different(reviewedItem.getQuantity(), cartItem.getQuantity())
+                || different(reviewedItem.getUnitPrice(), line.unitPrice())
+                || different(reviewedItem.getLineTotal(), line.lineTotal());
+    }
+
+    private boolean hasVoucherMismatch(ReviewedCheckoutRequest reviewedCheckout, AuthoritativeCheckout authoritative) {
+        String reviewedCode = reviewedCheckout.getVoucher() != null
+                ? normalizeCode(reviewedCheckout.getVoucher().getCode())
                 : null;
-        boolean reviewedApplicable = request.getReviewedCheckout().getVoucher() != null
-                && Boolean.TRUE.equals(
-                        request.getReviewedCheckout().getVoucher().getApplicable());
-        boolean noVoucher = reviewedCode == null && authoritative.normalizedVoucherCode() == null;
-        if (!noVoucher
-                && (!Objects.equals(reviewedCode, authoritative.normalizedVoucherCode())
-                        || reviewedApplicable != authoritative.applicable())) {
-            return new CheckoutChangedException(authoritative.response());
+        if (reviewedCode == null && authoritative.normalizedVoucherCode() == null) {
+            return false;
         }
 
-        // Monetary outcome (BigDecimal.compareTo, scale-independent)
-        if (!eq(
-                        request.getReviewedCheckout().getSubtotal(),
-                        authoritative.response().getSubtotal())
-                || !eq(
-                        request.getReviewedCheckout().getEligibleSubtotal(),
-                        authoritative.response().getEligibleSubtotal())
-                || !eq(
-                        request.getReviewedCheckout().getShippingFee(),
-                        authoritative.response().getShippingFee())
-                || !eq(
-                        request.getReviewedCheckout().getDiscountAmount(),
-                        authoritative.response().getDiscountAmount())
-                || !eq(
-                        request.getReviewedCheckout().getTotalAmount(),
-                        authoritative.response().getTotalAmount())
-                || !authoritative.response().isCanPlaceOrder()) {
-            return new CheckoutChangedException(authoritative.response());
+        if (!Objects.equals(reviewedCode, authoritative.normalizedVoucherCode())) {
+            return true;
         }
 
-        return null;
+        boolean reviewedApplicable =
+                Boolean.TRUE.equals(reviewedCheckout.getVoucher().getApplicable());
+        return reviewedApplicable != authoritative.applicable();
+    }
+
+    private boolean hasCheckoutOutcomeMismatch(
+            ReviewedCheckoutRequest reviewedCheckout, CheckoutResponse authoritativeResponse) {
+        return different(reviewedCheckout.getSubtotal(), authoritativeResponse.getSubtotal())
+                || different(reviewedCheckout.getEligibleSubtotal(), authoritativeResponse.getEligibleSubtotal())
+                || different(reviewedCheckout.getShippingFee(), authoritativeResponse.getShippingFee())
+                || different(reviewedCheckout.getDiscountAmount(), authoritativeResponse.getDiscountAmount())
+                || different(reviewedCheckout.getTotalAmount(), authoritativeResponse.getTotalAmount())
+                || !authoritativeResponse.isCanPlaceOrder();
     }
 
     private void allocateInventory(AuthoritativeCheckout authoritative, Order order) {
@@ -804,14 +840,14 @@ public class OrderService {
      * current transaction. The caller is responsible for holding the order's
      * pessimistic write lock (mutation path) or a read snapshot (read path).
      *
-     * <p>Same-target requests return the order idempotently without writing a
+     * <p>Same-target requests complete idempotently without writing a
      * new history entry; terminal-state transitions throw
      * {@link ErrorCode#ORDER_STATUS_CONFLICT}; history is always ordered by
      * timestamp then id.
      */
-    private Order applyTransition(Order order, OrderStatus target, Actor actor, String actorId, String note) {
+    private void applyTransition(Order order, OrderStatus target, Actor actor, String actorId, String note) {
         if (order.getStatus() == target) {
-            return order;
+            return;
         }
         OrderStatus from = order.getStatus();
         if (OrderTransitionPolicy.isTerminal(from)) {
@@ -836,31 +872,7 @@ public class OrderService {
         history.setNote(note);
         history.setCreatedAt(OffsetDateTime.now());
         orderStatusHistoryRepository.save(history);
-        return order;
     }
-
-    private enum OrderStatusHistoryActor {
-        CUSTOMER,
-        ADMIN
-    }
-
-    private record AuthoritativeCheckout(
-            CheckoutResponse response,
-            List<AuthoritativeLine> lines,
-            Voucher voucher,
-            String normalizedVoucherCode,
-            BigDecimal subtotal,
-            boolean applicable) {}
-
-    private record AuthoritativeLine(Long skuId, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {}
-
-    private record VoucherReview(
-            String normalizedCode,
-            BigDecimal eligibleSubtotal,
-            BigDecimal discountAmount,
-            boolean applicable,
-            String issueCode,
-            Voucher voucher) {}
 
     private VoucherReview evaluateVoucherReview(
             String rawVoucherCode, User user, Map<Long, BigDecimal> skuSubtotals, BigDecimal subtotal) {
@@ -891,10 +903,6 @@ public class OrderService {
         }
     }
 
-    // ════════════════════════════════════════════════════════
-    // PRIVATE HELPERS
-    // ════════════════════════════════════════════════════════
-
     private User getAuthenticatedUser() {
         String username = authService.getCurrentUsername();
         return userRepository.findByUsername(username).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
@@ -919,6 +927,10 @@ public class OrderService {
                 .sorted()
                 .toList();
     }
+
+    // ════════════════════════════════════════════════════════
+    // PRIVATE HELPERS
+    // ════════════════════════════════════════════════════════
 
     private void validateSelectionInCart(Cart cart, List<Long> selectedSkuIds) {
         Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
@@ -1026,24 +1038,50 @@ public class OrderService {
         return "ORD-" + datePart + "-" + randomPart;
     }
 
-    private boolean eq(BigDecimal a, BigDecimal b) {
+    private boolean different(BigDecimal a, BigDecimal b) {
         if (a == null || b == null) {
-            return a == b;
+            return a != b;
         }
-        return a.compareTo(b) == 0;
+        return a.compareTo(b) != 0;
     }
 
-    private boolean eq(Integer a, int b) {
-        return a != null && a == b;
+    private boolean different(Integer a, int b) {
+        return a == null || a != b;
     }
 
-    /**
-     * Record nội bộ chứa thông tin địa chỉ đã resolve
-     */
-    private record AddressInfo(UUID addressId, String recipientName, String phone, String fullAddress) {}
+    private enum OrderStatusHistoryActor {
+        CUSTOMER,
+        ADMIN
+    }
 
     @FunctionalInterface
     private interface TransactionCallback {
         OrderResponse run();
     }
+
+    private record AuthoritativeCheckout(
+            CheckoutResponse response,
+            List<AuthoritativeLine> lines,
+            Voucher voucher,
+            String normalizedVoucherCode,
+            BigDecimal subtotal,
+            boolean applicable) {}
+
+    private record AuthoritativeLine(Long skuId, int quantity, BigDecimal unitPrice, BigDecimal lineTotal) {}
+
+    private record CheckoutLineReview(
+            CheckoutItemResponse item, AuthoritativeLine authoritativeLine, BigDecimal lineTotal, String issueCode) {}
+
+    private record VoucherReview(
+            String normalizedCode,
+            BigDecimal eligibleSubtotal,
+            BigDecimal discountAmount,
+            boolean applicable,
+            String issueCode,
+            Voucher voucher) {}
+
+    /**
+     * Record nội bộ chứa thông tin địa chỉ đã resolve
+     */
+    private record AddressInfo(UUID addressId, String recipientName, String phone, String fullAddress) {}
 }
