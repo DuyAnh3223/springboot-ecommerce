@@ -2,10 +2,10 @@
 
 ## Status
 
-Draft overall — created from
-`.agents/docs/plans/2026-08-15-commerce-04-atomic-idempotent-order-creation-plan.md`
-per explicit user requirement. The ADR-003/ADR-004 persistence amendment was
-accepted by the user on 2026-08-19; full-spec acceptance remains pending.
+Accepted by explicit user confirmation on 2026-08-30. The ADR-003/ADR-004
+persistence amendment was previously accepted on 2026-08-19. Automated
+verification and human UAT remain tracked separately from specification
+acceptance.
 
 ## Context
 

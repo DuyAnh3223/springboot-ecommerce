@@ -2,12 +2,8 @@
 
 ## Status
 
-Draft — created from
-`.agents/docs/plans/2026-08-15-commerce-05-order-lifecycle-cancellation-plan.md`
-per explicit user requirement on 2026-08-19. Human acceptance of this spec is
-required before product behavior is final. The implementation and walkthrough
-are pre-acceptance evidence only; the plan is not a substitute for an accepted
-specification.
+Accepted by explicit user confirmation on 2026-08-30. Automated verification
+and human UAT remain tracked separately from specification acceptance.
 
 ## Context
 
@@ -36,7 +32,7 @@ cho mutation theo `orderCode`; `@Version` đã có từ Plan 04.
 - `OrderController` endpoints: `POST /orders/checkout-review`, `POST /orders`
   (idempotent), `GET /orders/user/{userId}`.
 - Existing contract/spec: SPEC-COMMERCE-02 (accepted), SPEC-COMMERCE-03
-  (accepted), SPEC-COMMERCE-04 (draft overall; ADR amendment accepted),
+  (accepted), SPEC-COMMERCE-04 (accepted),
   ADR-002/003/004 (accepted), PLAN-COMMERCE-05.
 - Baseline command: `./mvnw -Dtest="OrderServiceTest,*OrderController*,*Inventory*" test`
   từ `server/`.
@@ -405,6 +401,6 @@ cd server
 
 ## Open Questions
 
-- Các contract đã được đề xuất trong spec; human acceptance vẫn cần xác nhận
-  authority, voucher-integrity failure behavior, filter semantics và audit
-  field ownership trước khi coi product behavior là final.
+- Không còn material question: user đã chấp nhận authority,
+  voucher-integrity failure behavior, filter semantics và audit field
+  ownership trong specification này vào 2026-08-30.
