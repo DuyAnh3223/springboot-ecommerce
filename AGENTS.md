@@ -81,25 +81,25 @@ Exclude generated/dependency outputs from source audits:
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **springboot-ecommerce** (6009 symbols, 11580 relationships, 294 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **springboot-ecommerce** (7426 symbols, 27905 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
-## When GitNexus Is Available
+## Always Do
 
-- Before modifying a shared function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and inspect the blast radius.
-- Run `detect_changes()` before committing to verify changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
-- Warn the user before editing when impact analysis returns HIGH or CRITICAL risk.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
 - For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
-If GitNexus or a current index is unavailable, use callers, references, tests,
-and contract inspection as the fallback and report the limitation. Do not block
-an otherwise safe task solely because GitNexus is unavailable.
+## Never Do
 
-Never ignore HIGH or CRITICAL risk results. When GitNexus is available, use its
-graph-aware `rename` instead of find-and-replace for shared symbols.
+- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
 
 ## Resources
 
@@ -112,13 +112,13 @@ graph-aware `rename` instead of find-and-replace for shared symbols.
 
 ## CLI
 
-| Task | Use this skill when available |
+| Task | Read this skill file |
 |------|---------------------|
-| Understand architecture / "How does X work?" | `gitnexus-exploring` |
-| Blast radius / "What breaks if I change X?" | `gitnexus-impact-analysis` |
-| Trace bugs / "Why is X failing?" | `gitnexus-debugging` |
-| Rename / extract / split / refactor | `gitnexus-refactoring` |
-| Tools, resources, schema reference | `gitnexus-guide` |
-| Index, status, clean, wiki CLI commands | `gitnexus-cli` |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->

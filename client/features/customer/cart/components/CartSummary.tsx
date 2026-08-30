@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldCheck, Truck, RotateCcw, ArrowRight } from "lucide-react";
 import { formatCurrency } from "@/shared/utils";
 import { Button } from "@/components/ui/button";
 import { CartVoucherInput } from "./CartVoucherInput";
 import { getVoucher } from "@/features/vouchers/services/voucher.service";
 import { VoucherResponse } from "@/features/vouchers/voucher.type";
+import { buildCheckoutUrl } from "@/features/customer/checkout/utils/checkout.utils";
 
 interface CartSummaryProps {
   selectedCount: number;
@@ -21,33 +23,29 @@ export function CartSummary({
   subtotal,
   selectedSkuIds = [],
 }: CartSummaryProps) {
+  const router = useRouter();
   const [appliedVoucher, setAppliedVoucher] = useState<VoucherResponse | null>(null);
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
 
   const FLAT_SHIPPING_FEE = subtotal > 0 ? 30000 : 0;
-  const isCheckoutDisabled = selectedCount === 0;
+  const isCheckoutDisabled = selectedCount === 0 || selectedSkuIds.length === 0;
 
-  // Re-calculate discount when subtotal or applied voucher changes
-  useEffect(() => {
+  const discountAmount = useMemo(() => {
     if (!appliedVoucher) {
-      setDiscountAmount(0);
-      return;
+      return 0;
     }
 
     const minOrder = appliedVoucher.minOrderValue || 0;
     if (subtotal < minOrder) {
       // Subtotal dropped below minOrderValue -> invalid
-      setDiscountAmount(0);
-      return;
+      return 0;
     }
 
-    let eligibleSubtotal = subtotal;
+    const eligibleSubtotal = subtotal;
     if (appliedVoucher.applyScope === "SPECIFIC") {
       const eligibleSkuSet = new Set((appliedVoucher.productSkus || []).map((s) => s.id));
       const hasMatch = selectedSkuIds.some((id) => eligibleSkuSet.has(id));
       if (!hasMatch) {
-        setDiscountAmount(0);
-        return;
+        return 0;
       }
     }
 
@@ -62,7 +60,7 @@ export function CartSummary({
     }
 
     computedDiscount = Math.min(computedDiscount, eligibleSubtotal);
-    setDiscountAmount(Math.round(computedDiscount));
+    return Math.round(computedDiscount);
   }, [appliedVoucher, subtotal, selectedSkuIds]);
 
   const handleApplyVoucher = async (code: string) => {
@@ -104,7 +102,12 @@ export function CartSummary({
 
   const handleRemoveVoucher = () => {
     setAppliedVoucher(null);
-    setDiscountAmount(0);
+  };
+
+  const handleCheckout = () => {
+    if (isCheckoutDisabled) return;
+
+    router.push(buildCheckoutUrl(selectedSkuIds, appliedVoucher?.code));
   };
 
   const totalCheckout = Math.max(0, subtotal + FLAT_SHIPPING_FEE - discountAmount);
@@ -163,7 +166,9 @@ export function CartSummary({
 
         <div className="pt-2">
           <Button
+            type="button"
             disabled={isCheckoutDisabled}
+            onClick={handleCheckout}
             className="w-full h-12 bg-shop_light_green hover:bg-shop_dark_green text-white font-bold rounded-xl shadow-sm text-base transition-all disabled:opacity-50"
           >
             {isCheckoutDisabled ? (

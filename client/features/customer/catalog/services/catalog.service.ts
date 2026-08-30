@@ -1,5 +1,22 @@
 import { api } from "@/shared/http/api";
-import { CategoryFacetData, CatalogProductItem, CatalogFilterParams } from "../types/catalog.types";
+import { isAxiosError } from "axios";
+import {
+  CategoryFacetData,
+  CatalogProductDetail,
+  CatalogProductItem,
+  CatalogFilterParams,
+} from "../types/catalog.types";
+
+export class CatalogProductApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code?: number,
+    public readonly status?: number,
+  ) {
+    super(message);
+    this.name = "CatalogProductApiError";
+  }
+}
 
 export interface PageResponse<T> {
   content: T[];
@@ -12,6 +29,22 @@ export interface PageResponse<T> {
 }
 
 export const catalogService = {
+  getProductDetail: async (slug: string): Promise<CatalogProductDetail> => {
+    try {
+      const res = await api.get(`/catalog/products/${encodeURIComponent(slug)}`);
+      return res.data.result;
+    } catch (error) {
+      if (isAxiosError(error)) {
+        throw new CatalogProductApiError(
+          error.response?.data?.message || "Không thể tải thông tin sản phẩm.",
+          error.response?.data?.code,
+          error.response?.status,
+        );
+      }
+      throw new CatalogProductApiError("Không thể tải thông tin sản phẩm.");
+    }
+  },
+
   getCategoryFacets: async (categorySlug: string): Promise<CategoryFacetData> => {
     const res = await api.get(`/catalog/category/${categorySlug}/facets`);
     return res.data.result;

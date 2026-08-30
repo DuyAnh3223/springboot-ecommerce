@@ -55,16 +55,3 @@ export interface VoucherSearchParams {
   sortBy?: string;
   order?: "asc" | "desc";
 }
-
-export interface VoucherDiscountRequest {
-  code: string;
-  totalOrder: number;
-  productSkuIds?: number[];
-  userId?: string;
-}
-
-export interface VoucherDiscountResponse {
-  discountAmount: number;
-  totalOrder: number;
-  totalPrice: number;
-}

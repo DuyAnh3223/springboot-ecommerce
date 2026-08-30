@@ -15,6 +15,33 @@ export interface CartSnapshot {
   isGuest?: boolean;
 }
 
+export interface CartMergeItemInput {
+  skuId: number;
+  quantity: number;
+}
+
+export type CartMergeItemStatus = "MERGED" | "REJECTED";
+
+export interface CartMergeItemResult {
+  skuId: number;
+  requestedQuantity: number;
+  mergedQuantity: number;
+  status: CartMergeItemStatus;
+  reasonCode: string | null;
+}
+
+export interface CartMergeResponse {
+  mergeId: string;
+  items: CartMergeItemResult[];
+}
+
+export interface GuestMergeNotice {
+  skuId: number;
+  quantity: number;
+  reasonCode: string | null;
+  message: string;
+}
+
 export interface AddCartItemInput {
   productSkuId: number;
   quantity: number;

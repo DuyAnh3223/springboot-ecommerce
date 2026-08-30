@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,9 +25,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import spring.abtechzone.modules.cart.constant.CartMergeItemStatus;
 import spring.abtechzone.modules.cart.dto.request.CartItemRequest;
 import spring.abtechzone.modules.cart.dto.request.UpdateQuantityRequest;
 import spring.abtechzone.modules.cart.dto.response.CartItemResponse;
+import spring.abtechzone.modules.cart.dto.response.CartMergeItemResponse;
+import spring.abtechzone.modules.cart.dto.response.CartMergeResponse;
 import spring.abtechzone.modules.cart.dto.response.CartResponse;
 import spring.abtechzone.modules.cart.service.CartService;
 
@@ -65,6 +69,34 @@ class CartControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1000))
                 .andExpect(jsonPath("$.result.cartId").value(1));
+    }
+
+    @Test
+    @DisplayName("POST /cart/merge - returns per-item merge result")
+    void mergeGuestCart_valid_returnsBatchResult() throws Exception {
+        UUID mergeId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+        CartMergeResponse mergeResponse = CartMergeResponse.builder()
+                .mergeId(mergeId)
+                .items(List.of(CartMergeItemResponse.builder()
+                        .skuId(17L)
+                        .requestedQuantity(2)
+                        .mergedQuantity(2)
+                        .status(CartMergeItemStatus.MERGED)
+                        .build()))
+                .build();
+        when(cartService.mergeGuestCart(any())).thenReturn(mergeResponse);
+
+        mockMvc.perform(post("/cart/merge")
+                        .with(csrf())
+                        .with(jwt().jwt(jwt -> jwt.subject("test-user")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"mergeId":"550e8400-e29b-41d4-a716-446655440000","items":[{"skuId":17,"quantity":2}]}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(1000))
+                .andExpect(jsonPath("$.result.mergeId").value(mergeId.toString()))
+                .andExpect(jsonPath("$.result.items[0].status").value("MERGED"));
     }
 
     @Test

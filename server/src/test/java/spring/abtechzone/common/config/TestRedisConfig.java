@@ -22,10 +22,12 @@ public class TestRedisConfig {
         RLock mockLock = mock(RLock.class);
         lenient().when(mockClient.getLock(anyString())).thenReturn(mockLock);
         try {
+            lenient().when(mockLock.tryLock(anyLong(), any())).thenReturn(true);
             lenient().when(mockLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
         } catch (InterruptedException e) {
             // ignore
         }
+        lenient().when(mockLock.isHeldByCurrentThread()).thenReturn(true);
         return mockClient;
     }
 }

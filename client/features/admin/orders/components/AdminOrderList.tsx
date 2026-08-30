@@ -1,0 +1,17 @@
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { OrderSummaryResponse } from "@/features/orders/order.type";
+import type { PageResponse } from "@/shared/types/page.type";
+import { AdminOrderStatusBadge } from "./AdminOrderStatusBadge";
+import { buildAdminOrderUrl, formatAdminDate, formatAdminMoney } from "../utils/admin-order.utils";
+
+export function AdminOrderList({ number: pageNumber, content, empty, first, last, totalPages, search, status, fromDate, toDate, size }: PageResponse<OrderSummaryResponse> & { search?: string; status?: OrderSummaryResponse["status"]; fromDate?: string; toDate?: string; size: number }) {
+  if (empty || content.length === 0) return <Card><CardContent className="py-12 text-center text-muted-foreground">{search || status || fromDate || toDate ? "Không tìm thấy đơn hàng phù hợp." : "Chưa có đơn hàng nào."}</CardContent></Card>;
+  return <>
+    <div className="hidden md:block"><Card><Table><TableHeader><TableRow><TableHead>Mã đơn</TableHead><TableHead>Ngày tạo</TableHead><TableHead>Trạng thái</TableHead><TableHead>Thanh toán</TableHead><TableHead>Sản phẩm</TableHead><TableHead className="text-right">Tổng tiền</TableHead><TableHead /></TableRow></TableHeader><TableBody>{content.map((order) => <TableRow key={order.orderCode}><TableCell className="font-medium">{order.orderCode}</TableCell><TableCell>{formatAdminDate(order.createdAt)}</TableCell><TableCell><AdminOrderStatusBadge status={order.status} /></TableCell><TableCell>{order.paymentMethod} · {order.paymentStatus}</TableCell><TableCell>{order.previewItem?.productName || "—"}{order.itemCount > 1 ? ` + ${order.itemCount - 1}` : ""}</TableCell><TableCell className="text-right">{formatAdminMoney(order.totalAmount)}</TableCell><TableCell><Button render={<Link href={`/admin/orders/${encodeURIComponent(order.orderCode)}`} />} variant="outline" size="sm">Chi tiết</Button></TableCell></TableRow>)}</TableBody></Table></Card></div>
+    <div className="grid gap-3 md:hidden">{content.map((order) => <Card key={order.orderCode}><CardContent className="space-y-2 p-4"><div className="flex justify-between"><span className="font-semibold">{order.orderCode}</span><AdminOrderStatusBadge status={order.status} /></div><p className="text-sm text-muted-foreground">{formatAdminDate(order.createdAt)} · {order.paymentMethod}</p><p>{order.previewItem?.productName || "Không có sản phẩm"}{order.itemCount > 1 ? ` + ${order.itemCount - 1}` : ""}</p><div className="flex items-center justify-between"><strong>{formatAdminMoney(order.totalAmount)}</strong><Button render={<Link href={`/admin/orders/${encodeURIComponent(order.orderCode)}`} />} variant="outline" size="sm">Chi tiết</Button></div></CardContent></Card>)}</div>
+    <div className="flex items-center justify-between text-sm"><span>Trang {pageNumber + 1} / {Math.max(totalPages, 1)}</span><div className="flex gap-2"><Button render={<Link href={buildAdminOrderUrl({ search, status, fromDate, toDate, page: Math.max(0, pageNumber - 1), size })} />} variant="outline" size="sm" disabled={first}>Trước</Button><Button render={<Link href={buildAdminOrderUrl({ search, status, fromDate, toDate, page: pageNumber + 1, size })} />} variant="outline" size="sm" disabled={last}>Sau</Button></div></div>
+  </>;
+}

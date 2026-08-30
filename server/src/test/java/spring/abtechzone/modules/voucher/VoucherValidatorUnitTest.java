@@ -20,16 +20,17 @@ import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.constant.VoucherRedemptionStatus;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
 import spring.abtechzone.modules.voucher.entity.Voucher;
-import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
 import spring.abtechzone.modules.voucher.validator.VoucherValidator;
 
 class VoucherValidatorUnitTest {
 
-    private VoucherRepository voucherRepository;
+    private VoucherRedemptionRepository voucherRedemptionRepository;
     private VoucherValidator voucherValidator;
     private final User testUser = User.builder()
             .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
@@ -38,8 +39,8 @@ class VoucherValidatorUnitTest {
 
     @BeforeEach
     void setUp() {
-        voucherRepository = mock(VoucherRepository.class);
-        voucherValidator = new VoucherValidator(voucherRepository);
+        voucherRedemptionRepository = mock(VoucherRedemptionRepository.class);
+        voucherValidator = new VoucherValidator(voucherRedemptionRepository);
     }
 
     @Nested
@@ -318,7 +319,8 @@ class VoucherValidatorUnitTest {
                     .isActive(true)
                     .build();
 
-            when(voucherRepository.countUsageByVoucherIdAndUserId(eq(6L), eq(testUser.getId())))
+            when(voucherRedemptionRepository.countByVoucherIdAndUserIdAndStatus(
+                            eq(6L), eq(testUser.getId()), eq(VoucherRedemptionStatus.REDEEMED)))
                     .thenReturn(1L);
 
             AppException ex = assertThrows(

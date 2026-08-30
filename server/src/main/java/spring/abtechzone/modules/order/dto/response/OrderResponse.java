@@ -11,11 +11,11 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class OrderResponse {
-    Long orderId;
+    Long id;
     String orderCode;
-    String orderStatus;
-    BigDecimal subtotal;
+    String status;
+    BigDecimal subtotalAmount;
     BigDecimal shippingFee;
-    BigDecimal totalDiscount;
-    BigDecimal totalCheckout;
+    BigDecimal discountAmount;
+    BigDecimal totalAmount;
 }

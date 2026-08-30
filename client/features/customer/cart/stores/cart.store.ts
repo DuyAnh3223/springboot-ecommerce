@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { CartItem, CartSnapshot } from "../types/cart.types";
+import { CartItem, CartSnapshot, GuestMergeNotice } from "../types/cart.types";
 
 interface CartState {
   cartId: number | null;
@@ -12,6 +12,7 @@ interface CartState {
   pendingSkuIds: number[];
   isClearPending: boolean;
   isGuest: boolean;
+  guestMergeNotices: GuestMergeNotice[];
 
   // Actions
   setCart: (snapshot: CartSnapshot, hydrationKey?: string) => void;
@@ -23,6 +24,7 @@ interface CartState {
   removeItemOptimistic: (skuId: number) => void;
   setPendingSku: (skuId: number, pending: boolean) => void;
   setIsClearPending: (pending: boolean) => void;
+  setGuestMergeNotices: (notices: GuestMergeNotice[]) => void;
   clear: () => void;
 
   // Selectors
@@ -44,6 +46,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   pendingSkuIds: [],
   isClearPending: false,
   isGuest: false,
+  guestMergeNotices: [],
 
   setCart: (snapshot, hydrationKey) => {
     const newItems = snapshot.items || [];
@@ -80,6 +83,7 @@ export const useCartStore = create<CartState>((set, get) => ({
       pendingSkuIds: [],
       isClearPending: false,
       isGuest: false,
+      guestMergeNotices: [],
     });
   },
 
@@ -142,6 +146,10 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setIsClearPending: (pending) => {
     set({ isClearPending: pending });
+  },
+
+  setGuestMergeNotices: (notices) => {
+    set({ guestMergeNotices: notices });
   },
 
   clear: () => {

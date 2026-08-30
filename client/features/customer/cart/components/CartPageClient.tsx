@@ -28,6 +28,7 @@ export function CartPageClient({ initialError, isGuest: propIsGuest }: CartPageC
   const pendingSkuIds = useCartStore((state) => state.pendingSkuIds);
   const isClearPending = useCartStore((state) => state.isClearPending);
   const isHydrated = useCartStore((state) => state.isHydrated);
+  const guestMergeNotices = useCartStore((state) => state.guestMergeNotices);
   const isAllSelected = useCartStore((state) => state.isAllSelected());
   const toggleItem = useCartStore((state) => state.toggleItem);
   const toggleAll = useCartStore((state) => state.toggleAll);
@@ -36,6 +37,21 @@ export function CartPageClient({ initialError, isGuest: propIsGuest }: CartPageC
 
   const { error, setError, handleUpdateQuantity, handleRemoveItem, handleClearCart } = useCart();
   const isGuest = propIsGuest ?? storeIsGuest;
+
+  const mergeNotice = guestMergeNotices.length > 0 && (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-2xs">
+      <p className="font-semibold">Một số sản phẩm chưa được đồng bộ</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        {guestMergeNotices.map((notice, index) => (
+          <li key={`${notice.skuId}-${index}`}>
+            {notice.skuId > 0
+              ? `SKU ${notice.skuId} (${notice.quantity} sản phẩm): ${notice.message}`
+              : notice.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 
   const handleRetry = () => {
     router.refresh();
@@ -52,6 +68,7 @@ export function CartPageClient({ initialError, isGuest: propIsGuest }: CartPageC
   if (items.length === 0) {
     return (
       <div className="space-y-4">
+        {mergeNotice}
         {isGuest && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-900 shadow-2xs">
             <div className="flex items-start space-x-3">
@@ -78,6 +95,7 @@ export function CartPageClient({ initialError, isGuest: propIsGuest }: CartPageC
 
   return (
     <div className="space-y-6">
+      {mergeNotice}
       {isGuest && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-900 shadow-2xs">
           <div className="flex items-start space-x-3">

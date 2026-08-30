@@ -64,3 +64,58 @@ export interface CatalogFilterParams {
   order?: "asc" | "desc";
   attributes?: Record<string, string[]>;
 }
+
+export type CatalogAttributeValue = string | number | boolean;
+
+export interface CatalogAttributeDefinition {
+  code: string;
+  name: string;
+  unit: string | null;
+  dataType: "STRING" | "NUMBER" | "BOOLEAN" | "ENUM";
+  sortOrder: number;
+}
+
+export interface CatalogProductReference {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export interface CatalogProductImage {
+  id: number;
+  url: string;
+  altText: string | null;
+  sortOrder: number;
+  primary: boolean;
+}
+
+export interface CatalogProductSku {
+  id: number;
+  sku: string;
+  price: number;
+  stock: number;
+  currency: string;
+  weightGram: number | null;
+  attributes: Record<string, CatalogAttributeValue>;
+  primaryImageUrl: string | null;
+  images: CatalogProductImage[];
+}
+
+export interface CatalogProductDetail {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  primaryImageUrl: string | null;
+  rating: number | null;
+  reviewCount: number;
+  category: CatalogProductReference;
+  brand: CatalogProductReference | null;
+  attributes: Record<string, CatalogAttributeValue | string[]>;
+  specificationDefinitions: CatalogAttributeDefinition[];
+  variantDefinitions: CatalogAttributeDefinition[];
+  priceMin: number | null;
+  priceMax: number | null;
+  totalStock: number;
+  skus: CatalogProductSku[];
+}

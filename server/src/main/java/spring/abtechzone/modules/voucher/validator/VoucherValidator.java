@@ -10,20 +10,21 @@ import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
+import spring.abtechzone.modules.voucher.constant.VoucherRedemptionStatus;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
 import spring.abtechzone.modules.voucher.entity.Voucher;
-import spring.abtechzone.modules.voucher.repository.VoucherRepository;
+import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
 
 @Component
 public class VoucherValidator {
 
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
-    private final VoucherRepository voucherRepository;
+    private final VoucherRedemptionRepository voucherRedemptionRepository;
 
-    public VoucherValidator(VoucherRepository voucherRepository) {
-        this.voucherRepository = voucherRepository;
+    public VoucherValidator(VoucherRedemptionRepository voucherRedemptionRepository) {
+        this.voucherRedemptionRepository = voucherRedemptionRepository;
     }
 
     public void validateCreate(VoucherCreateRequest request) {
@@ -46,13 +47,6 @@ public class VoucherValidator {
         validatePerUserLimit(voucher, user);
         validateMinOrderValue(voucher, fullSubtotal);
         validateSpecificScopeEligibility(voucher, eligibleSubtotal);
-    }
-
-    public void validateVoucher(Voucher voucher, BigDecimal totalOrder) {
-        validateActive(voucher);
-        validateExpiry(voucher);
-        validateUsageLimit(voucher);
-        validateMinOrderValue(voucher, totalOrder);
     }
 
     private void validateActive(Voucher voucher) {
@@ -82,7 +76,8 @@ public class VoucherValidator {
         if (voucher.getMaxPerUser() == null || user == null) {
             return;
         }
-        long userUsageCount = voucherRepository.countUsageByVoucherIdAndUserId(voucher.getId(), user.getId());
+        long userUsageCount = voucherRedemptionRepository.countByVoucherIdAndUserIdAndStatus(
+                voucher.getId(), user.getId(), VoucherRedemptionStatus.REDEEMED);
         if (userUsageCount >= voucher.getMaxPerUser()) {
             throw new AppException(ErrorCode.VOUCHER_PER_USER_LIMIT_REACHED);
         }

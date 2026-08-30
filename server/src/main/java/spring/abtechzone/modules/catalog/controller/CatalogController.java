@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.dto.ApiResult;
 import spring.abtechzone.modules.catalog.dto.request.CatalogSearchRequest;
+import spring.abtechzone.modules.catalog.dto.response.CatalogProductDetailResponse;
 import spring.abtechzone.modules.catalog.dto.response.CategoryFacetResponse;
 import spring.abtechzone.modules.catalog.service.CatalogService;
 import spring.abtechzone.modules.product.dto.response.ProductResponse;
@@ -33,6 +34,13 @@ import spring.abtechzone.modules.product.dto.response.ProductResponse;
 public class CatalogController {
 
     CatalogService catalogService;
+
+    @GetMapping("/products/{slug}")
+    public ApiResult<CatalogProductDetailResponse> getProductDetail(@PathVariable String slug) {
+        return ApiResult.<CatalogProductDetailResponse>builder()
+                .result(catalogService.getProductDetail(slug))
+                .build();
+    }
 
     @GetMapping("/category/{slug}/facets")
     public ApiResult<CategoryFacetResponse> getCategoryFacets(@PathVariable String slug) {
