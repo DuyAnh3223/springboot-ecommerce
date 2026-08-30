@@ -15,6 +15,9 @@ import org.hibernate.annotations.ColumnDefault;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentMethod;
+import spring.abtechzone.modules.order.constant.PaymentStatus;
+import spring.abtechzone.modules.voucher.entity.Voucher;
 
 @Entity
 @Getter
@@ -23,11 +26,20 @@ import spring.abtechzone.modules.order.constant.OrderStatus;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Table(name = "\"order\"")
+@Table(
+        name = "\"order\"",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_order_user_idempotency_key",
+                        columnNames = {"user_id", "idempotency_key"}))
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
+
+    @Version
+    @Column(name = "version")
+    Long version;
 
     @NotNull
     @Column(name = "user_id", nullable = false)
@@ -67,12 +79,28 @@ public class Order {
     @Column(name = "voucher_code", length = 50)
     String voucherCode;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "voucher_id")
+    Voucher voucher;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 20)
+    PaymentMethod paymentMethod;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_status", nullable = false, length = 20)
+    PaymentStatus paymentStatus;
+
+    @NotNull
+    @Column(name = "idempotency_key", nullable = false, length = 36)
+    String idempotencyKey;
+
+    @NotNull
+    @Column(name = "request_hash", nullable = false, length = 64)
+    String requestHash;
+
     @Column(name = "shipping_address_id")
     UUID shippingAddressId;
-
-    @Size(max = 150)
-    @Column(name = "payment_reference", length = 150)
-    String paymentReference;
 
     @Size(max = 500)
     @Column(name = "note", length = 500)
@@ -87,10 +115,6 @@ public class Order {
     @ColumnDefault("CURRENT_TIMESTAMP(6)")
     @Column(name = "created_at", nullable = false)
     OffsetDateTime createdAt;
-
-    //    @ManyToOne(fetch = FetchType.LAZY)
-    //    @JoinColumn(name = "voucher_id")
-    //    Voucher voucher;
 
     @Column(nullable = false, unique = true)
     String orderCode;
@@ -115,6 +139,9 @@ public class Order {
         updatedAt = OffsetDateTime.now();
         if (currency == null) {
             currency = "VND";
+        }
+        if (paymentStatus == null) {
+            paymentStatus = PaymentStatus.UNPAID;
         }
     }
 

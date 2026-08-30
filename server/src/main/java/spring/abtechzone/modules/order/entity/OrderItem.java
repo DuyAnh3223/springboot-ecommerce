@@ -35,6 +35,9 @@ public class OrderItem {
     @JoinColumn(name = "sku_id", nullable = false)
     ProductSku sku;
 
+    @Column(name = "sku_id", insertable = false, updatable = false)
+    Long skuId;
+
     @Size(max = 255)
     @NotNull
     @Column(name = "product_name_snapshot", nullable = false)

@@ -17,7 +17,11 @@ Welcome to the Spring Boot backend architecture knowledge base for ABTechZone (`
    - Comprehensive specifications for all 8 business modules (`auth`, `user`, `product`, `category`, `cart`, `order`, `inventory`, `voucher`) and the `common` infrastructure package (`AwsS3FileService`, CloudFront CDN & Signed URLs, `ErrorCode`, `GlobalExceptionHandler`).
 
 2. **[Checkout & Distributed Transaction Flow](checkout-flow.md)**
-   - Detailed sequence diagrams and step-by-step logic for `OrderService.createOrder(...)`, Redisson distributed locking (`tryLock`), transaction boundaries, voucher validation, inventory reservation, and explicit failure/rollback compensating actions.
+   - Detailed sequence diagrams and step-by-step logic for
+     `OrderCreationService.createOrder(...)`, its shared `CheckoutService`
+     computation, Redisson distributed locking (`tryLock`), transaction
+     boundaries, voucher validation, inventory reservation, and explicit
+     failure/rollback actions.
 
 3. **[Testing Guidelines & Mockito Patterns](testing-guidelines.md)**
    - Standardized unit testing patterns using `@ExtendWith(MockitoExtension.class)`, `@Mock AuthService`, MapStruct `@Spy` mappers, exact query method stubbing, and `lenient()` rationale to prevent `UnnecessaryStubbingException`.

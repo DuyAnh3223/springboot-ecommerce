@@ -26,10 +26,8 @@ import spring.abtechzone.modules.product.service.ProductSkuService;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 import spring.abtechzone.modules.voucher.dto.request.VoucherCreateRequest;
-import spring.abtechzone.modules.voucher.dto.request.VoucherDiscountRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherSearchRequest;
 import spring.abtechzone.modules.voucher.dto.request.VoucherUpdateRequest;
-import spring.abtechzone.modules.voucher.dto.response.VoucherDiscountResponse;
 import spring.abtechzone.modules.voucher.dto.response.VoucherResponse;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.mapper.VoucherMapper;
@@ -159,25 +157,6 @@ public class VoucherService {
             }
         }
         return eligibleSubtotal;
-    }
-
-    @Deprecated(since = "Plan-Commerce-02", forRemoval = false)
-    public VoucherDiscountResponse calculateDiscount(VoucherDiscountRequest request) {
-        Voucher voucher = findVoucherByCode(request.getCode());
-
-        voucherValidator.validateVoucher(voucher, request.getTotalOrder());
-
-        BigDecimal totalOrder = request.getTotalOrder() != null ? request.getTotalOrder() : BigDecimal.ZERO;
-
-        BigDecimal discountAmount = getDiscount(voucher, totalOrder);
-
-        BigDecimal totalPrice = totalOrder.subtract(discountAmount);
-
-        return VoucherDiscountResponse.builder()
-                .discountAmount(discountAmount)
-                .totalOrder(totalOrder)
-                .totalPrice(totalPrice)
-                .build();
     }
 
     public BigDecimal getDiscount(Voucher voucher, BigDecimal eligibleSubtotal) {

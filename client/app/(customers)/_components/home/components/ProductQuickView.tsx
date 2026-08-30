@@ -5,6 +5,7 @@ import { CatalogProductItem } from "@/features/customer/catalog/types/catalog.ty
 import { getSafeImageUrl } from "@/shared/utils/image";
 import { X, CheckCircle2, XCircle, Shield, Truck } from "lucide-react";
 import Link from "next/link";
+import { getProductDetailPath } from "@/features/customer/catalog/utils/product-detail.utils";
 
 interface ProductQuickViewProps {
   product: CatalogProductItem | null;
@@ -109,7 +110,7 @@ export default function ProductQuickView({ product, onClose }: ProductQuickViewP
             {/* CTA */}
             <div className="pt-2 flex items-center gap-3">
               <Link
-                href={`/category/${product.slug}`}
+                href={getProductDetailPath(product.slug)}
                 onClick={onClose}
                 className="flex-1 py-3 text-center rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg transition-all"
               >

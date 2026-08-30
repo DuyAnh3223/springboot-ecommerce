@@ -4,6 +4,8 @@ import { CatalogProductItem } from "@/features/customer/catalog/types/catalog.ty
 import { AddToCartButton } from "@/features/customer/catalog/components/AddToCartButton";
 import { getSafeImageUrl } from "@/shared/utils/image";
 import { Star, Eye } from "lucide-react";
+import Link from "next/link";
+import { getProductDetailPath } from "@/features/customer/catalog/utils/product-detail.utils";
 
 interface HomeProductCardProps {
   product: CatalogProductItem;
@@ -54,8 +56,8 @@ export default function HomeProductCard({ product, onQuickView }: HomeProductCar
         </div>
 
         {/* Title */}
-        <h3 className="text-xs sm:text-sm font-bold text-slate-800 line-clamp-2 mb-1.5 group-hover:text-rose-600 transition-colors">
-          {product.name}
+        <h3 className="mb-1.5 line-clamp-2 text-xs font-bold text-slate-800 transition-colors group-hover:text-rose-600 sm:text-sm">
+          <Link href={getProductDetailPath(product.slug)}>{product.name}</Link>
         </h3>
 
         {/* Rating */}
@@ -83,14 +85,13 @@ export default function HomeProductCard({ product, onQuickView }: HomeProductCar
         </div>
 
         <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => onQuickView(product)}
+          <Link
+            href={getProductDetailPath(product.slug)}
             className="flex-1 py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200 flex items-center justify-center gap-1"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Chi Tiết</span>
-          </button>
+          </Link>
 
           <AddToCartButton product={product} iconOnly />
         </div>

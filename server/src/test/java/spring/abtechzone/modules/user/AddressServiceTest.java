@@ -1,4 +1,4 @@
-package spring.abtechzone.user;
+package spring.abtechzone.modules.user;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

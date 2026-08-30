@@ -47,7 +47,9 @@ class CartServiceTest {
 ## 2. Mocking Guidelines & Rationale
 
 ### 2.1 AuthService Mocking & `lenient()` Rationale
-When testing services that depend on user authentication (`CartService`, `OrderService`, `UserService`), inject `@Mock AuthService authService;`.
+When testing services that depend on user authentication (`CartService`,
+`CheckoutService`, `OrderCreationService`, `OrderLifecycleService`,
+`UserService`), inject `@Mock AuthService authService;`.
 
 **Why use `lenient()` for `authService` in `@BeforeEach`?**
 ```java
@@ -99,7 +101,7 @@ class OrderServiceTest {
     OrderMapper orderMapper = Mappers.getMapper(OrderMapper.class);
 
     @InjectMocks
-    OrderService orderService;
+    OrderCreationService orderCreationService;
 
     @BeforeEach
     void setUp() {

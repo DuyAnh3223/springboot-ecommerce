@@ -39,10 +39,6 @@ class AddressRepositoryIT extends BaseIT {
     private spring.abtechzone.modules.order.repository.OrderRepository orderRepository;
 
     @Autowired
-    private spring.abtechzone.modules.inventory.repository.InventoryReservationRepository
-            inventoryReservationRepository;
-
-    @Autowired
     private spring.abtechzone.modules.inventory.repository.StockMovementRepository stockMovementRepository;
 
     private User userA;
@@ -51,7 +47,6 @@ class AddressRepositoryIT extends BaseIT {
     @BeforeEach
     void setUp() {
         stockMovementRepository.deleteAll();
-        inventoryReservationRepository.deleteAll();
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();

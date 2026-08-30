@@ -38,6 +38,7 @@ public enum ErrorCode {
     CART_EXISTS(1027, "Cart already exists", HttpStatus.BAD_REQUEST),
     CART_ITEM_NOT_FOUND(1028, "Cart item not found", HttpStatus.NOT_FOUND),
     CART_ITEM_QUANTITY_INVALID(1029, "Cart item quantity must be at least 1", HttpStatus.BAD_REQUEST),
+    CART_ITEM_NOT_IN_CART(1066, "Selected SKU is not in the active cart", HttpStatus.BAD_REQUEST),
     CART_NOT_FOUND(1030, "Cart not found", HttpStatus.NOT_FOUND),
     CART_IS_EMPTY(1031, "Cart is empty", HttpStatus.BAD_REQUEST),
     INSUFFICIENT_STOCK(1032, "Insufficient stock for product", HttpStatus.BAD_REQUEST),
@@ -76,6 +77,10 @@ public enum ErrorCode {
     VOUCHER_SCOPE_INVALID(1063, "Voucher scope is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_MAX_DISCOUNT_INVALID(1064, "Voucher max discount amount is invalid", HttpStatus.BAD_REQUEST),
     VOUCHER_CODE_IMMUTABLE(1065, "Voucher code cannot be modified after creation", HttpStatus.BAD_REQUEST),
+    IDEMPOTENCY_KEY_REUSED(1067, "Idempotency key was already used with a different request", HttpStatus.CONFLICT),
+    CHECKOUT_CHANGED(1068, "Checkout state changed since review; please review again", HttpStatus.CONFLICT),
+    ORDER_STATUS_CONFLICT(1069, "Order status transition is not allowed", HttpStatus.CONFLICT),
+    MERGE_ID_REUSED(1070, "Merge ID was already used with a different request", HttpStatus.CONFLICT),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

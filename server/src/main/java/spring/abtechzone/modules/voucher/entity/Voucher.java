@@ -2,9 +2,7 @@ package spring.abtechzone.modules.voucher.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import jakarta.persistence.*;
@@ -15,7 +13,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.constant.VoucherApplyScope;
 import spring.abtechzone.modules.voucher.constant.VoucherType;
 
@@ -66,14 +63,6 @@ public class Voucher {
 
     @Column(precision = 12, scale = 2)
     BigDecimal maxDiscountAmount;
-
-    @ManyToMany
-    @JoinTable(
-            name = "voucher_user",
-            joinColumns = @JoinColumn(name = "voucher_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id"))
-    @Builder.Default
-    List<User> users = new ArrayList<>(); // Users nào đã sử dụng
 
     @NotNull
     @Enumerated(EnumType.STRING)

@@ -1,4 +1,4 @@
-package spring.abtechzone.cart;
+package spring.abtechzone.modules.cart;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

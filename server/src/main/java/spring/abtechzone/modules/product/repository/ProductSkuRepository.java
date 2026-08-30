@@ -1,5 +1,6 @@
 package spring.abtechzone.modules.product.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,10 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
     @Override
     @EntityGraph(attributePaths = "product")
     Optional<ProductSku> findById(Long id);
+
+    @EntityGraph(attributePaths = "product")
+    @Query("select s from ProductSku s where s.id in :ids")
+    List<ProductSku> findAllWithProductByIdIn(@Param("ids") Collection<Long> ids);
 
     @Override
     @EntityGraph(attributePaths = "product")
@@ -47,4 +52,11 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
     @Modifying
     @Query("UPDATE ProductSku s SET s.stock = s.stock - :quantity WHERE s.id = :id AND s.stock >= :quantity")
     int decreaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    // Atomic compensation: never drive stock negative (R-C05-04 / CP-C05-05)
+    @Modifying
+    @Query(
+            value = "UPDATE product_sku SET stock = stock + :quantity WHERE id = :id AND stock + :quantity >= 0",
+            nativeQuery = true)
+    int increaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
 }

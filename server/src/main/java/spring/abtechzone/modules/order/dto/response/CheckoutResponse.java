@@ -14,8 +14,10 @@ import lombok.experimental.FieldDefaults;
 public class CheckoutResponse {
     List<CheckoutItemResponse> items;
     BigDecimal subtotal;
+    BigDecimal eligibleSubtotal;
     BigDecimal shippingFee;
-    BigDecimal totalDiscount;
-    BigDecimal totalCheckout;
-    String voucherCode;
+    BigDecimal discountAmount;
+    BigDecimal totalAmount;
+    VoucherReviewResponse voucher;
+    boolean canPlaceOrder;
 }

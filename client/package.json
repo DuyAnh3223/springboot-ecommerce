@@ -6,7 +6,12 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:guest-cart": "node --experimental-strip-types --test test/guest-cart-merge.test.ts",
+    "test:checkout": "node --experimental-strip-types --test test/checkout-flow.test.ts",
+    "test:orders": "node --experimental-strip-types --test test/customer-orders.test.ts",
+    "test:admin-orders": "node --experimental-strip-types --test test/admin-orders.test.ts",
+    "test:product-detail": "node --experimental-strip-types --test test/product-detail.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
