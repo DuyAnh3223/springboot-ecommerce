@@ -36,6 +36,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import spring.abtechzone.common.exception.AppException;
@@ -61,8 +62,9 @@ import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.order.service.CheckoutService;
 import spring.abtechzone.modules.order.service.CreateOrderRequestHash;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.OrderCreationService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
@@ -126,8 +128,12 @@ class OrderServiceTest {
     @Spy
     OrderMapper orderMapper = Mappers.getMapper(spring.abtechzone.modules.order.mapper.OrderMapper.class);
 
+    @Spy
     @InjectMocks
-    OrderService orderService;
+    CheckoutService checkoutService;
+
+    @InjectMocks
+    OrderCreationService orderService;
 
     private final UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID addressId = UUID.fromString("33333333-3333-3333-3333-333333333333");
@@ -138,6 +144,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(orderService, "checkoutService", checkoutService);
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken("testuser", null, List.of()));
         lenient().when(authService.getCurrentUsername()).thenReturn("testuser");
@@ -270,7 +277,7 @@ class OrderServiceTest {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutResponse response = orderService.checkoutReview(request(100L));
+            CheckoutResponse response = checkoutService.checkoutReview(request(100L));
 
             assertThat(response.getSubtotal()).isEqualByComparingTo(BigDecimal.valueOf(2000000.00));
             assertThat(response.getShippingFee()).isEqualByComparingTo(BigDecimal.valueOf(30000));
@@ -318,7 +325,7 @@ class OrderServiceTest {
             when(productSkuRepository.findById(200L)).thenReturn(Optional.of(sku2));
 
             // Unsorted + duplicate selection
-            CheckoutResponse response = orderService.checkoutReview(request(200L, 100L, 200L));
+            CheckoutResponse response = checkoutService.checkoutReview(request(200L, 100L, 200L));
 
             assertThat(response.getItems()).hasSize(2);
             assertThat(response.getItems().get(0).getSkuId()).isEqualTo(100L);
@@ -351,7 +358,7 @@ class OrderServiceTest {
             cart.getItems().add(item2);
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutResponse response = orderService.checkoutReview(request(100L));
+            CheckoutResponse response = checkoutService.checkoutReview(request(100L));
 
             assertThat(response.getItems()).hasSize(1);
             assertThat(response.getItems().get(0).getSkuId()).isEqualTo(100L);
@@ -368,7 +375,7 @@ class OrderServiceTest {
             CheckoutRequest request =
                     CheckoutRequest.builder().selectedSkuIds(List.of(999L)).build();
 
-            assertThatThrownBy(() -> orderService.checkoutReview(request))
+            assertThatThrownBy(() -> checkoutService.checkoutReview(request))
                     .isInstanceOf(AppException.class)
                     .hasMessageContaining(ErrorCode.CART_ITEM_NOT_IN_CART.getMessage());
         }
@@ -378,15 +385,15 @@ class OrderServiceTest {
         void reviewThrows_invalidSelection() {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
 
-            assertThatThrownBy(() -> orderService.checkoutReview(
+            assertThatThrownBy(() -> checkoutService.checkoutReview(
                             CheckoutRequest.builder().selectedSkuIds(null).build()))
                     .isInstanceOf(AppException.class);
 
-            assertThatThrownBy(() -> orderService.checkoutReview(
+            assertThatThrownBy(() -> checkoutService.checkoutReview(
                             CheckoutRequest.builder().selectedSkuIds(List.of()).build()))
                     .isInstanceOf(AppException.class);
 
-            assertThatThrownBy(() -> orderService.checkoutReview(CheckoutRequest.builder()
+            assertThatThrownBy(() -> checkoutService.checkoutReview(CheckoutRequest.builder()
                             .selectedSkuIds(List.of(0L, -1L))
                             .build()))
                     .isInstanceOf(AppException.class);
@@ -412,7 +419,7 @@ class OrderServiceTest {
                     .selectedSkuIds(List.of(100L))
                     .voucherCode("SALE10")
                     .build();
-            CheckoutResponse response = orderService.checkoutReview(request);
+            CheckoutResponse response = checkoutService.checkoutReview(request);
 
             assertThat(response.getDiscountAmount()).isEqualByComparingTo(BigDecimal.valueOf(200000.00));
             assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000000 + 30000 - 200000));
@@ -472,7 +479,7 @@ class OrderServiceTest {
                     .selectedSkuIds(List.of(100L, 200L))
                     .voucherCode("SPECIFIC10")
                     .build();
-            CheckoutResponse response = orderService.checkoutReview(request);
+            CheckoutResponse response = checkoutService.checkoutReview(request);
 
             // Subtotal = 2.000.000 (sku 100) + 500.000 (sku 200) = 2.500.000
             // Discount = 10% of 2.000.000 (eligible SKU only) = 200.000
@@ -514,7 +521,7 @@ class OrderServiceTest {
                     .selectedSkuIds(List.of(100L))
                     .voucherCode("ONCE_ONLY")
                     .build();
-            CheckoutResponse response = orderService.checkoutReview(request);
+            CheckoutResponse response = checkoutService.checkoutReview(request);
 
             assertThat(response.getVoucher()).isNotNull();
             assertThat(response.getVoucher().getCode()).isEqualTo("ONCE_ONLY");
@@ -531,7 +538,7 @@ class OrderServiceTest {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutResponse response = orderService.checkoutReview(request(100L));
+            CheckoutResponse response = checkoutService.checkoutReview(request(100L));
 
             assertThat(response.getItems()).hasSize(1);
             assertThat(response.getItems().get(0).getIssueCode()).isEqualTo(ErrorCode.INSUFFICIENT_STOCK.name());
@@ -547,7 +554,7 @@ class OrderServiceTest {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
             when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
 
-            CheckoutResponse response = orderService.checkoutReview(request(100L));
+            CheckoutResponse response = checkoutService.checkoutReview(request(100L));
 
             assertThat(response).hasNoNullFieldsOrPropertiesExcept("voucher", "subtotal");
             // Sanity: the reviewed snapshot exposes only order-affecting + display fields

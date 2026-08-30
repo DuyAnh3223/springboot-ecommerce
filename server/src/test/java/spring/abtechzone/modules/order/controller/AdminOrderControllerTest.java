@@ -33,7 +33,7 @@ import spring.abtechzone.modules.auth.service.AuthService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.dto.response.OrderSummaryResponse;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.OrderLifecycleService;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
@@ -47,7 +47,7 @@ class AdminOrderControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private OrderService orderService;
+    private OrderLifecycleService orderService;
 
     @MockitoBean
     private CustomJwtDecoder customJwtDecoder;

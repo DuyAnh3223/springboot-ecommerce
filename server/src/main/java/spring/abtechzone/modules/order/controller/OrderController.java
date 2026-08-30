@@ -22,7 +22,9 @@ import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.OrderDetailResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.dto.response.OrderSummaryResponse;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.CheckoutService;
+import spring.abtechzone.modules.order.service.OrderCreationService;
+import spring.abtechzone.modules.order.service.OrderLifecycleService;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
@@ -36,7 +38,9 @@ import spring.abtechzone.modules.user.repository.UserRepository;
                 "Order lifecycle management: checkout preview, order creation with distributed locking, customer order history and cancellation")
 public class OrderController {
 
-    OrderService orderService;
+    OrderCreationService orderCreationService;
+    CheckoutService checkoutService;
+    OrderLifecycleService orderLifecycleService;
     AuthService authService;
     UserRepository userRepository;
 
@@ -54,7 +58,7 @@ public class OrderController {
     @ApiResponse(responseCode = "401", description = "Unauthenticated")
     ApiResult<CheckoutResponse> checkoutReview(@RequestBody @Valid CheckoutRequest request) {
         return ApiResult.<CheckoutResponse>builder()
-                .result(orderService.checkoutReview(request))
+                .result(checkoutService.checkoutReview(request))
                 .build();
     }
 
@@ -80,7 +84,7 @@ public class OrderController {
             @RequestHeader(name = "Idempotency-Key") String idempotencyKey,
             @RequestBody @Valid CreateOrderRequest request) {
         return ApiResult.<OrderResponse>builder()
-                .result(orderService.createOrder(request, idempotencyKey))
+                .result(orderCreationService.createOrder(request, idempotencyKey))
                 .build();
     }
 
@@ -97,7 +101,7 @@ public class OrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ApiResult.<Page<OrderSummaryResponse>>builder()
-                .result(orderService.getMyOrders(status, page, size, currentUser()))
+                .result(orderLifecycleService.getMyOrders(status, page, size, currentUser()))
                 .build();
     }
 
@@ -112,7 +116,7 @@ public class OrderController {
     @ApiResponse(responseCode = "404", description = "Order not found or not owned by the current user")
     ApiResult<OrderDetailResponse> getOrderDetail(@PathVariable String orderCode) {
         return ApiResult.<OrderDetailResponse>builder()
-                .result(orderService.getMyOrderDetail(orderCode, currentUser()))
+                .result(orderLifecycleService.getMyOrderDetail(orderCode, currentUser()))
                 .build();
     }
 
@@ -130,7 +134,7 @@ public class OrderController {
     ApiResult<OrderResponse> cancelOrder(
             @PathVariable String orderCode, @RequestBody @Valid OrderCancelRequest request) {
         return ApiResult.<OrderResponse>builder()
-                .result(orderService.cancelOrder(orderCode, request.getReason(), currentUser()))
+                .result(orderLifecycleService.cancelOrder(orderCode, request.getReason(), currentUser()))
                 .build();
     }
 

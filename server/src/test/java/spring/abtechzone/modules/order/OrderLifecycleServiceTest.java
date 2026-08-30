@@ -37,7 +37,7 @@ import spring.abtechzone.modules.order.entity.OrderStatusHistory;
 import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.OrderLifecycleService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
@@ -70,7 +70,7 @@ class OrderLifecycleServiceTest {
     OrderMapper orderMapper = Mappers.getMapper(OrderMapper.class);
 
     @InjectMocks
-    OrderService orderService;
+    OrderLifecycleService orderService;
 
     private final UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private final UUID otherUserId = UUID.fromString("22222222-2222-2222-2222-222222222222");

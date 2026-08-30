@@ -48,7 +48,9 @@ import spring.abtechzone.modules.order.dto.response.CheckoutItemResponse;
 import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.dto.response.VoucherReviewResponse;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.CheckoutService;
+import spring.abtechzone.modules.order.service.OrderCreationService;
+import spring.abtechzone.modules.order.service.OrderLifecycleService;
 
 @WebMvcTest(OrderController.class)
 @Import(SecurityConfig.class)
@@ -62,7 +64,13 @@ class OrderControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @MockitoBean
-    private OrderService orderService;
+    private OrderCreationService orderService;
+
+    @MockitoBean
+    private CheckoutService checkoutService;
+
+    @MockitoBean
+    private OrderLifecycleService orderLifecycleService;
 
     @MockitoBean
     private CustomJwtDecoder customJwtDecoder;
@@ -103,7 +111,7 @@ class OrderControllerTest {
                 .canPlaceOrder(true)
                 .build();
 
-        when(orderService.checkoutReview(any(CheckoutRequest.class))).thenReturn(mockResponse);
+        when(checkoutService.checkoutReview(any(CheckoutRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/orders/checkout-review")
                         .with(csrf())
@@ -180,7 +188,7 @@ class OrderControllerTest {
                 .canPlaceOrder(false)
                 .build();
 
-        when(orderService.checkoutReview(any(CheckoutRequest.class))).thenReturn(mockResponse);
+        when(checkoutService.checkoutReview(any(CheckoutRequest.class))).thenReturn(mockResponse);
 
         mockMvc.perform(post("/orders/checkout-review")
                         .with(csrf())
@@ -198,7 +206,7 @@ class OrderControllerTest {
         CheckoutRequest request =
                 CheckoutRequest.builder().selectedSkuIds(List.of(999L)).build();
 
-        when(orderService.checkoutReview(any(CheckoutRequest.class)))
+        when(checkoutService.checkoutReview(any(CheckoutRequest.class)))
                 .thenThrow(new AppException(ErrorCode.CART_ITEM_NOT_IN_CART));
 
         mockMvc.perform(post("/orders/checkout-review")
@@ -453,7 +461,7 @@ class OrderControllerTest {
                         .itemCount(1)
                         .allowedTransitions(List.of("CANCELLED"))
                         .build();
-        when(orderService.getMyOrders(any(), anyInt(), anyInt(), any()))
+        when(orderLifecycleService.getMyOrders(any(), anyInt(), anyInt(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(summary)));
 
         mockMvc.perform(get("/orders/me")
@@ -468,7 +476,7 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.result.content[0].allowedTransitions[0]").value("CANCELLED"));
 
         // The user must come from AuthService, not from a path/query id.
-        verify(orderService).getMyOrders(eq(OrderStatus.PENDING), eq(0), eq(10), argThat(u -> u.getId()
+        verify(orderLifecycleService).getMyOrders(eq(OrderStatus.PENDING), eq(0), eq(10), argThat(u -> u.getId()
                 .equals(CURRENT_USER_ID)));
     }
 
@@ -476,7 +484,7 @@ class OrderControllerTest {
     @DisplayName("GET /orders/{orderCode} - order of another user maps to 404 without disclosure")
     void getOrderDetail_nonOwned_returns404() throws Exception {
         stubCurrentUser();
-        when(orderService.getMyOrderDetail(eq("ORD-OTHER"), any()))
+        when(orderLifecycleService.getMyOrderDetail(eq("ORD-OTHER"), any()))
                 .thenThrow(new AppException(ErrorCode.ORDER_NOT_FOUND));
 
         mockMvc.perform(get("/orders/ORD-OTHER").with(csrf()).with(jwt().jwt(jwt -> jwt.subject("test-user"))))
@@ -500,7 +508,7 @@ class OrderControllerTest {
     @DisplayName("POST /orders/{orderCode}/cancel - success returns cancelled order")
     void cancelOrder_success_returns200() throws Exception {
         stubCurrentUser();
-        when(orderService.cancelOrder(eq("ORD-20260818-ABCD1234"), eq("Tôi muốn thay đổi sản phẩm"), any()))
+        when(orderLifecycleService.cancelOrder(eq("ORD-20260818-ABCD1234"), eq("Tôi muốn thay đổi sản phẩm"), any()))
                 .thenReturn(OrderResponse.builder()
                         .id(1L)
                         .orderCode("ORD-20260818-ABCD1234")

@@ -19,7 +19,7 @@ import spring.abtechzone.modules.order.dto.request.OrderStatusUpdateRequest;
 import spring.abtechzone.modules.order.dto.response.OrderDetailResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
 import spring.abtechzone.modules.order.dto.response.OrderSummaryResponse;
-import spring.abtechzone.modules.order.service.OrderService;
+import spring.abtechzone.modules.order.service.OrderLifecycleService;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
@@ -33,7 +33,7 @@ import spring.abtechzone.modules.user.repository.UserRepository;
                 "Admin order management: search/list, detail, and status transitions via the shared service policy")
 public class AdminOrderController {
 
-    OrderService orderService;
+    OrderLifecycleService orderLifecycleService;
     AuthService authService;
     UserRepository userRepository;
 
@@ -48,7 +48,7 @@ public class AdminOrderController {
     @ApiResponse(responseCode = "403", description = "Access denied")
     ApiResult<Page<OrderSummaryResponse>> searchOrders(@Valid @ModelAttribute AdminOrderSearchRequest request) {
         return ApiResult.<Page<OrderSummaryResponse>>builder()
-                .result(orderService.getAdminOrders(request))
+                .result(orderLifecycleService.getAdminOrders(request))
                 .build();
     }
 
@@ -60,7 +60,7 @@ public class AdminOrderController {
     @ApiResponse(responseCode = "404", description = "Order not found")
     ApiResult<OrderDetailResponse> getOrderDetail(@PathVariable String orderCode) {
         return ApiResult.<OrderDetailResponse>builder()
-                .result(orderService.getAdminOrderDetail(orderCode))
+                .result(orderLifecycleService.getAdminOrderDetail(orderCode))
                 .build();
     }
 
@@ -79,7 +79,8 @@ public class AdminOrderController {
             @PathVariable String orderCode, @RequestBody @Valid OrderStatusUpdateRequest request) {
         User admin = currentAdmin();
         return ApiResult.<OrderResponse>builder()
-                .result(orderService.updateOrderStatus(orderCode, request.getStatus(), request.getNote(), admin))
+                .result(orderLifecycleService.updateOrderStatus(
+                        orderCode, request.getStatus(), request.getNote(), admin))
                 .build();
     }
 
