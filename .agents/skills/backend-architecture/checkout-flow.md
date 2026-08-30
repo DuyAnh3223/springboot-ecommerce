@@ -4,13 +4,18 @@
 
 ## 1. Happy Path Execution Sequence
 
-The order checkout pipeline is coordinated by `OrderService.createOrder(CreateOrderRequest, String idempotencyKey)` using Redisson distributed locks and Spring's `TransactionTemplate`.
+The order checkout pipeline is coordinated by
+`OrderCreationService.createOrder(CreateOrderRequest, String idempotencyKey)`.
+`CheckoutService` supplies both the customer review and the authoritative
+recomputation used during creation. Order creation uses Redisson distributed
+locks and Spring's `TransactionTemplate`.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Client
-    participant OS as OrderService
+    participant OS as OrderCreationService
+    participant CS as CheckoutService
     participant AS as AuthService
     participant RL as RedissonClient (Distributed Lock)
     participant TT as TransactionTemplate
@@ -37,8 +42,9 @@ sequenceDiagram
     activate TT
     TT->>OR: Recheck idempotency (replay/409 inside transaction)
     TT->>CR: Load active cart & validate (first load is inside the transaction)
-    TT->>PR: Re-fetch SKU details (verify stock & price)
-    TT->>VV: Validate voucher & calculate discount
+    TT->>CS: Recompute authoritative checkout
+    CS->>PR: Re-fetch SKU details (verify stock & price)
+    CS->>VV: Validate voucher & calculate discount
     TT->>OR: Save Order & OrderItems
     TT->>IS: Atomic stock decrement + SALE_OUT movement
     TT->>CR: Remove selected items only (ACTIVE if any remain, else COMPLETED)
@@ -47,7 +53,7 @@ sequenceDiagram
 
     Note over OS,RL: Finally Block Execution
     loop For each lock in locks
-        OS->>RL: if (lock.isHeldByCurrentThread()) lock.unlock()
+        OS->>RL: lock.unlock()
     end
 
     OS-->>Client: OrderResponse
@@ -86,8 +92,9 @@ sequenceDiagram
      redemption without a `voucher_user` row (ADR-004), then removes selected cart
      items (cart stays `ACTIVE` if items remain, else `COMPLETED`).
 5. **Lock Release in `finally` Block**:
-   - Iterates through acquired locks and releases each via
-     `if (lock.isHeldByCurrentThread()) { lock.unlock(); }`.
+   - Recursive lock ownership ensures each acquired lock is released by its
+     matching `finally` block, including callback failure and interruption
+     paths.
 
 ## 3. Failure Conditions & Compensating Actions
 
@@ -99,4 +106,4 @@ sequenceDiagram
 | **Invalid / Unowned Shipping Address** | `ADDRESS_NOT_BELONG_TO_USER` (1036) | Selected `addressId` does not belong to user | Throws `AppException`. DB transaction rolls back. All Redisson locks released in `finally`. |
 | **Insufficient Product Stock** | `INSUFFICIENT_STOCK` (1032) | Atomic conditional decrement `stock >= quantity` updates 0 rows | Throws `AppException`. DB transaction rolls back any prior stock movement written in the same transaction. All Redisson locks released in `finally`. |
 | **Voucher Invalid / Expired / Limit Reached** | `VOUCHER_EXPIRED` (1024) / `VOUCHER_ARE_OUT` (1025) | Voucher fails validation rules, or the guarded increment/redemption fails | Throws `AppException`. DB transaction rolls back stock, order, and cart together. All Redisson locks released in `finally`. |
-| **Uncaught Runtime Exception** | `SYSTEM_ERROR` (1045) | Any unhandled exception or DB integrity constraint failure | Caught in `createOrder`; `AppException` is re-thrown directly, otherwise re-thrown as `SYSTEM_ERROR`. DB transaction rolls back automatically via `TransactionTemplate`. All Redisson locks released in `finally`. |
+| **Repeated idempotency constraint race** | `SYSTEM_ERROR` (1045) | A unique-constraint violation cannot be resolved to the winning order after the bounded retry limit | The transaction rolls back automatically via `TransactionTemplate`. All Redisson locks are released by their matching `finally` blocks. |
