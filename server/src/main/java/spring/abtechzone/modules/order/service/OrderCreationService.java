@@ -301,6 +301,7 @@ public class OrderCreationService {
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .sku(sku)
+                    .skuId(sku.getId())
                     .productNameSnapshot(
                             sku.getProduct() != null ? sku.getProduct().getName() : null)
                     .skuSnapshot(sku.getSku())

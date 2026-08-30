@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -135,6 +136,7 @@ class OrderIT extends BaseIT {
 
     @BeforeEach
     void setUp() {
+        jdbcTemplate.update("UPDATE product_sku SET deleted_at = NULL WHERE deleted_at IS NOT NULL");
         voucherRedemptionRepository.deleteAll();
         stockMovementRepository.deleteAll();
         orderStatusHistoryRepository.deleteAll();
@@ -786,6 +788,43 @@ class OrderIT extends BaseIT {
         assertThat(cancelled.getPaymentStatus().name()).isEqualTo("CANCELLED");
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
                 .hasSize(2); // created + cancelled
+    }
+
+    @Test
+    @DisplayName("Order snapshot remains readable and cancellable after its SKU is renamed and soft-deleted")
+    void softDeletedSku_preservesSnapshotAndCancellation() throws Exception {
+        String originalSkuCode = sku.getSku();
+        String orderCode = createOrderViaApi(null, "0");
+
+        jdbcTemplate.update(
+                "UPDATE product_sku SET sku = ?, deleted_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "RENAMED-AFTER-ORDER",
+                sku.getId());
+
+        mockMvc.perform(get("/orders/{orderCode}", orderCode).with(jwt().jwt(j -> j.subject("testuser"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.items[0].skuCode").value(originalSkuCode))
+                .andExpect(jsonPath("$.result.items[0].productName").value(product.getName()));
+
+        mockMvc.perform(get("/admin/orders/{orderCode}", orderCode).header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.items[0].skuCode").value(originalSkuCode))
+                .andExpect(jsonPath("$.result.items[0].productName").value(product.getName()));
+
+        mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+								{"reason": "cancel after sku deletion"}
+								"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.status").value("CANCELLED"));
+
+        Integer restoredStock =
+                jdbcTemplate.queryForObject("SELECT stock FROM product_sku WHERE id = ?", Integer.class, sku.getId());
+        assertThat(restoredStock).isEqualTo(50);
+        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+                .hasSize(1);
     }
 
     @Test

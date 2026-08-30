@@ -100,6 +100,7 @@ class OrderLifecycleServiceTest {
                 .id(1L)
                 .order(null)
                 .sku(sku)
+                .skuId(100L)
                 .quantity(2)
                 .unitPrice(BigDecimal.valueOf(1000000.00))
                 .build();

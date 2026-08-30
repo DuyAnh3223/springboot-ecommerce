@@ -55,6 +55,8 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
 
     // Atomic compensation: never drive stock negative (R-C05-04 / CP-C05-05)
     @Modifying
-    @Query("UPDATE ProductSku s SET s.stock = s.stock + :quantity WHERE s.id = :id AND s.stock + :quantity >= 0")
+    @Query(
+            value = "UPDATE product_sku SET stock = stock + :quantity WHERE id = :id AND stock + :quantity >= 0",
+            nativeQuery = true)
     int increaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
 }

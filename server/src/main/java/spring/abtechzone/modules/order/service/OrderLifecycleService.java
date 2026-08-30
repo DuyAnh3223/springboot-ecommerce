@@ -189,7 +189,8 @@ public class OrderLifecycleService {
 
     private void restoreCancellationStockItem(Order order, OrderItem item) {
         validateCancellationItem(item);
-        requireSingleUpdatedRow(productSkuRepository.increaseStock(item.getSku().getId(), item.getQuantity()));
+        Long skuId = item.getSkuId();
+        requireSingleUpdatedRow(productSkuRepository.increaseStock(skuId, item.getQuantity()));
 
         StockMovement movement = new StockMovement();
         movement.setSku(item.getSku());
@@ -201,7 +202,7 @@ public class OrderLifecycleService {
     }
 
     private void validateCancellationItem(OrderItem item) {
-        if (item.getSku() == null || item.getSku().getId() == null || item.getQuantity() <= 0) {
+        if (item.getSkuId() == null || item.getQuantity() <= 0) {
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         }
     }

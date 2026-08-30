@@ -26,7 +26,9 @@ class OrderMapperTest {
                 .build();
         OrderItem item = OrderItem.builder()
                 .sku(sku)
+                .skuId(100L)
                 .productNameSnapshot("iPhone 15 Pro Max")
+                .skuSnapshot("ORDERED-IPHONE-15-256GB")
                 .quantity(2)
                 .unitPrice(BigDecimal.valueOf(1000000))
                 .imageUrl("https://example.com/img.png")
@@ -35,7 +37,7 @@ class OrderMapperTest {
         OrderItemResponse response = mapper.toOrderItemResponse(item);
 
         assertThat(response.getSkuId()).isEqualTo(100L);
-        assertThat(response.getSkuCode()).isEqualTo("IPHONE-15-256GB");
+        assertThat(response.getSkuCode()).isEqualTo("ORDERED-IPHONE-15-256GB");
         assertThat(response.getProductName()).isEqualTo("iPhone 15 Pro Max");
         assertThat(response.getQuantity()).isEqualTo(2);
         assertThat(response.getUnitPrice()).isEqualByComparingTo(BigDecimal.valueOf(1000000));

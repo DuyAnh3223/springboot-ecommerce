@@ -28,8 +28,8 @@ public interface OrderMapper {
             target = "lineTotal",
             expression =
                     "java(item.getUnitPrice() == null ? null : item.getUnitPrice().multiply(java.math.BigDecimal.valueOf(item.getQuantity())))")
-    @Mapping(target = "skuCode", source = "sku.sku")
-    @Mapping(target = "skuId", source = "sku.id")
+    @Mapping(target = "skuCode", source = "skuSnapshot")
+    @Mapping(target = "skuId", source = "skuId")
     @Mapping(target = "productName", source = "productNameSnapshot")
     OrderItemResponse toOrderItemResponse(OrderItem item);
 

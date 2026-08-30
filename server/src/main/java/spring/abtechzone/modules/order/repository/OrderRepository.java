@@ -34,7 +34,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
      * persisted OrderItem quantities.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @EntityGraph(attributePaths = {"items", "items.sku"})
+    @EntityGraph(attributePaths = "items")
     @Query("SELECT o FROM Order o WHERE o.orderCode = :orderCode")
     Optional<Order> findByOrderCodeForUpdate(@Param("orderCode") String orderCode);
 
@@ -47,9 +47,9 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
     Page<Order> findByUserIdAndStatusOrderByCreatedAtDesc(
             UUID userId, spring.abtechzone.modules.order.constant.OrderStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"items", "items.sku", "items.sku.product"})
+    @EntityGraph(attributePaths = "items")
     Optional<Order> findWithItemsByOrderCode(String orderCode);
 
-    @EntityGraph(attributePaths = {"items", "items.sku", "items.sku.product"})
+    @EntityGraph(attributePaths = "items")
     Optional<Order> findWithItemsByOrderCodeAndUserId(String orderCode, UUID userId);
 }
