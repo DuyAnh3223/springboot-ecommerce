@@ -1,5 +1,7 @@
 package spring.abtechzone.modules.cart.service;
 
+import static spring.abtechzone.modules.order.service.CreateOrderRequestHash.getString;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -66,11 +68,7 @@ public final class CartMergeRequestNormalizer {
     private static String sha256(String input) {
         try {
             byte[] bytes = MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(bytes.length * 2);
-            for (byte value : bytes) {
-                hex.append(Character.forDigit((value >> 4) & 0xF, 16)).append(Character.forDigit(value & 0xF, 16));
-            }
-            return hex.toString();
+            return getString(bytes);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }

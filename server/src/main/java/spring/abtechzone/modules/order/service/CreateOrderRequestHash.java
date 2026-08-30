@@ -8,6 +8,8 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+
 import spring.abtechzone.modules.order.dto.request.AddressRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
 import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
@@ -137,13 +139,18 @@ public final class CreateOrderRequestHash {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] bytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(bytes.length * 2);
-            for (byte b : bytes) {
-                hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
-            }
-            return hex.toString();
+            return getString(bytes);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is not available", e);
         }
+    }
+
+    @NonNull
+    public static String getString(byte[] bytes) {
+        StringBuilder hex = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            hex.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+        }
+        return hex.toString();
     }
 }
