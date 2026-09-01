@@ -1,6 +1,10 @@
 package spring.abtechzone.modules.inventory.service;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.OptionalInt;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,9 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.inventory.entity.Inventory;
 import spring.abtechzone.modules.inventory.entity.StockMovement;
+import spring.abtechzone.modules.inventory.repository.InventoryRepository;
 import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.product.entity.ProductSku;
@@ -18,17 +25,133 @@ import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class InventoryService {
 
     StockMovementRepository stockMovementRepository;
+    InventoryRepository inventoryRepository;
     ProductSkuRepository productSkuRepository;
     UserRepository userRepository;
 
+    private static final int MAX_ON_HAND = Integer.MAX_VALUE;
+
+    @Transactional(readOnly = true)
+    public OptionalInt findOnHand(Long skuId) {
+        if (skuId == null) {
+            return OptionalInt.empty();
+        }
+        return inventoryRepository
+                .findById(skuId)
+                .map(inventory -> OptionalInt.of(inventory.getOnHand()))
+                .orElseGet(() -> {
+                    // Missing rows are invariant violations, never a reason to use a catalog fallback.
+                    log.warn("Missing inventory row for skuId={}", skuId);
+                    return OptionalInt.empty();
+                });
+    }
+
+    @Transactional(readOnly = true)
+    public int getOnHandOrZero(Long skuId) {
+        OptionalInt onHand = findOnHand(skuId);
+        if (onHand.isEmpty()) {
+            return 0;
+        }
+        return onHand.getAsInt();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> getOnHandBySkuIds(Collection<Long> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Integer> result = new HashMap<>();
+        for (InventoryRepository.SkuOnHandProjection row : inventoryRepository.findOnHandBySkuIds(skuIds)) {
+            result.put(row.getSkuId(), row.getOnHand());
+        }
+        for (Long skuId : skuIds) {
+            if (skuId != null && !result.containsKey(skuId)) {
+                log.warn("Missing inventory row in bulk read for skuId={}", skuId);
+            }
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> getTotalOnHandByProductIds(Collection<Long> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        logMissingInventoryRows(inventoryRepository.findActiveSkuIdsByProductIds(productIds));
+        Map<Long, Integer> result = new HashMap<>();
+        for (InventoryRepository.ProductOnHandProjection row : inventoryRepository.sumOnHandByProductIds(productIds)) {
+            long total = row.getTotalOnHand() == null ? 0L : row.getTotalOnHand();
+            result.put(row.getProductId(), (int) Math.min(Integer.MAX_VALUE, Math.max(0L, total)));
+        }
+        return result;
+    }
+
+    private void logMissingInventoryRows(Collection<Long> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            return;
+        }
+        Map<Long, Integer> existing = getOnHandBySkuIdsWithoutDiagnostics(skuIds);
+        for (Long skuId : skuIds) {
+            if (skuId != null && !existing.containsKey(skuId)) {
+                log.warn("Missing inventory row while summing product stock for skuId={}", skuId);
+            }
+        }
+    }
+
+    private Map<Long, Integer> getOnHandBySkuIdsWithoutDiagnostics(Collection<Long> skuIds) {
+        Map<Long, Integer> result = new HashMap<>();
+        for (InventoryRepository.SkuOnHandProjection row : inventoryRepository.findOnHandBySkuIds(skuIds)) {
+            result.put(row.getSkuId(), row.getOnHand());
+        }
+        return result;
+    }
+
     @Transactional
-    public void reserveStock(ProductSku sku, int quantity, Order order) {
-        int rowsUpdated = productSkuRepository.decreaseStock(sku.getId(), quantity);
+    public Inventory createForSku(ProductSku sku, Integer onHand) {
+        validateOnHand(onHand);
+        if (sku == null || sku.getId() == null) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+        if (!productSkuRepository.existsById(sku.getId())) {
+            throw new AppException(ErrorCode.SKU_NOT_FOUND);
+        }
+        if (inventoryRepository.existsById(sku.getId())) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+        return inventoryRepository.save(Inventory.builder()
+                .skuId(sku.getId())
+                .productSku(sku)
+                .onHand(onHand)
+                .build());
+    }
+
+    @Transactional
+    public void setOnHand(Long skuId, Integer onHand) {
+        validateOnHand(onHand);
+        if (skuId == null) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+        Inventory inventory = inventoryRepository.findById(skuId).orElseGet(() -> {
+            log.warn("Cannot set inventory; row missing for skuId={}", skuId);
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        });
+        inventory.setOnHand(onHand);
+        inventoryRepository.save(inventory);
+    }
+
+    @Transactional
+    public void decreaseStock(ProductSku sku, int quantity, Order order) {
+        validateQuantity(quantity);
+        if (sku == null || sku.getId() == null) {
+            throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
+        }
+        int rowsUpdated = inventoryRepository.decreaseOnHand(sku.getId(), quantity);
 
         if (rowsUpdated == 0) {
             throw new AppException(ErrorCode.INSUFFICIENT_STOCK);
@@ -46,5 +169,39 @@ public class InventoryService {
         }
         movement.setCreatedAt(OffsetDateTime.now());
         stockMovementRepository.save(movement);
+    }
+
+    @Transactional
+    public void increaseStock(Long skuId, int quantity, Order order, ProductSku sku) {
+        validateQuantity(quantity);
+        if (skuId == null || sku == null) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+        int rowsUpdated = inventoryRepository.increaseOnHand(skuId, quantity, MAX_ON_HAND);
+        if (rowsUpdated != 1) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
+
+        StockMovement movement = new StockMovement();
+        movement.setSku(sku);
+        movement.setChangeQty(quantity);
+        movement.setReason("ORDER_CANCEL_RETURN");
+        if (order != null) {
+            movement.setReferenceId(String.valueOf(order.getId()));
+        }
+        movement.setCreatedAt(OffsetDateTime.now());
+        stockMovementRepository.save(movement);
+    }
+
+    private void validateOnHand(Integer onHand) {
+        if (onHand == null || onHand < 0) {
+            throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
+        }
+    }
+
+    private void validateQuantity(int quantity) {
+        if (quantity <= 0) {
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
     }
 }
