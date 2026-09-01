@@ -68,12 +68,6 @@ public class Product {
     @Builder.Default
     Integer activeSkuCount = 0;
 
-    @NotNull
-    @ColumnDefault("0")
-    @Column(name = "total_stock", nullable = false)
-    @Builder.Default
-    Integer totalStock = 0;
-
     @Column(name = "price_min")
     BigDecimal priceMin;
 
