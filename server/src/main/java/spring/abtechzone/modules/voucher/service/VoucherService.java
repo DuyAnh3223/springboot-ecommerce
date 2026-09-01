@@ -19,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.dto.response.ProductSkuResponse;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
@@ -46,6 +47,7 @@ public class VoucherService {
     VoucherMapper voucherMapper;
     VoucherValidator voucherValidator;
     ProductSkuService productSkuService;
+    InventoryService inventoryService;
 
     @Transactional
     public VoucherResponse create(VoucherCreateRequest request) {
@@ -68,7 +70,7 @@ public class VoucherService {
         }
 
         voucher = voucherRepository.save(voucher);
-        return voucherMapper.toVoucherResponse(voucher);
+        return toVoucherResponse(voucher);
     }
 
     private Voucher findVoucherByCode(String code) {
@@ -83,11 +85,11 @@ public class VoucherService {
 
         Page<Voucher> vouchersPage = voucherRepository.findAll(spec, request.toPageable());
 
-        return vouchersPage.map(voucherMapper::toVoucherResponse);
+        return vouchersPage.map(this::toVoucherResponse);
     }
 
     public VoucherResponse getVoucher(String code) {
-        return voucherMapper.toVoucherResponse(findVoucherByCode(code));
+        return toVoucherResponse(findVoucherByCode(code));
     }
 
     @Transactional
@@ -107,7 +109,7 @@ public class VoucherService {
             voucher.setProductSkus(new HashSet<>(productSkus));
         }
 
-        return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
+        return toVoucherResponse(voucherRepository.save(voucher));
     }
 
     public void delete(String code) {
@@ -120,7 +122,7 @@ public class VoucherService {
     public VoucherResponse reactivate(String code) {
         Voucher voucher = findVoucherByCode(code);
         voucher.setIsActive(true);
-        return voucherMapper.toVoucherResponse(voucherRepository.save(voucher));
+        return toVoucherResponse(voucherRepository.save(voucher));
     }
 
     @Transactional(readOnly = true)
@@ -135,6 +137,20 @@ public class VoucherService {
         }
 
         return productSkuService.toSkuResponseList(skus);
+    }
+
+    private VoucherResponse toVoucherResponse(Voucher voucher) {
+        VoucherResponse response = voucherMapper.toVoucherResponse(voucher);
+        if (response == null
+                || response.getProductSkus() == null
+                || response.getProductSkus().isEmpty()) {
+            return response;
+        }
+        Map<Long, Integer> onHandBySkuId = inventoryService.getOnHandBySkuIds(response.getProductSkus().stream()
+                .map(ProductSkuResponse::getId)
+                .toList());
+        response.getProductSkus().forEach(sku -> sku.setStock(onHandBySkuId.getOrDefault(sku.getId(), 0)));
+        return response;
     }
 
     public BigDecimal calculateEligibleSubtotal(

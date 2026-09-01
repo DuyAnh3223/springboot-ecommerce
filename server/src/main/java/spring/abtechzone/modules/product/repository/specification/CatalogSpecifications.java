@@ -18,6 +18,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import lombok.extern.slf4j.Slf4j;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
+import spring.abtechzone.modules.inventory.repository.specification.InventorySpecifications;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 
@@ -62,7 +63,7 @@ public class CatalogSpecifications {
     }
 
     public static Specification<Product> inStock() {
-        return (root, query, cb) -> cb.greaterThan(root.get("totalStock"), 0);
+        return InventorySpecifications.hasAvailableSku();
     }
 
     /**
