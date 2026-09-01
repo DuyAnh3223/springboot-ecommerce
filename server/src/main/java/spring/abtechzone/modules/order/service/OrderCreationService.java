@@ -232,7 +232,7 @@ public class OrderCreationService {
             ProductSku sku = productSkuRepository
                     .findById(line.skuId())
                     .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
-            inventoryService.reserveStock(sku, line.quantity(), order);
+            inventoryService.decreaseStock(sku, line.quantity(), order);
         }
     }
 
