@@ -41,22 +41,6 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, Long>, J
     long countByProductIdAndDeletedAtIsNullAndActiveTrue(@Param("productId") Long productId);
 
     @Query(
-            "SELECT COALESCE(SUM(s.stock), 0) FROM ProductSku s WHERE s.product.id = :productId AND s.deletedAt IS NULL AND s.active = true")
-    int sumStockByProductIdAndActiveTrue(@Param("productId") Long productId);
-
-    @Query(
             "SELECT MIN(s.price), MAX(s.price) FROM ProductSku s WHERE s.product.id = :productId AND s.deletedAt IS NULL AND s.active = true")
     Object[] findPriceMinAndMaxByProductIdAndActiveTrue(@Param("productId") Long productId);
-
-    // Atomic
-    @Modifying
-    @Query("UPDATE ProductSku s SET s.stock = s.stock - :quantity WHERE s.id = :id AND s.stock >= :quantity")
-    int decreaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
-
-    // Atomic compensation: never drive stock negative (R-C05-04 / CP-C05-05)
-    @Modifying
-    @Query(
-            value = "UPDATE product_sku SET stock = stock + :quantity WHERE id = :id AND stock + :quantity >= 0",
-            nativeQuery = true)
-    int increaseStock(@Param("id") Long id, @Param("quantity") Integer quantity);
 }

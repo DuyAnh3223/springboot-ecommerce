@@ -19,10 +19,12 @@ public interface ProductMapper {
     Product toProduct(ProductCreateRequest productRequest);
 
     @Mapping(target = "skus", ignore = true)
+    @Mapping(target = "totalStock", ignore = true)
     @Mapping(target = "primaryImageUrl", ignore = true)
     ProductResponse toProductResponse(Product product);
 
     @Mapping(target = "skus", ignore = true)
+    @Mapping(target = "totalStock", ignore = true)
     @Mapping(target = "primaryImageUrl", ignore = true)
     ProductResponse toProductResponseSummary(Product product);
 
