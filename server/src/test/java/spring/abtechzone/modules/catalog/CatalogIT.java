@@ -23,6 +23,8 @@ import spring.abtechzone.modules.category.repository.AttributeRepository;
 import spring.abtechzone.modules.category.repository.BrandRepository;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.entity.Inventory;
+import spring.abtechzone.modules.inventory.repository.InventoryRepository;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
@@ -53,6 +55,9 @@ class CatalogIT extends BaseIT {
     private ProductSkuRepository productSkuRepository;
 
     @Autowired
+    private InventoryRepository inventoryRepository;
+
+    @Autowired
     private spring.abtechzone.modules.cart.repository.CartItemRepository cartItemRepository;
 
     @Autowired
@@ -75,6 +80,7 @@ class CatalogIT extends BaseIT {
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
+        inventoryRepository.deleteAll();
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
         categoryAttributeRepository.deleteAll();
@@ -222,7 +228,6 @@ class CatalogIT extends BaseIT {
                 .attributes(attributes)
                 .priceMin(BigDecimal.valueOf(priceMinVal))
                 .priceMax(BigDecimal.valueOf(priceMaxVal))
-                .totalStock(10)
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
@@ -240,12 +245,17 @@ class CatalogIT extends BaseIT {
                 .product(product)
                 .sku(skuCode)
                 .price(BigDecimal.valueOf(priceVal))
-                .stock(stock)
                 .attributes(attributes)
                 .active(active)
                 .createdAt(OffsetDateTime.now())
                 .updatedAt(OffsetDateTime.now())
                 .build();
-        return productSkuRepository.save(sku);
+        sku = productSkuRepository.save(sku);
+        inventoryRepository.save(Inventory.builder()
+                .skuId(sku.getId())
+                .productSku(sku)
+                .onHand(stock)
+                .build());
+        return sku;
     }
 }

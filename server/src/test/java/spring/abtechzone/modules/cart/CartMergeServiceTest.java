@@ -41,6 +41,7 @@ import spring.abtechzone.modules.cart.repository.CartMergeLedgerRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.cart.service.CartMergeRequestNormalizer;
 import spring.abtechzone.modules.cart.service.CartService;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
@@ -69,6 +70,9 @@ class CartMergeServiceTest {
 
     @Mock
     UserService userService;
+
+    @Mock
+    InventoryService inventoryService;
 
     @Mock
     CartMergeLedgerRepository cartMergeLedgerRepository;
@@ -104,7 +108,8 @@ class CartMergeServiceTest {
                 cartMergeLedgerRepository,
                 redissonClient,
                 objectMapper,
-                transactionTemplate);
+                transactionTemplate,
+                inventoryService);
         user = User.builder()
                 .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
                 .username("testuser")
@@ -112,6 +117,7 @@ class CartMergeServiceTest {
         mergeId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
 
         when(userService.getCurrentUser()).thenReturn(user);
+        when(inventoryService.getOnHandBySkuIds(any())).thenReturn(java.util.Map.of(17L, 10, 42L, 0));
         when(redissonClient.<String>getBucket(anyString())).thenReturn(bucket);
         when(redissonClient.getLock(anyString())).thenReturn(lock);
         when(bucket.get()).thenReturn(null);
@@ -135,14 +141,12 @@ class CartMergeServiceTest {
         ProductSku validSku = ProductSku.builder()
                 .id(17L)
                 .price(BigDecimal.valueOf(100))
-                .stock(10)
                 .active(true)
                 .product(product)
                 .build();
         ProductSku outOfStockSku = ProductSku.builder()
                 .id(42L)
                 .price(BigDecimal.valueOf(200))
-                .stock(0)
                 .active(true)
                 .product(product)
                 .build();

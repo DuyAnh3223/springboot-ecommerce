@@ -161,9 +161,12 @@ class OrderServiceTest {
                 .id(100L)
                 .sku("IPHONE-15-256GB")
                 .price(BigDecimal.valueOf(1000000.00))
-                .stock(10)
                 .product(product)
                 .build();
+        lenient().when(inventoryService.getOnHandOrZero(anyLong())).thenAnswer(invocation -> {
+            Long skuId = invocation.getArgument(0);
+            return skuId.equals(sku.getId()) ? 10 : 0;
+        });
 
         cartItem = CartItem.builder()
                 .id(10L)
@@ -183,11 +186,10 @@ class OrderServiceTest {
                 .doAnswer(invocation -> {
                     ProductSku skuArg = invocation.getArgument(0);
                     int qty = invocation.getArgument(1);
-                    skuArg.setStock(skuArg.getStock() - qty);
                     return null;
                 })
                 .when(inventoryService)
-                .reserveStock(any(), anyInt(), any());
+                .decreaseStock(any(), anyInt(), any());
 
         lenient().when(addressRepository.save(any(Address.class))).thenAnswer(invocation -> {
             Address addr = invocation.getArgument(0);
@@ -307,7 +309,6 @@ class OrderServiceTest {
                     .id(200L)
                     .sku("ACCESSORY-CASE")
                     .price(BigDecimal.valueOf(500000.00))
-                    .stock(5)
                     .product(Product.builder()
                             .id(2L)
                             .name("Case")
@@ -342,7 +343,6 @@ class OrderServiceTest {
                     .id(200L)
                     .sku("ACCESSORY-CASE")
                     .price(BigDecimal.valueOf(500000.00))
-                    .stock(5)
                     .product(Product.builder()
                             .id(2L)
                             .name("Case")
@@ -445,7 +445,6 @@ class OrderServiceTest {
                     .id(200L)
                     .sku("ACCESSORY-CASE")
                     .price(BigDecimal.valueOf(500000.00))
-                    .stock(5)
                     .product(Product.builder()
                             .id(2L)
                             .name("Case")
@@ -794,12 +793,10 @@ class OrderServiceTest {
             assertThat(response.getStatus()).isEqualTo("PENDING");
             assertThat(response.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
 
-            assertThat(sku.getStock()).isEqualTo(8);
-
             assertThat(cart.getStatus()).isEqualTo(CartStatus.COMPLETED);
 
             verify(orderRepository).save(any(Order.class));
-            verify(inventoryService).reserveStock(eq(sku), eq(2), any());
+            verify(inventoryService).decreaseStock(eq(sku), eq(2), any());
 
             // Watchdog overload used, no fixed lease (AC-C04-05)
             verify(redissonClient.getLock(anyString()), atLeastOnce()).tryLock(anyLong(), any(TimeUnit.class));
@@ -1036,7 +1033,7 @@ class OrderServiceTest {
             // Replay must happen BEFORE the cart lookup (AC-C04-01/02)
             verify(cartRepository, never()).findByUserIdAndStatus(any(), any());
             verify(orderRepository, never()).save(any());
-            verify(inventoryService, never()).reserveStock(any(), anyInt(), any());
+            verify(inventoryService, never()).decreaseStock(any(), anyInt(), any());
         }
 
         @Test
@@ -1138,7 +1135,6 @@ class OrderServiceTest {
                     .id(100L)
                     .sku("IPHONE-15-256GB")
                     .price(BigDecimal.valueOf(1100000.00))
-                    .stock(10)
                     .product(user != null ? sku.getProduct() : null)
                     .build();
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(changedSku));
@@ -1147,9 +1143,8 @@ class OrderServiceTest {
 
             assertThatThrownBy(() -> orderService.createOrder(request, IDEMPOTENCY_KEY))
                     .isInstanceOf(CheckoutChangedException.class);
-            assertThat(sku.getStock()).isEqualTo(10);
             verify(orderRepository, never()).save(any());
-            verify(inventoryService, never()).reserveStock(any(), anyInt(), any());
+            verify(inventoryService, never()).decreaseStock(any(), anyInt(), any());
         }
 
         @Test
@@ -1181,7 +1176,6 @@ class OrderServiceTest {
                     .id(100L)
                     .sku("IPHONE-15-256GB")
                     .price(BigDecimal.valueOf(1000000.00))
-                    .stock(7)
                     .product(sku.getProduct())
                     .build();
             when(productSkuRepository.findById(100L)).thenReturn(Optional.of(changedStockSku));
@@ -1222,7 +1216,7 @@ class OrderServiceTest {
             assertThatThrownBy(() -> orderService.createOrder(request, IDEMPOTENCY_KEY))
                     .isInstanceOf(CheckoutChangedException.class);
             verify(orderRepository, never()).save(any());
-            verify(inventoryService, never()).reserveStock(any(), anyInt(), any());
+            verify(inventoryService, never()).decreaseStock(any(), anyInt(), any());
         }
 
         @Test
@@ -1236,7 +1230,6 @@ class OrderServiceTest {
                     .id(200L)
                     .sku("ACCESSORY-CASE")
                     .price(BigDecimal.valueOf(500000.00))
-                    .stock(5)
                     .product(Product.builder()
                             .id(2L)
                             .name("Case")
@@ -1278,8 +1271,8 @@ class OrderServiceTest {
             assertThat(cart.getItems()).hasSize(1);
             assertThat(cart.getItems().get(0).getProductSku().getId()).isEqualTo(200L);
             assertThat(cart.getStatus()).isEqualTo(CartStatus.ACTIVE);
-            verify(inventoryService).reserveStock(eq(sku), eq(2), any());
-            verify(inventoryService, never()).reserveStock(eq(sku2), anyInt(), any());
+            verify(inventoryService).decreaseStock(eq(sku), eq(2), any());
+            verify(inventoryService, never()).decreaseStock(eq(sku2), anyInt(), any());
         }
     }
 }

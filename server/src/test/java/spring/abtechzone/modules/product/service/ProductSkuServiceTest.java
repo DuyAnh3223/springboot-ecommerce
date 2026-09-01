@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import spring.abtechzone.common.service.AwsS3FileService;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.dto.request.ProductSkuItemRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
@@ -52,6 +53,9 @@ class ProductSkuServiceTest {
     @Mock
     SkuImageService skuImageService;
 
+    @Mock
+    InventoryService inventoryService;
+
     @InjectMocks
     ProductSkuService productSkuService;
 
@@ -66,9 +70,11 @@ class ProductSkuServiceTest {
                 .product(sampleProduct)
                 .sku("SKU-100-RED")
                 .price(BigDecimal.valueOf(100000))
-                .stock(10)
                 .imageUrl("products/10/old-primary.png")
                 .build();
+        lenient().when(inventoryService.getOnHandOrZero(any())).thenReturn(10);
+        lenient().when(inventoryService.getOnHandBySkuIds(any())).thenReturn(java.util.Map.of(10L, 10));
+        lenient().when(inventoryService.getTotalOnHandByProductIds(any())).thenReturn(java.util.Map.of(100L, 10));
     }
 
     @Test
@@ -118,7 +124,7 @@ class ProductSkuServiceTest {
         assertThat(removeSku.isActive()).isFalse();
         assertThat(removeSku.getDeletedAt()).isNotNull();
         assertThat(sampleSku.getPrice()).isEqualTo(BigDecimal.valueOf(150000));
-        assertThat(sampleSku.getStock()).isEqualTo(20);
+        verify(inventoryService).setOnHand(10L, 20);
     }
 
     @Test
@@ -174,7 +180,6 @@ class ProductSkuServiceTest {
         when(productSkuRepository.countByProductIdAndDeletedAtIsNull(100L)).thenReturn(1L);
         when(productSkuRepository.countByProductIdAndDeletedAtIsNullAndActiveTrue(100L))
                 .thenReturn(1L);
-        when(productSkuRepository.sumStockByProductIdAndActiveTrue(100L)).thenReturn(10);
         when(productSkuRepository.findPriceMinAndMaxByProductIdAndActiveTrue(100L))
                 .thenReturn(new Object[] {BigDecimal.valueOf(100000), BigDecimal.valueOf(250000)});
 
@@ -182,7 +187,6 @@ class ProductSkuServiceTest {
 
         assertThat(sampleProduct.getPriceMin()).isEqualTo(BigDecimal.valueOf(100000));
         assertThat(sampleProduct.getPriceMax()).isEqualTo(BigDecimal.valueOf(250000));
-        assertThat(sampleProduct.getTotalStock()).isEqualTo(10);
     }
 
     @Test
