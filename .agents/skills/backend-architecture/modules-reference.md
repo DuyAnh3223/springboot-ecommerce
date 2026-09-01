@@ -12,7 +12,7 @@
 | **category** | `CategoryService`, `AttributeService` | `Category`, `Attribute`, `CategoryAttribute` | Parent-child taxonomy, category-attribute mapping, slug generation |
 | **cart** | `CartService` | `Cart`, `CartItem` | Active cart management (`findByUserIdAndStatus`), quantity accumulation, price sync |
 | **order** | `CheckoutService`, `OrderCreationService`, `OrderLifecycleService` | `Order`, `OrderItem`, `OrderStatusHistory` | Checkout calculation, atomic order creation, and order query/status lifecycle |
-| **inventory** | `InventoryService` | `ProductSku`, `StockMovement` | Atomic stock deduction and auditable stock movements; committed quantities live on `OrderItem` |
+| **inventory** | `InventoryService` | `Inventory`, `ProductSku`, `StockMovement` | Inventory-owned on-hand reads, guarded stock mutations, and auditable movements; committed quantities live on `OrderItem` |
 | **voucher** | `VoucherService`, `VoucherValidator` | `Voucher`, `VoucherRedemption`, `VoucherType`, `VoucherApplyScope` | Coupon validation, atomic aggregate limits, and canonical per-order usage ledger |
 | **common** | `AwsS3FileService` | `AwsS3FileResponse`, `AwsS3AccessUrlResponse`, `ErrorCode` | Storage (dual-mode CloudFront public/signed URL), exception handling, app initialization |
 
@@ -39,8 +39,8 @@
 
 ### 2.3 Product Module (`spring.abtechzone.modules.product`)
 - **`ProductService` & `ProductSkuService`**:
-  - `Product`: Aggregates `skuCount`, `activeSkuCount`, `totalStock`, `priceMin`, `priceMax`.
-  - `ProductSku`: Unique SKU code, price, stock, attributes (JSON/Map), `isActive`.
+  - `Product`: Aggregates `skuCount`, `activeSkuCount`, `priceMin`, and `priceMax`; `totalStock` is derived from Inventory for API responses.
+  - `ProductSku`: Unique SKU code, price, attributes (JSON/Map), `isActive`; current stock is not persisted here.
   - `SkuImageService`: Public service handling SKU multi-image gallery synchronization (`syncSkuImages`), enforcing PATCH semantics, and invoking `s3ObjectLifecycleHelper.deleteAfterCommit(...)` for obsolete gallery images. Explicitly flushes deletes and non-primary updates before saving new images to prevent PostgreSQL partial unique constraint violations (`idx_product_image_sku_primary`).
   - `SkuVariantPreviewCalculator`: Public helper encapsulating ENUM attribute validation and Cartesian-product SKU preview generation.
   - MapStruct Mappers (`ProductMapper`, `ProductSkuMapper`, `ProductImageMapper`): Pure DTO/entity mappers. `ProductService` and `ProductSkuService` resolve S3 access URLs directly using `AwsS3FileService.resolveAccessUrl(...)`.
@@ -57,7 +57,7 @@
 ### 2.5 Cart Module (`spring.abtechzone.modules.cart`)
 - **`CartService`**:
   - Active Cart Resolution: Calls `cartRepository.findByUserIdAndStatus(userId, CartStatus.ACTIVE)`.
-  - `addToCart(CartItemRequest)`: Validates request format, creates cart if absent, accumulates quantity if SKU exists, or appends new `CartItem`, validating cumulative quantity against current `ProductSku.stock`.
+  - `addToCart(CartItemRequest)`: Validates request format, creates cart if absent, accumulates quantity if SKU exists, or appends new `CartItem`, validating cumulative quantity against Inventory on-hand.
   - `getCart()`: Synchronizes unit prices from current `ProductSku.price` on read and persists synced prices to the database.
 
 ### 2.6 Order Module (`spring.abtechzone.modules.order`)
@@ -75,7 +75,9 @@
 
 ### 2.7 Inventory Module (`spring.abtechzone.modules.inventory`)
 - **`InventoryService`**:
-  - Atomic stock validation/decrement during checkout; no committed-order reservation row.
+  - Owns the shared-primary-key `Inventory(skuId, onHand)` balance and bulk read projections.
+  - Provides admin create/set, atomic conditional decrement/increment, and `SALE_OUT`/`ORDER_CANCEL_RETURN` movement writes.
+  - Missing rows fail closed (zero for reads, business/system errors for mutations); no committed-order reservation row.
 
 ### 2.8 Voucher Module (`spring.abtechzone.modules.voucher`)
 - **`VoucherService` & `VoucherValidator`**:
