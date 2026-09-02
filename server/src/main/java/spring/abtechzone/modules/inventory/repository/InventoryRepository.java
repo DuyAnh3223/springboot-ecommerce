@@ -2,8 +2,12 @@ package spring.abtechzone.modules.inventory.repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +17,10 @@ import spring.abtechzone.modules.inventory.entity.Inventory;
 
 @Repository
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from Inventory i join fetch i.productSku where i.skuId = :skuId")
+    Optional<Inventory> findByIdForUpdate(@Param("skuId") Long skuId);
 
     @Query("select i.skuId as skuId, i.onHand as onHand from Inventory i where i.skuId in :skuIds")
     List<SkuOnHandProjection> findOnHandBySkuIds(@Param("skuIds") Collection<Long> skuIds);
