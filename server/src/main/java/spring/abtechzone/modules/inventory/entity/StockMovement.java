@@ -10,6 +10,7 @@ import org.hibernate.annotations.ColumnDefault;
 
 import lombok.Getter;
 import lombok.Setter;
+import spring.abtechzone.modules.inventory.constant.StockMovementReason;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.user.entity.User;
 
@@ -32,10 +33,10 @@ public class StockMovement {
     @Column(name = "change_qty", nullable = false)
     private Integer changeQty;
 
-    @Size(max = 30)
     @NotNull
+    @Enumerated(EnumType.STRING)
     @Column(name = "reason", nullable = false, length = 30)
-    private String reason;
+    private StockMovementReason reason;
 
     @Size(max = 100)
     @Column(name = "reference_id", length = 100)

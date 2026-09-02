@@ -75,9 +75,10 @@
 
 ### 2.7 Inventory Module (`spring.abtechzone.modules.inventory`)
 - **`InventoryService`**:
-  - Owns the shared-primary-key `Inventory(skuId, onHand)` balance and bulk read projections.
-  - Provides admin create/set, atomic conditional decrement/increment, and `SALE_OUT`/`ORDER_CANCEL_RETURN` movement writes.
-  - Missing rows fail closed (zero for reads, business/system errors for mutations); no committed-order reservation row.
+  - Owns the shared-primary-key `Inventory(skuId, onHand)` balance and bulk read projections; this is the sole current-stock source of truth.
+  - Creates opening-balance movements, provides audited adjust-to for existing SKU flows, and provides atomic conditional decrement/increment for order sale/cancellation.
+  - Exposes ADMIN-only stock adjustment and paged movement-history commands; adjustment writes use typed reasons, signed deltas, and the authenticated actor.
+  - Missing rows fail closed (zero for reads, business/system errors for mutations); no `reserved` counter or committed-order reservation row.
 
 ### 2.8 Voucher Module (`spring.abtechzone.modules.voucher`)
 - **`VoucherService` & `VoucherValidator`**:

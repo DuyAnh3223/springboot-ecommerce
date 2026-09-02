@@ -44,6 +44,7 @@ import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.constant.StockMovementReason;
 import spring.abtechzone.modules.inventory.entity.Inventory;
 import spring.abtechzone.modules.inventory.entity.StockMovement;
 import spring.abtechzone.modules.inventory.repository.InventoryRepository;
@@ -283,7 +284,7 @@ class OrderIT extends BaseIT {
         List<StockMovement> movements = stockMovementRepository.findAll();
         assertThat(movements).hasSize(1);
         assertThat(movements.get(0).getChangeQty()).isEqualTo(-2);
-        assertThat(movements.get(0).getReason()).isEqualTo("SALE_OUT");
+        assertThat(movements.get(0).getReason()).isEqualTo(StockMovementReason.SALE_OUT);
         assertThat(movements.get(0).getReferenceId())
                 .isEqualTo(String.valueOf(orders.get(0).getId()));
         assertThat(tableCount("inventory_reservation")).isZero();
@@ -795,7 +796,7 @@ class OrderIT extends BaseIT {
                 .isEqualTo(50);
 
         List<StockMovement> returns = stockMovementRepository.findAll().stream()
-                .filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason()))
+                .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason())
                 .toList();
         assertThat(returns).hasSize(1);
         assertThat(returns.get(0).getChangeQty()).isEqualTo(2);
@@ -840,7 +841,8 @@ class OrderIT extends BaseIT {
         Integer restoredStock = jdbcTemplate.queryForObject(
                 "SELECT on_hand FROM inventory WHERE sku_id = ?", Integer.class, sku.getId());
         assertThat(restoredStock).isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
     }
 
@@ -866,7 +868,8 @@ class OrderIT extends BaseIT {
 
         assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
@@ -938,7 +941,8 @@ class OrderIT extends BaseIT {
 
         assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isEqualTo(48);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .isEmpty();
         assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
                 .isEqualTo(1);
@@ -1019,7 +1023,8 @@ class OrderIT extends BaseIT {
 
         assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
