@@ -20,6 +20,7 @@ import spring.abtechzone.common.service.AwsS3FileService;
 import spring.abtechzone.common.service.S3ObjectLifecycleHelper;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.dto.request.*;
 import spring.abtechzone.modules.product.dto.request.ProductSkuItemRequest;
 import spring.abtechzone.modules.product.dto.response.ProductImageResponse;
@@ -54,6 +55,7 @@ public class ProductSkuService {
     ProductAttributeValidator productAttributeValidator;
     CategoryAttributeRepository categoryAttributeRepository;
     SkuImageService skuImageService;
+    InventoryService inventoryService;
     SkuVariantPreviewCalculator skuVariantPreviewCalculator = new SkuVariantPreviewCalculator();
 
     @Transactional(readOnly = true)
@@ -64,7 +66,12 @@ public class ProductSkuService {
                 .and(ProductSkuSpecifications.hasMinPrice(request.getMinPrice()))
                 .and(ProductSkuSpecifications.hasMaxPrice(request.getMaxPrice()));
 
-        return productSkuRepository.findAll(spec, request.toPageable()).map(this::toSkuResponse);
+        Page<ProductSku> page = productSkuRepository.findAll(spec, request.toPageable());
+        Map<Long, Integer> onHandBySkuId = inventoryService.getOnHandBySkuIds(page.getContent().stream()
+                .map(ProductSku::getId)
+                .filter(Objects::nonNull)
+                .toList());
+        return page.map(sku -> toSkuResponse(sku, onHandBySkuId.getOrDefault(sku.getId(), 0)));
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +79,7 @@ public class ProductSkuService {
     public ProductSkuResponse getSku(Long skuId) {
         ProductSku sku =
                 productSkuRepository.findById(skuId).orElseThrow(() -> new AppException(ErrorCode.SKU_NOT_FOUND));
-        return toSkuResponse(sku);
+        return toSkuResponse(sku, inventoryService.getOnHandOrZero(sku.getId()));
     }
 
     @Transactional
@@ -86,7 +93,7 @@ public class ProductSkuService {
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         ProductSku sku = createSingleSkuInternal(product, request, product.getSkus());
-        return toSkuResponse(sku);
+        return toSkuResponse(sku, inventoryService.getOnHandOrZero(sku.getId()));
     }
 
     @Transactional
@@ -111,6 +118,10 @@ public class ProductSkuService {
         productSkuMapper.updateProductSku(sku, request);
 
         sku = productSkuRepository.save(sku);
+
+        if (request.getStock() != null) {
+            inventoryService.setOnHand(sku.getId(), request.getStock());
+        }
 
         if (request.getImages() != null) {
             skuImageService.syncSkuImages(sku, request.getImages());
@@ -147,11 +158,16 @@ public class ProductSkuService {
 
     @PreAuthorize("permitAll()")
     public ProductSkuResponse toSkuResponse(ProductSku sku) {
+        return sku == null ? null : toSkuResponse(sku, inventoryService.getOnHandOrZero(sku.getId()));
+    }
+
+    private ProductSkuResponse toSkuResponse(ProductSku sku, int onHand) {
         if (sku == null) {
             return null;
         }
 
         ProductSkuResponse response = productSkuMapper.toProductSkuResponse(sku);
+        response.setStock(onHand);
 
         String rawImageUrl = sku.getImageUrl();
         if ((rawImageUrl == null || rawImageUrl.isBlank())
@@ -183,7 +199,11 @@ public class ProductSkuService {
         if (skus == null) {
             return Collections.emptyList();
         }
-        return skus.stream().map(this::toSkuResponse).toList();
+        Map<Long, Integer> onHandBySkuId = inventoryService.getOnHandBySkuIds(
+                skus.stream().map(ProductSku::getId).filter(Objects::nonNull).toList());
+        return skus.stream()
+                .map(sku -> toSkuResponse(sku, onHandBySkuId.getOrDefault(sku.getId(), 0)))
+                .toList();
     }
 
     private ProductImageResponse toProductImageResponse(ProductImage image) {
@@ -208,6 +228,7 @@ public class ProductSkuService {
         productAttributeValidator.validateSkuNotDuplicate(product, currentSkus, sku.getAttributes());
 
         sku = productSkuRepository.save(sku);
+        inventoryService.createForSku(sku, request.getStock());
 
         if (request.getImages() != null) {
             skuImageService.syncSkuImages(sku, request.getImages());
@@ -363,13 +384,13 @@ public class ProductSkuService {
 
         sku.setSku(item.getSku());
         sku.setPrice(item.getPrice());
-        sku.setStock(item.getStock());
         sku.setWeightGram(item.getWeightGram());
         if (item.getCurrency() != null) sku.setCurrency(item.getCurrency());
         sku.setAttributes(updatedAttrs);
         sku.setActive(true);
 
         sku = productSkuRepository.save(sku);
+        inventoryService.setOnHand(sku.getId(), item.getStock());
 
         if (item.getImages() != null) {
             skuImageService.syncSkuImages(sku, item.getImages());
@@ -395,7 +416,6 @@ public class ProductSkuService {
                 .product(product)
                 .sku(item.getSku())
                 .price(item.getPrice())
-                .stock(item.getStock())
                 .weightGram(item.getWeightGram())
                 .currency(item.getCurrency() != null ? item.getCurrency() : "VND")
                 .attributes(attrs)
@@ -403,6 +423,7 @@ public class ProductSkuService {
                 .build();
 
         newSku = productSkuRepository.save(newSku);
+        inventoryService.createForSku(newSku, item.getStock());
 
         if (item.getImages() != null) {
             skuImageService.syncSkuImages(newSku, item.getImages());
@@ -415,11 +436,8 @@ public class ProductSkuService {
         Long productId = product.getId();
         int totalSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNull(productId);
         int activeSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNullAndActiveTrue(productId);
-        int totalStock = productSkuRepository.sumStockByProductIdAndActiveTrue(productId);
-
         product.setSkuCount(totalSkuCount);
         product.setActiveSkuCount(activeSkuCount);
-        product.setTotalStock(totalStock);
 
         if (activeSkuCount > 0) {
             Object[] bounds = productSkuRepository.findPriceMinAndMaxByProductIdAndActiveTrue(productId);

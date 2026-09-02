@@ -16,8 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
-import spring.abtechzone.modules.inventory.entity.StockMovement;
-import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
@@ -32,7 +31,6 @@ import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.order.repository.specification.OrderSpecifications;
 import spring.abtechzone.modules.order.service.OrderTransitionPolicy.Actor;
-import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
@@ -47,10 +45,9 @@ public class OrderLifecycleService {
 
     OrderRepository orderRepository;
     OrderStatusHistoryRepository orderStatusHistoryRepository;
-    ProductSkuRepository productSkuRepository;
     VoucherRepository voucherRepository;
     VoucherRedemptionRepository voucherRedemptionRepository;
-    StockMovementRepository stockMovementRepository;
+    InventoryService inventoryService;
     OrderMapper orderMapper;
 
     @Transactional(readOnly = true)
@@ -190,15 +187,7 @@ public class OrderLifecycleService {
     private void restoreCancellationStockItem(Order order, OrderItem item) {
         validateCancellationItem(item);
         Long skuId = item.getSkuId();
-        requireSingleUpdatedRow(productSkuRepository.increaseStock(skuId, item.getQuantity()));
-
-        StockMovement movement = new StockMovement();
-        movement.setSku(item.getSku());
-        movement.setChangeQty(item.getQuantity());
-        movement.setReason("ORDER_CANCEL_RETURN");
-        movement.setReferenceId(String.valueOf(order.getId()));
-        movement.setCreatedAt(OffsetDateTime.now());
-        stockMovementRepository.save(movement);
+        inventoryService.increaseStock(skuId, item.getQuantity(), order, item.getSku());
     }
 
     private void validateCancellationItem(OrderItem item) {

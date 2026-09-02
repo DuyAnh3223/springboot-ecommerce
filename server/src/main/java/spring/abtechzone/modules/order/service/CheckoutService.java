@@ -24,6 +24,7 @@ import spring.abtechzone.modules.cart.constant.CartStatus;
 import spring.abtechzone.modules.cart.entity.Cart;
 import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.dto.request.CheckoutRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
 import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
@@ -52,6 +53,7 @@ public class CheckoutService {
     VoucherValidator voucherValidator;
     AuthService authService;
     VoucherService voucherService;
+    InventoryService inventoryService;
 
     @Value("${app.checkout.shipping-fee:30000}")
     BigDecimal checkoutShippingFee = BigDecimal.valueOf(30000);
@@ -131,23 +133,25 @@ public class CheckoutService {
         }
 
         ProductSku freshSku = null;
+        int onHand = 0;
         String issueCode;
         if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
             issueCode = ErrorCode.CART_ITEM_QUANTITY_INVALID.name();
         } else {
             freshSku = productSkuRepository.findById(skuId).orElse(null);
-            issueCode = resolveCheckoutLineIssue(freshSku, cartItem.getQuantity());
+            onHand = freshSku == null ? 0 : inventoryService.getOnHandOrZero(skuId);
+            issueCode = resolveCheckoutLineIssue(freshSku, cartItem.getQuantity(), onHand);
         }
 
         BigDecimal lineTotal = calculateLineTotal(freshSku, cartItem.getQuantity());
-        CheckoutItemResponse item = buildCheckoutItem(skuId, cartItem, freshSku, lineTotal, issueCode);
+        CheckoutItemResponse item = buildCheckoutItem(skuId, cartItem, freshSku, onHand, lineTotal, issueCode);
         BigDecimal unitPrice = freshSku != null ? freshSku.getPrice() : null;
         AuthoritativeLine authoritativeLine =
                 new AuthoritativeLine(skuId, cartItem.getQuantity(), unitPrice, lineTotal);
         return new CheckoutLineReview(item, authoritativeLine, lineTotal, issueCode);
     }
 
-    private String resolveCheckoutLineIssue(ProductSku freshSku, int quantity) {
+    private String resolveCheckoutLineIssue(ProductSku freshSku, int quantity, int onHand) {
         if (freshSku == null) {
             return ErrorCode.SKU_NOT_FOUND.name();
         }
@@ -159,7 +163,7 @@ public class CheckoutService {
                 || freshSku.getProduct().isDraft()) {
             return ErrorCode.PRODUCT_NOT_AVAILABLE.name();
         }
-        if (freshSku.getStock() == null || freshSku.getStock() < quantity) {
+        if (onHand < quantity) {
             return ErrorCode.INSUFFICIENT_STOCK.name();
         }
         return null;
@@ -173,7 +177,7 @@ public class CheckoutService {
     }
 
     private CheckoutItemResponse buildCheckoutItem(
-            Long skuId, CartItem cartItem, ProductSku freshSku, BigDecimal lineTotal, String issueCode) {
+            Long skuId, CartItem cartItem, ProductSku freshSku, int onHand, BigDecimal lineTotal, String issueCode) {
         CheckoutItemResponse.CheckoutItemResponseBuilder itemBuilder =
                 CheckoutItemResponse.builder().skuId(skuId).quantity(cartItem.getQuantity());
         if (freshSku != null) {
@@ -185,7 +189,7 @@ public class CheckoutService {
                                     : null)
                     .imageUrl(freshSku.getImageUrl())
                     .unitPrice(freshSku.getPrice())
-                    .availableStock(freshSku.getStock());
+                    .availableStock(onHand);
         }
         if (lineTotal != null) {
             itemBuilder.lineTotal(lineTotal);

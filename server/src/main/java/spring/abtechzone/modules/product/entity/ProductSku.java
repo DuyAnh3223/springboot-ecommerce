@@ -39,9 +39,6 @@ public class ProductSku {
     @Column(nullable = false)
     BigDecimal price;
 
-    @Column(nullable = false)
-    Integer stock;
-
     String imageUrl;
 
     @JdbcTypeCode(SqlTypes.JSON)

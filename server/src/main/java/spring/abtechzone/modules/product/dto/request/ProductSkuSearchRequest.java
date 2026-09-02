@@ -57,7 +57,8 @@ public class ProductSkuSearchRequest {
 
     private String normalizeSortProperty(String requestedSortBy) {
         return switch (requestedSortBy) {
-            case "sku", "price", "stock", "id" -> requestedSortBy;
+            case "sku", "price", "id" -> requestedSortBy;
+            case "stock" -> "inventory.onHand";
             case "productname", "product_name", "name" -> "product.name";
             default -> "id";
         };

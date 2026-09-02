@@ -2,6 +2,7 @@ package spring.abtechzone.modules.cart;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -36,6 +37,7 @@ import spring.abtechzone.modules.cart.mapper.CartMapper;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.cart.service.CartService;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
@@ -63,6 +65,9 @@ class CartServiceTest {
     @Mock
     UserService userService;
 
+    @Mock
+    InventoryService inventoryService;
+
     @InjectMocks
     CartService cartService;
 
@@ -78,6 +83,7 @@ class CartServiceTest {
         // Shared fixtures
         user = User.builder().id(userId).username("testuser").build();
         lenient().when(userService.getCurrentUser()).thenReturn(user);
+        lenient().when(inventoryService.getOnHandOrZero(anyLong())).thenReturn(50);
 
         Product product = Product.builder().id(1L).name("iPhone 15").build();
 
@@ -85,7 +91,6 @@ class CartServiceTest {
                 .id(100L)
                 .sku("IPHONE-15-256GB")
                 .price(BigDecimal.valueOf(999.99))
-                .stock(50)
                 .imageUrl("https://example.com/iphone15.png")
                 .product(product)
                 .build();

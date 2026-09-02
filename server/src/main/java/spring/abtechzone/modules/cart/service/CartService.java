@@ -40,6 +40,7 @@ import spring.abtechzone.modules.cart.mapper.CartMapper;
 import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartMergeLedgerRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
@@ -63,6 +64,7 @@ public class CartService {
     RedissonClient redissonClient;
     ObjectMapper objectMapper;
     TransactionTemplate transactionTemplate;
+    InventoryService inventoryService;
 
     private static final long MERGE_LOCK_WAIT_SECONDS = 5;
     private static final Duration MERGE_CACHE_TTL = Duration.ofHours(24);
@@ -87,7 +89,7 @@ public class CartService {
 
         User user = userService.getCurrentUser();
 
-        int stock = productSku.getStock() != null ? productSku.getStock() : 0;
+        int stock = inventoryService.getOnHandOrZero(productSku.getId());
 
         // Validation 1: Request quantity must be <= stock
         if (request.getQuantity() > stock) {
@@ -226,6 +228,7 @@ public class CartService {
                 .toList();
         Map<Long, ProductSku> skuById = new HashMap<>();
         productSkuRepository.findAllWithProductByIdIn(skuIds).forEach(sku -> skuById.put(sku.getId(), sku));
+        Map<Long, Integer> onHandBySkuId = inventoryService.getOnHandBySkuIds(skuIds);
         Map<Long, CartItem> existingItems = new HashMap<>();
         if (cart != null && cart.getItems() != null) {
             cart.getItems().forEach(item -> {
@@ -240,7 +243,8 @@ public class CartService {
         Map<Long, Integer> finalQuantities = new HashMap<>();
         for (CartMergeRequestNormalizer.NormalizedCartMergeItem item : normalized.items()) {
             ProductSku sku = skuById.get(item.skuId());
-            String rejection = mergeRejectionReason(sku, existingItems.get(item.skuId()), item.quantity());
+            String rejection = mergeRejectionReason(
+                    sku, existingItems.get(item.skuId()), item.quantity(), onHandBySkuId.getOrDefault(item.skuId(), 0));
             if (rejection != null) {
                 results.add(rejectedResult(item, rejection));
                 continue;
@@ -302,7 +306,7 @@ public class CartService {
         return response;
     }
 
-    private String mergeRejectionReason(ProductSku sku, CartItem existingItem, int requestedQuantity) {
+    private String mergeRejectionReason(ProductSku sku, CartItem existingItem, int requestedQuantity, int onHand) {
         if (sku == null) {
             return "SKU_NOT_FOUND";
         }
@@ -319,8 +323,7 @@ public class CartService {
         if (existingQuantity < 0 || requestedQuantity > Integer.MAX_VALUE - existingQuantity) {
             return "QUANTITY_OVERFLOW";
         }
-        int stock = sku.getStock() == null ? 0 : sku.getStock();
-        if (existingQuantity + requestedQuantity > stock) {
+        if (existingQuantity + requestedQuantity > onHand) {
             return "INSUFFICIENT_STOCK";
         }
         return null;
@@ -456,7 +459,7 @@ public class CartService {
         int newQuantity = request.getQuantity();
 
         // Check stock
-        int stock = cartItem.getProductSku().getStock();
+        int stock = inventoryService.getOnHandOrZero(cartItem.getProductSku().getId());
         if (newQuantity > stock) {
             throw new AppException(ErrorCode.PRODUCT_STOCK_INVALID);
         }
