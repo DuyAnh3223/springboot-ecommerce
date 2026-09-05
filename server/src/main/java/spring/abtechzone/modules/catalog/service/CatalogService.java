@@ -28,6 +28,7 @@ import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.dto.response.ProductResponse;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductImage;
@@ -51,6 +52,7 @@ public class CatalogService {
     ProductService productService;
     ProductImageRepository productImageRepository;
     spring.abtechzone.common.service.AwsS3FileService awsS3FileService;
+    InventoryService inventoryService;
 
     @Transactional(readOnly = true)
     public CatalogProductDetailResponse getProductDetail(String slug) {
@@ -74,8 +76,11 @@ public class CatalogService {
                         .filter(ProductSku::isActive)
                         .filter(sku -> sku.getDeletedAt() == null)
                         .toList();
-        List<CatalogProductDetailResponse.Sku> skuResponses =
-                activeSkus.stream().map(sku -> toCustomerSku(product, sku)).toList();
+        Map<Long, Integer> onHandBySkuId = inventoryService.getOnHandBySkuIds(
+                activeSkus.stream().map(ProductSku::getId).toList());
+        List<CatalogProductDetailResponse.Sku> skuResponses = activeSkus.stream()
+                .map(sku -> toCustomerSku(product, sku, onHandBySkuId.getOrDefault(sku.getId(), 0)))
+                .toList();
 
         BigDecimal priceMin = activeSkus.stream()
                 .map(ProductSku::getPrice)
@@ -87,11 +92,14 @@ public class CatalogService {
                 .filter(Objects::nonNull)
                 .max(BigDecimal::compareTo)
                 .orElse(null);
-        int totalStock = Math.toIntExact(activeSkus.stream()
-                .map(ProductSku::getStock)
-                .filter(Objects::nonNull)
-                .mapToLong(stock -> Math.max(0, stock))
-                .sum());
+        int totalStock = onHandBySkuId.values().stream()
+                                .mapToLong(stock -> Math.max(0, stock))
+                                .sum()
+                        > Integer.MAX_VALUE
+                ? Integer.MAX_VALUE
+                : onHandBySkuId.values().stream()
+                        .mapToInt(stock -> Math.max(0, stock))
+                        .sum();
 
         return CatalogProductDetailResponse.builder()
                 .id(product.getId())
@@ -148,7 +156,7 @@ public class CatalogService {
                 .build();
     }
 
-    private CatalogProductDetailResponse.Sku toCustomerSku(Product product, ProductSku sku) {
+    private CatalogProductDetailResponse.Sku toCustomerSku(Product product, ProductSku sku, int onHand) {
         List<ProductImage> orderedImages = sku.getImages() == null
                 ? List.of()
                 : sku.getImages().stream()
@@ -181,7 +189,7 @@ public class CatalogService {
                 .id(sku.getId())
                 .sku(sku.getSku())
                 .price(sku.getPrice())
-                .stock(Math.max(0, Objects.requireNonNullElse(sku.getStock(), 0)))
+                .stock(Math.max(0, onHand))
                 .currency(sku.getCurrency())
                 .weightGram(sku.getWeightGram())
                 .attributes(copyAttributes(sku.getAttributes()))
@@ -347,8 +355,10 @@ public class CatalogService {
         List<Long> productIds =
                 productsPage.getContent().stream().map(Product::getId).toList();
         Map<Long, String> primaryImageUrlsMap = fetchPrimaryImageUrlsMap(productIds);
+        Map<Long, Integer> totalOnHandByProductId = inventoryService.getTotalOnHandByProductIds(productIds);
 
-        return productsPage.map(p -> productService.toSummaryResponse(p, primaryImageUrlsMap.get(p.getId())));
+        return productsPage.map(p -> productService.toSummaryResponse(
+                p, primaryImageUrlsMap.get(p.getId()), totalOnHandByProductId.getOrDefault(p.getId(), 0)));
     }
 
     private Map<Long, String> fetchPrimaryImageUrlsMap(List<Long> productIds) {

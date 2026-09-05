@@ -81,6 +81,10 @@ public enum ErrorCode {
     CHECKOUT_CHANGED(1068, "Checkout state changed since review; please review again", HttpStatus.CONFLICT),
     ORDER_STATUS_CONFLICT(1069, "Order status transition is not allowed", HttpStatus.CONFLICT),
     MERGE_ID_REUSED(1070, "Merge ID was already used with a different request", HttpStatus.CONFLICT),
+    INVENTORY_NOT_FOUND(1071, "Inventory not found for product SKU", HttpStatus.NOT_FOUND),
+    INVENTORY_ADJUSTMENT_INVALID(
+            1072, "Inventory adjustment operation and reason do not match", HttpStatus.BAD_REQUEST),
+    INVENTORY_STOCK_OVERFLOW(1073, "Inventory stock exceeds supported limit", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

@@ -44,8 +44,12 @@ import spring.abtechzone.modules.cart.repository.CartItemRepository;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.constant.StockMovementReason;
+import spring.abtechzone.modules.inventory.entity.Inventory;
 import spring.abtechzone.modules.inventory.entity.StockMovement;
+import spring.abtechzone.modules.inventory.repository.InventoryRepository;
 import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
@@ -80,6 +84,12 @@ class OrderIT extends BaseIT {
 
     @Autowired
     private ProductSkuRepository productSkuRepository;
+
+    @Autowired
+    private InventoryRepository inventoryRepository;
+
+    @Autowired
+    private InventoryService inventoryService;
 
     @Autowired
     private CartRepository cartRepository;
@@ -144,6 +154,7 @@ class OrderIT extends BaseIT {
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
+        inventoryRepository.deleteAll();
         addressRepository.deleteAll();
         voucherRepository.deleteAll();
         productSkuRepository.deleteAll();
@@ -202,9 +213,13 @@ class OrderIT extends BaseIT {
         sku = productSkuRepository.save(ProductSku.builder()
                 .sku("IPHONE-15-256GB")
                 .price(BigDecimal.valueOf(1000000.00))
-                .stock(50)
                 .imageUrl("https://example.com/iphone15.png")
                 .product(product)
+                .build());
+        inventoryRepository.save(Inventory.builder()
+                .skuId(sku.getId())
+                .productSku(sku)
+                .onHand(50)
                 .build());
     }
 
@@ -257,8 +272,8 @@ class OrderIT extends BaseIT {
         assertThat(orders.get(0).getSubtotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000000));
         assertThat(orders.get(0).getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2030000));
 
-        ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(updatedSku.getStock()).isEqualTo(48);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
 
         Cart updatedCart = cartRepository.findById(cart.getId()).orElseThrow();
         assertThat(updatedCart.getStatus()).isEqualTo(CartStatus.COMPLETED);
@@ -269,7 +284,7 @@ class OrderIT extends BaseIT {
         List<StockMovement> movements = stockMovementRepository.findAll();
         assertThat(movements).hasSize(1);
         assertThat(movements.get(0).getChangeQty()).isEqualTo(-2);
-        assertThat(movements.get(0).getReason()).isEqualTo("SALE_OUT");
+        assertThat(movements.get(0).getReason()).isEqualTo(StockMovementReason.SALE_OUT);
         assertThat(movements.get(0).getReferenceId())
                 .isEqualTo(String.valueOf(orders.get(0).getId()));
         assertThat(tableCount("inventory_reservation")).isZero();
@@ -301,8 +316,8 @@ class OrderIT extends BaseIT {
                 .andExpect(status().isOk());
 
         assertThat(orderRepository.count()).isEqualTo(1);
-        ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(updatedSku.getStock()).isEqualTo(48);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
     }
 
     @Test
@@ -374,8 +389,8 @@ class OrderIT extends BaseIT {
         assertThat(cartItemRepository.findByCartIdAndProductSkuId(cart.getId(), sku.getId()))
                 .isPresent();
         // Stock was decremented by the guard, then rolled back:
-        ProductSku unchangedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(unchangedSku.getStock()).isEqualTo(50);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
         assertThat(stockMovementRepository.count()).isZero();
         Voucher unchangedVoucher = voucherRepository.findById(voucher.getId()).orElseThrow();
         assertThat(unchangedVoucher.getUsedCount()).isZero();
@@ -415,8 +430,8 @@ class OrderIT extends BaseIT {
 
         // No order was created; the cart quantity change was applied outside the flow.
         assertThat(orderRepository.count()).isZero();
-        ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(updatedSku.getStock()).isEqualTo(50);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
         CartItem updatedCartItem = cartItemRepository
                 .findByCartIdAndProductSkuId(cart.getId(), sku.getId())
                 .orElseThrow();
@@ -429,8 +444,12 @@ class OrderIT extends BaseIT {
         ProductSku sku2 = productSkuRepository.save(ProductSku.builder()
                 .sku("ACCESSORY-CASE")
                 .price(BigDecimal.valueOf(500000.00))
-                .stock(5)
                 .product(product)
+                .build());
+        inventoryRepository.save(Inventory.builder()
+                .skuId(sku2.getId())
+                .productSku(sku2)
+                .onHand(5)
                 .build());
 
         Cart cart = cartRepository.save(
@@ -455,8 +474,8 @@ class OrderIT extends BaseIT {
         assertThat(cartItemRepository.findByCartIdAndProductSkuId(cart.getId(), sku2.getId()))
                 .isPresent();
 
-        ProductSku updatedSku2 = productSkuRepository.findById(sku2.getId()).orElseThrow();
-        assertThat(updatedSku2.getStock()).isEqualTo(5);
+        assertThat(inventoryRepository.findById(sku2.getId()).orElseThrow().getOnHand())
+                .isEqualTo(5);
     }
 
     @Test
@@ -593,8 +612,8 @@ class OrderIT extends BaseIT {
 
         // AC-C04-10: exactly one order and one stock decrement
         assertThat(orderRepository.count()).isEqualTo(1);
-        ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(updatedSku.getStock()).isEqualTo(48);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
 
         // Every thread must have received a response (200 replay or 200 created);
         // no background exception may be swallowed.
@@ -606,8 +625,7 @@ class OrderIT extends BaseIT {
     @Test
     @DisplayName("Concurrent different-key orders for the same SKU never oversell")
     void concurrentDifferentKeys_sameSku_doesNotOversell() throws Exception {
-        sku.setStock(2);
-        productSkuRepository.saveAndFlush(sku);
+        inventoryService.setOnHand(sku.getId(), 2);
 
         int threads = 4;
         List<User> buyers = new java.util.ArrayList<>();
@@ -668,8 +686,8 @@ class OrderIT extends BaseIT {
                 .hasSize(threads - 1)
                 .allSatisfy(response -> assertThat(response.getStatus()).isIn(400, 409));
         assertThat(orderRepository.count()).isEqualTo(1);
-        ProductSku updatedSku = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(updatedSku.getStock()).isZero();
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isZero();
     }
 
     @Test
@@ -762,8 +780,8 @@ class OrderIT extends BaseIT {
     @DisplayName("Customer cancel of PENDING order restores stock once and records one history entry")
     void cancelPending_restoresStockExactlyOnce() throws Exception {
         String orderCode = createOrderViaApi(null, "0");
-        ProductSku before = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(before.getStock()).isEqualTo(48);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
 
         mockMvc.perform(post("/orders/{orderCode}/cancel", orderCode)
                         .with(jwt().jwt(j -> j.subject("testuser")))
@@ -774,11 +792,11 @@ class OrderIT extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.status").value("CANCELLED"));
 
-        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(after.getStock()).isEqualTo(50);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
 
         List<StockMovement> returns = stockMovementRepository.findAll().stream()
-                .filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason()))
+                .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason())
                 .toList();
         assertThat(returns).hasSize(1);
         assertThat(returns.get(0).getChangeQty()).isEqualTo(2);
@@ -820,10 +838,11 @@ class OrderIT extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.status").value("CANCELLED"));
 
-        Integer restoredStock =
-                jdbcTemplate.queryForObject("SELECT stock FROM product_sku WHERE id = ?", Integer.class, sku.getId());
+        Integer restoredStock = jdbcTemplate.queryForObject(
+                "SELECT on_hand FROM inventory WHERE sku_id = ?", Integer.class, sku.getId());
         assertThat(restoredStock).isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
     }
 
@@ -847,9 +866,10 @@ class OrderIT extends BaseIT {
                         .content(body))
                 .andExpect(status().isOk());
 
-        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(after.getStock()).isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
@@ -919,9 +939,10 @@ class OrderIT extends BaseIT {
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(unchanged.getId()))
                 .hasSize(1); // create history only
 
-        assertThat(productSkuRepository.findById(sku.getId()).orElseThrow().getStock())
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isEqualTo(48);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .isEmpty();
         assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
                 .isEqualTo(1);
@@ -955,8 +976,8 @@ class OrderIT extends BaseIT {
 
         Order unchanged = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(OrderStatus.PENDING);
-        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(after.getStock()).isEqualTo(48);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
     }
 
     @Test
@@ -1000,9 +1021,10 @@ class OrderIT extends BaseIT {
         assertThat(responses).hasSize(threads);
         assertThat(responses.stream().filter(r -> r.getStatus() == 200)).hasSize(threads);
 
-        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(after.getStock()).isEqualTo(50);
-        assertThat(stockMovementRepository.findAll().stream().filter(m -> "ORDER_CANCEL_RETURN".equals(m.getReason())))
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(m -> StockMovementReason.ORDER_CANCEL_RETURN == m.getReason()))
                 .hasSize(1);
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
@@ -1102,8 +1124,8 @@ class OrderIT extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.status").value("CANCELLED"));
 
-        ProductSku after = productSkuRepository.findById(sku.getId()).orElseThrow();
-        assertThat(after.getStock()).isEqualTo(50);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
         Voucher updatedVoucher = voucherRepository.findById(voucher.getId()).orElseThrow();
         assertThat(updatedVoucher.getUsedCount()).isZero();
         assertThat(voucherRedemptionRepository.findAll().get(0).getStatus().name())

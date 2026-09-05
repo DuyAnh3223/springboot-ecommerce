@@ -3,6 +3,7 @@ package spring.abtechzone.modules.order;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
 import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
@@ -39,7 +41,6 @@ import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.order.service.OrderLifecycleService;
 import spring.abtechzone.modules.product.entity.ProductSku;
-import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
@@ -55,16 +56,13 @@ class OrderLifecycleServiceTest {
     OrderStatusHistoryRepository orderStatusHistoryRepository;
 
     @Mock
-    ProductSkuRepository productSkuRepository;
-
-    @Mock
     VoucherRepository voucherRepository;
 
     @Mock
     VoucherRedemptionRepository voucherRedemptionRepository;
 
     @Mock
-    spring.abtechzone.modules.inventory.repository.StockMovementRepository stockMovementRepository;
+    InventoryService inventoryService;
 
     @Spy
     OrderMapper orderMapper = Mappers.getMapper(OrderMapper.class);
@@ -93,7 +91,6 @@ class OrderLifecycleServiceTest {
                 .id(100L)
                 .sku("IPHONE-15-256GB")
                 .price(BigDecimal.valueOf(1000000.00))
-                .stock(48)
                 .build();
 
         orderItem = OrderItem.builder()
@@ -136,7 +133,6 @@ class OrderLifecycleServiceTest {
                     Voucher.builder().id(77L).code("SAVE100K").usedCount(1).build();
             order.setVoucher(voucher);
             order.setVoucherCode("SAVE100K");
-            when(productSkuRepository.increaseStock(100L, 2)).thenReturn(1);
             when(voucherRedemptionRepository.reverseRedemptionByOrderId(999L)).thenReturn(1);
             when(voucherRepository.decreaseUsedCount(77L)).thenReturn(1);
 
@@ -145,7 +141,7 @@ class OrderLifecycleServiceTest {
 
             assertThat(response.getStatus()).isEqualTo("CANCELLED");
             assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
-            verify(productSkuRepository).increaseStock(100L, 2);
+            verify(inventoryService).increaseStock(100L, 2, order, sku);
             verify(voucherRedemptionRepository).reverseRedemptionByOrderId(999L);
             verify(voucherRepository).decreaseUsedCount(77L);
 
@@ -157,19 +153,12 @@ class OrderLifecycleServiceTest {
             assertThat(history.getActorType()).isEqualTo("CUSTOMER");
             assertThat(history.getActorId()).isEqualTo(userId.toString());
             assertThat(history.getNote()).isEqualTo("Tôi muốn thay đổi sản phẩm");
-
-            ArgumentCaptor<spring.abtechzone.modules.inventory.entity.StockMovement> movementCaptor =
-                    ArgumentCaptor.forClass(spring.abtechzone.modules.inventory.entity.StockMovement.class);
-            verify(stockMovementRepository).save(movementCaptor.capture());
-            assertThat(movementCaptor.getValue().getChangeQty()).isEqualTo(2);
-            assertThat(movementCaptor.getValue().getReason()).isEqualTo("ORDER_CANCEL_RETURN");
         }
 
         @Test
         @DisplayName("Cancel without voucher does not decrement usedCount")
         void cancelPending_withoutVoucher() {
             stubLockedOrder();
-            when(productSkuRepository.increaseStock(100L, 2)).thenReturn(1);
 
             orderService.cancelOrder("ORD-20260818-ABCD1234", "reason", user);
 
@@ -183,7 +172,6 @@ class OrderLifecycleServiceTest {
             stubLockedOrder();
             order.setVoucher(
                     Voucher.builder().id(77L).code("SAVE100K").usedCount(1).build());
-            when(productSkuRepository.increaseStock(100L, 2)).thenReturn(1);
             when(voucherRedemptionRepository.reverseRedemptionByOrderId(999L)).thenReturn(0);
 
             assertThatThrownBy(() -> orderService.cancelOrder("ORD-20260818-ABCD1234", "reason", user))
@@ -200,7 +188,6 @@ class OrderLifecycleServiceTest {
             stubLockedOrder();
             order.setVoucher(
                     Voucher.builder().id(77L).code("SAVE100K").usedCount(1).build());
-            when(productSkuRepository.increaseStock(100L, 2)).thenReturn(1);
             when(voucherRedemptionRepository.reverseRedemptionByOrderId(999L)).thenReturn(1);
             when(voucherRepository.decreaseUsedCount(77L)).thenReturn(0);
 
@@ -221,7 +208,7 @@ class OrderLifecycleServiceTest {
             OrderResponse response = orderService.cancelOrder("ORD-20260818-ABCD1234", "again", user);
 
             assertThat(response.getStatus()).isEqualTo("CANCELLED");
-            verify(productSkuRepository, never()).increaseStock(any(), any());
+            verify(inventoryService, never()).increaseStock(any(), anyInt(), any(), any());
             verify(orderStatusHistoryRepository, never()).save(any());
         }
 
@@ -248,7 +235,7 @@ class OrderLifecycleServiceTest {
             assertThatThrownBy(() -> orderService.cancelOrder("ORD-20260818-ABCD1234", "reason", user))
                     .isInstanceOf(AppException.class)
                     .hasMessageContaining(ErrorCode.ORDER_STATUS_CONFLICT.getMessage());
-            verify(productSkuRepository, never()).increaseStock(any(), any());
+            verify(inventoryService, never()).increaseStock(any(), anyInt(), any(), any());
             verify(orderStatusHistoryRepository, never()).save(any());
         }
     }

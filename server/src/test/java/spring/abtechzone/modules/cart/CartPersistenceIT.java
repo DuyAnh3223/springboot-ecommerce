@@ -41,6 +41,8 @@ import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.cart.service.CartService;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.entity.Inventory;
+import spring.abtechzone.modules.inventory.repository.InventoryRepository;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
@@ -61,6 +63,9 @@ class CartPersistenceIT extends BaseIT {
 
     @Autowired
     private ProductSkuRepository productSkuRepository;
+
+    @Autowired
+    private InventoryRepository inventoryRepository;
 
     @Autowired
     private CartRepository cartRepository;
@@ -95,6 +100,7 @@ class CartPersistenceIT extends BaseIT {
         cartItemRepository.deleteAll();
         cartMergeLedgerRepository.deleteAll();
         cartRepository.deleteAll();
+        inventoryRepository.deleteAll();
         productSkuRepository.deleteAll();
         productRepository.deleteAll();
         categoryRepository.deleteAll();
@@ -129,9 +135,13 @@ class CartPersistenceIT extends BaseIT {
         productSku = productSkuRepository.save(ProductSku.builder()
                 .sku("CART-SKU-1")
                 .price(BigDecimal.valueOf(1000.00))
-                .stock(10)
                 .imageUrl("https://example.com/image.png")
                 .product(product)
+                .build());
+        inventoryRepository.save(Inventory.builder()
+                .skuId(productSku.getId())
+                .productSku(productSku)
+                .onHand(10)
                 .build());
 
         when(authService.getCurrentUsername()).thenReturn("cartuser");

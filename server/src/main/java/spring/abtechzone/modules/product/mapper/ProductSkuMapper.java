@@ -20,6 +20,7 @@ public interface ProductSkuMapper {
 
     @Mapping(source = "product.id", target = "productId")
     @Mapping(source = "product.name", target = "productName")
+    @Mapping(target = "stock", ignore = true)
     @Mapping(target = "imageUrl", ignore = true)
     ProductSkuResponse toProductSkuResponse(ProductSku productSku);
 

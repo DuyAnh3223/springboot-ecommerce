@@ -24,6 +24,7 @@ import spring.abtechzone.modules.category.entity.Brand;
 import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.repository.BrandRepository;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.dto.request.ProductCreateRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSearchRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuCreateRequest;
@@ -55,6 +56,7 @@ public class ProductService {
     CategoryRepository categoryRepository;
     BrandRepository brandRepository;
     AwsS3FileService awsS3FileService;
+    InventoryService inventoryService;
 
     @Transactional
     public ProductResponse create(ProductCreateRequest request) {
@@ -88,6 +90,20 @@ public class ProductService {
         productAttributeValidator.validateProductSkus(product);
 
         product = productRepository.save(product);
+
+        if (product.getSkus() != null && !product.getSkus().isEmpty()) {
+            Map<String, Integer> requestedStockBySku = request.getSkus() == null
+                    ? Map.of()
+                    : request.getSkus().stream()
+                            .filter(skuRequest -> skuRequest.getSku() != null)
+                            .collect(Collectors.toMap(
+                                    ProductSkuCreateRequest::getSku,
+                                    ProductSkuCreateRequest::getStock,
+                                    (first, replacement) -> replacement));
+            for (ProductSku sku : product.getSkus()) {
+                inventoryService.createForSku(sku, requestedStockBySku.getOrDefault(sku.getSku(), 0));
+            }
+        }
 
         return toDetailResponse(product);
     }
@@ -216,7 +232,11 @@ public class ProductService {
         List<Long> productIds =
                 productsPage.getContent().stream().map(Product::getId).toList();
         Map<Long, String> primaryImageUrlsMap = fetchPrimaryImageUrlsMap(productIds);
-        return productsPage.map(product -> toSummaryResponse(product, primaryImageUrlsMap.get(product.getId())));
+        Map<Long, Integer> totalOnHandByProductId = inventoryService.getTotalOnHandByProductIds(productIds);
+        return productsPage.map(product -> toSummaryResponse(
+                product,
+                primaryImageUrlsMap.get(product.getId()),
+                totalOnHandByProductId.getOrDefault(product.getId(), 0)));
     }
 
     private Map<Long, String> fetchPrimaryImageUrlsMap(List<Long> productIds) {
@@ -275,6 +295,12 @@ public class ProductService {
         }
 
         ProductResponse response = productMapper.toProductResponse(product);
+        response.setTotalStock(
+                product.getId() == null
+                        ? 0
+                        : inventoryService
+                                .getTotalOnHandByProductIds(List.of(product.getId()))
+                                .getOrDefault(product.getId(), 0));
 
         if (product.getSkus() != null && !product.getSkus().isEmpty()) {
             response.setSkus(productSkuService.toSkuResponseList(product.getSkus()));
@@ -291,11 +317,22 @@ public class ProductService {
 
     @PreAuthorize("permitAll()")
     public ProductResponse toSummaryResponse(Product product, String resolvedPrimaryImageUrl) {
+        int totalOnHand = product == null || product.getId() == null
+                ? 0
+                : inventoryService
+                        .getTotalOnHandByProductIds(List.of(product.getId()))
+                        .getOrDefault(product.getId(), 0);
+        return toSummaryResponse(product, resolvedPrimaryImageUrl, totalOnHand);
+    }
+
+    @PreAuthorize("permitAll()")
+    public ProductResponse toSummaryResponse(Product product, String resolvedPrimaryImageUrl, int totalOnHand) {
         if (product == null) {
             return null;
         }
 
         ProductResponse response = productMapper.toProductResponseSummary(product);
+        response.setTotalStock(totalOnHand);
         response.setPrimaryImageUrl(resolvedPrimaryImageUrl);
         setSingleSkuId(response, product);
         return response;

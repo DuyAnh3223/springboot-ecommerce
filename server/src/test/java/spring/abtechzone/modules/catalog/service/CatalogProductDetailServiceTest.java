@@ -26,6 +26,7 @@ import spring.abtechzone.modules.category.entity.Category;
 import spring.abtechzone.modules.category.entity.CategoryAttribute;
 import spring.abtechzone.modules.category.repository.CategoryAttributeRepository;
 import spring.abtechzone.modules.category.repository.CategoryRepository;
+import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductImage;
 import spring.abtechzone.modules.product.entity.ProductSku;
@@ -53,6 +54,9 @@ class CatalogProductDetailServiceTest {
 
     @Mock
     AwsS3FileService awsS3FileService;
+
+    @Mock
+    InventoryService inventoryService;
 
     @InjectMocks
     CatalogService catalogService;
@@ -91,6 +95,7 @@ class CatalogProductDetailServiceTest {
         when(categoryAttributeRepository.findByCategoryIdWithAttribute(7L)).thenReturn(List.of(specification, variant));
         when(productImageRepository.findPrimaryImagesByProductIds(List.of(101L)))
                 .thenReturn(List.of(projection));
+        when(inventoryService.getOnHandBySkuIds(List.of(129L))).thenReturn(Map.of(129L, 9));
         when(awsS3FileService.resolveAccessUrl("products/product.webp")).thenReturn("https://cdn.example/product.webp");
         when(awsS3FileService.resolveAccessUrl("products/sku.webp")).thenReturn("https://cdn.example/sku.webp");
         when(awsS3FileService.resolveAccessUrl("products/sku-primary.webp"))
@@ -195,7 +200,6 @@ class CatalogProductDetailServiceTest {
                 .product(product)
                 .sku(code)
                 .price(BigDecimal.valueOf(price))
-                .stock(stock)
                 .currency("VND")
                 .active(active)
                 .attributes(Map.of())
