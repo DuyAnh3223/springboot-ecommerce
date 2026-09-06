@@ -65,6 +65,10 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, PUBLIC_CUSTOMER_ENDPOINTS)
                     .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/payments/callbacks/momo", "/payments/callbacks/payos")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/payments/callbacks/vnpay", "/payments/providers")
+                    .permitAll()
                     .requestMatchers("/actuator/health", "/actuator/health/**")
                     .permitAll()
                     .anyRequest()
@@ -110,7 +114,7 @@ public class SecurityConfig {
 
         corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         corsConfiguration.setAllowedHeaders(
-                List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+                List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "Idempotency-Key"));
         corsConfiguration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

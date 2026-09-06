@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentMethod;
+import spring.abtechzone.modules.order.constant.PaymentStatus;
+import spring.abtechzone.modules.payment.dto.PaymentSummary;
 
 /**
  * Shared order transition policy (R-C05-01). Single source of truth for which
@@ -48,6 +51,20 @@ public final class OrderTransitionPolicy {
         return targets != null && targets.contains(to);
     }
 
+    public static boolean isAllowed(OrderStatus from, OrderStatus to, Actor actor, PaymentSummary payment) {
+        if (!isAllowed(from, to, actor) || payment == null) {
+            return false;
+        }
+        if (to == OrderStatus.CANCELLED && payment.status() == PaymentStatus.PAID) {
+            return false;
+        }
+        return !(actor == Actor.ADMIN
+                && from == OrderStatus.PENDING
+                && to == OrderStatus.CONFIRMED
+                && payment.method() != PaymentMethod.COD
+                && payment.status() != PaymentStatus.PAID);
+    }
+
     public static List<OrderStatus> allowedTransitions(OrderStatus from, Actor actor) {
         Map<OrderStatus, Set<OrderStatus>> byActor = ALLOWED.get(actor);
         if (byActor == null || from == null) {
@@ -58,6 +75,12 @@ public final class OrderTransitionPolicy {
             return List.of();
         }
         return targets.stream().sorted(Comparator.comparing(Enum::name)).toList();
+    }
+
+    public static List<OrderStatus> allowedTransitions(OrderStatus from, Actor actor, PaymentSummary payment) {
+        return allowedTransitions(from, actor).stream()
+                .filter(target -> isAllowed(from, target, actor, payment))
+                .toList();
     }
 
     public static boolean isTerminal(OrderStatus status) {

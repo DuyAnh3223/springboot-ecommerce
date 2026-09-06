@@ -44,6 +44,35 @@ app:
     enabled: ${SWAGGER_ENABLED:true}
   checkout:
     shipping-fee: ${CHECKOUT_SHIPPING_FEE:30000}
+  payment:
+    mock-enabled: ${PAYMENT_MOCK_ENABLED:false}
+    online:
+      deadline-minutes: ${PAYMENT_DEADLINE_MINUTES:15}
+      max-queries: ${PAYMENT_MAX_QUERIES:96}
+      query-window-hours: ${PAYMENT_QUERY_WINDOW_HOURS:24}
+      return-base-url: ${PAYMENT_RETURN_BASE_URL:http://localhost:3000}
+      gateways:
+        MOMO:
+          enabled: ${MOMO_ENABLED:false}
+          merchant-id: ${MOMO_PARTNER_CODE:}
+          access-key: ${MOMO_ACCESS_KEY:}
+          secret-key: ${MOMO_SECRET_KEY:}
+          callback-url: ${MOMO_CALLBACK_URL:}
+          api-url: https://test-payment.momo.vn/v2/gateway/api
+        VNPAY:
+          enabled: ${VNPAY_ENABLED:false}
+          merchant-id: ${VNPAY_TMN_CODE:}
+          secret-key: ${VNPAY_HASH_SECRET:}
+          callback-url: ${VNPAY_CALLBACK_URL:}
+          api-url: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+          checkout-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+        PAYOS:
+          enabled: ${PAYOS_ENABLED:false}
+          merchant-id: ${PAYOS_CLIENT_ID:}
+          access-key: ${PAYOS_API_KEY:}
+          secret-key: ${PAYOS_CHECKSUM_KEY:}
+          callback-url: ${PAYOS_CALLBACK_URL:}
+          api-url: https://api-merchant.payos.vn
 
 springdoc:
   swagger-ui:

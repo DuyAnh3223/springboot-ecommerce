@@ -13,6 +13,8 @@ import spring.abtechzone.modules.voucher.entity.VoucherRedemption;
 public interface VoucherRedemptionRepository extends JpaRepository<VoucherRedemption, Long> {
     long countByVoucherIdAndUserIdAndStatus(Long voucherId, UUID userId, VoucherRedemptionStatus status);
 
+    boolean existsByOrderIdAndStatus(Long orderId, VoucherRedemptionStatus status);
+
     /** Conditionally reverse the single active redemption for an order. */
     @Modifying
     @Query(

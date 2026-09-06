@@ -85,6 +85,11 @@ public enum ErrorCode {
     INVENTORY_ADJUSTMENT_INVALID(
             1072, "Inventory adjustment operation and reason do not match", HttpStatus.BAD_REQUEST),
     INVENTORY_STOCK_OVERFLOW(1073, "Inventory stock exceeds supported limit", HttpStatus.BAD_REQUEST),
+    PAYMENT_NOT_FOUND(1074, "Payment not found", HttpStatus.NOT_FOUND),
+    PAYMENT_STATE_CONFLICT(1075, "Payment state transition is not allowed", HttpStatus.CONFLICT),
+    PAYMENT_AMOUNT_MISMATCH(1076, "Payment amount or currency does not match the order", HttpStatus.BAD_REQUEST),
+    PAYMENT_REFERENCE_CONFLICT(1077, "Payment reference is already in use", HttpStatus.CONFLICT),
+    PAYMENT_METHOD_NOT_AVAILABLE(1078, "Payment method is not available", HttpStatus.BAD_REQUEST),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {

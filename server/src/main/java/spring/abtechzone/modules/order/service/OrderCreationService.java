@@ -27,7 +27,6 @@ import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
-import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.*;
 import spring.abtechzone.modules.order.dto.response.*;
 import spring.abtechzone.modules.order.entity.Order;
@@ -36,6 +35,8 @@ import spring.abtechzone.modules.order.entity.OrderStatusHistory;
 import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.payment.config.PaymentMockPolicy;
+import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
 import spring.abtechzone.modules.user.entity.Address;
@@ -68,12 +69,24 @@ public class OrderCreationService {
     OrderMapper orderMapper;
     AuthService authService;
     CheckoutService checkoutService;
+    PaymentService paymentService;
+    PaymentMockPolicy paymentMockPolicy;
+    spring.abtechzone.modules.payment.service.OnlinePaymentService onlinePaymentService;
 
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
 
     /** Creates an order from a previously reviewed checkout snapshot. */
     public OrderResponse createOrder(CreateOrderRequest request, String rawIdempotencyKey) {
+        paymentMockPolicy.requireAvailable(request.getPaymentMethod());
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.MOCK) {
+            throw new AppException(ErrorCode.PAYMENT_METHOD_NOT_AVAILABLE);
+        }
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE) {
+            onlinePaymentService.requireProvider(request.getPaymentProvider());
+        } else if (request.getPaymentProvider() != null) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
         // Step 1: Auth User (idempotency is scoped to the authenticated user)
         User user = getAuthenticatedUser();
 
@@ -171,6 +184,11 @@ public class OrderCreationService {
         // Step 7: Save order (cascade saves items) + initial history fromStatus=null -> toStatus=PENDING
         Order savedOrder = orderRepository.save(order);
         createOrderStatusHistory(savedOrder, user);
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE) {
+            onlinePaymentService.createInitial(savedOrder, request.getPaymentProvider());
+        } else {
+            paymentService.createInitialPayment(savedOrder, request.getPaymentMethod());
+        }
 
         // Step 8: Atomic stock decrement + SALE_OUT movement, per sorted SKU.
         // Persisted OrderItems are the committed quantity source (ADR-003).
@@ -276,8 +294,6 @@ public class OrderCreationService {
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
-                .paymentMethod(request.getPaymentMethod())
-                .paymentStatus(PaymentStatus.UNPAID)
                 .subtotalAmount(subtotal)
                 .shippingFee(shippingFee)
                 .discountAmount(discountAmount)
