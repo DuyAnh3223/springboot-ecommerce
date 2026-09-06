@@ -65,6 +65,8 @@ import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.order.service.CheckoutService;
 import spring.abtechzone.modules.order.service.CreateOrderRequestHash;
 import spring.abtechzone.modules.order.service.OrderCreationService;
+import spring.abtechzone.modules.payment.config.PaymentMockPolicy;
+import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
@@ -118,6 +120,12 @@ class OrderServiceTest {
 
     @Mock
     TransactionTemplate transactionTemplate;
+
+    @Mock
+    PaymentService paymentService;
+
+    @Mock
+    PaymentMockPolicy paymentMockPolicy;
 
     @Mock
     AuthService authService;
