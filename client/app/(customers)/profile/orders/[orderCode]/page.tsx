@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getOrderPayments, getPaymentProviders } from "@/features/payments/services/payment.service";
+import { OnlinePaymentPanel } from "@/features/customer/orders/components/OnlinePaymentPanel";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { CancelOrderDialog } from "@/features/customer/orders/components/CancelOrderDialog";
@@ -59,7 +61,13 @@ export default async function CustomerOrderDetailPage({
     );
   }
 
+  const [payments, providers] = order.paymentMethod === "ONLINE"
+    ? await Promise.all([getOrderPayments(orderCode).catch(() => null), getPaymentProviders().catch(() => [])])
+    : [null, []];
   return (
+    <div className="space-y-4">
+    {payments && <OnlinePaymentPanel payments={payments} providers={providers} />}
+    {order.paymentMethod === "ONLINE" && !payments && <p role="alert">Chưa thể tải trạng thái thanh toán. Vui lòng tải lại trang trước khi thanh toán thêm.</p>}
     <OrderDetailView
       order={order}
       actions={(
@@ -69,5 +77,6 @@ export default async function CustomerOrderDetailPage({
         />
       )}
     />
+    </div>
   );
 }

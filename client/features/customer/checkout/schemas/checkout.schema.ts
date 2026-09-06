@@ -16,6 +16,7 @@ export const checkoutNewAddressSchema = z.object({
 });
 
 const checkoutSharedFields = {
+  paymentProvider: z.enum(["COD", "MOMO", "VNPAY", "PAYOS"]).optional(),
   voucherCode: z.string().optional(),
 };
 

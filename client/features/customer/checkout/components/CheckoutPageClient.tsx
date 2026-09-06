@@ -34,6 +34,7 @@ import {
 } from "../utils/checkout.utils";
 
 interface CheckoutPageClientProps {
+  paymentProviders?: import("@/features/payments/payment.type").OnlineProvider[];
   selectedSkuIds: number[];
   initialVoucherCode?: string;
   initialReview: CheckoutResponse | null;
@@ -162,6 +163,7 @@ function ReviewSummary({ review }: { review: CheckoutResponse }) {
 }
 
 export function CheckoutPageClient({
+  paymentProviders = [],
   selectedSkuIds,
   initialVoucherCode,
   initialReview,
@@ -185,6 +187,7 @@ export function CheckoutPageClient({
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
+      paymentProvider: "COD",
       addressMode: defaultAddress ? "EXISTING" : "NEW",
       addressId: defaultAddress?.id,
       newAddress: DEFAULT_NEW_ADDRESS,
@@ -200,6 +203,7 @@ export function CheckoutPageClient({
   } = form;
   const addressMode = useWatch({ control: form.control, name: "addressMode" });
   const voucherCode = useWatch({ control: form.control, name: "voucherCode" });
+  const paymentProvider = useWatch({ control: form.control, name: "paymentProvider" });
 
   const refreshReview = useCallback(
     async (code?: string | null): Promise<CheckoutActionResult<CheckoutResponse> | null> => {
@@ -319,7 +323,13 @@ export function CheckoutPageClient({
       return;
     }
 
-    router.push(`/checkout/success?orderCode=${encodeURIComponent(result.data.orderCode)}`);
+    if (result.data.paymentCheckoutUrl) {
+      window.location.assign(result.data.paymentCheckoutUrl);
+    } else if (payload.paymentMethod === "ONLINE") {
+      router.push(`/profile/orders/${encodeURIComponent(result.data.orderCode)}`);
+    } else {
+      router.push(`/checkout/success?orderCode=${encodeURIComponent(result.data.orderCode)}`);
+    }
   };
 
   if (!isHydrated || guestMergeStatus === "unknown" || guestMergeStatus === "pending") {
@@ -545,10 +555,13 @@ export function CheckoutPageClient({
             <h2 className="mt-1 text-xl font-black text-slate-900">Thanh toán</h2>
           </div>
           <div className="flex items-start gap-3 rounded-xl border border-shop_light_green bg-emerald-50/40 p-3">
-            <input type="radio" checked readOnly aria-label="Thanh toán khi nhận hàng" />
             <div>
-              <p className="text-sm font-bold text-slate-800">Thanh toán khi nhận hàng (COD)</p>
-              <p className="mt-1 text-xs text-slate-600">Bạn thanh toán khi nhận được sản phẩm.</p>
+              <label className="text-sm font-bold text-slate-800" htmlFor="payment-provider">Phương thức thanh toán</label>
+              <select id="payment-provider" {...register("paymentProvider")} disabled={isSubmitLoading} className="mt-2 block w-full rounded border bg-white p-2">
+                <option value="COD">Thanh toán khi nhận hàng (COD)</option>
+                {paymentProviders.map(provider => <option key={provider} value={provider}>{provider === "MOMO" ? "MoMo" : provider === "PAYOS" ? "payOS" : "VNPAY"}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-600">{paymentProvider && paymentProvider !== "COD" ? "Bạn sẽ được chuyển đến cổng thanh toán sau khi tạo đơn." : "Bạn thanh toán khi nhận được sản phẩm."}</p>
             </div>
           </div>
 
@@ -586,7 +599,7 @@ export function CheckoutPageClient({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang tạo đơn hàng...
               </>
             ) : (
-              "Đặt hàng COD"
+              paymentProvider && paymentProvider !== "COD" ? "Đặt hàng và thanh toán" : "Đặt hàng COD"
             )}
           </Button>
 
