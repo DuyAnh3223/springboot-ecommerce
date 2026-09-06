@@ -23,6 +23,7 @@ sequenceDiagram
     participant PR as ProductSkuRepository
     participant VV as VoucherValidator
     participant OR as OrderRepository
+    participant PS as PaymentService
     participant IS as InventoryService
 
     Client->>OS: createOrder(request, idempotencyKey)
@@ -46,6 +47,7 @@ sequenceDiagram
     CS->>PR: Re-fetch SKU details (verify stock & price)
     CS->>VV: Validate voucher & calculate discount
     TT->>OR: Save Order & OrderItems
+    TT->>PS: Save initial PENDING Payment from Order total/currency and selected provider
     TT->>IS: Atomic stock decrement + SALE_OUT movement
     TT->>CR: Remove selected items only (ACTIVE if any remain, else COMPLETED)
     TT-->>OS: OrderResponse
@@ -83,8 +85,8 @@ sequenceDiagram
      validates the selection (no pre-lock OSIV read).
    - Recomputes the authoritative checkout and semantic-compares it with the
      reviewed snapshot (`CHECKOUT_CHANGED` 409 on mismatch).
-   - Resolves address, persists `Order`, `OrderItem`, and `OrderStatusHistory`
-     with authoritative amounts only.
+   - Resolves address, persists `Order`, `OrderItem`, `OrderStatusHistory`, and one
+     initial `Payment` with authoritative amounts in the same transaction.
    - Atomically decrements stock with a guard and writes a `SALE_OUT` stock
      movement. `OrderItem` is the committed quantity source; no separate
      inventory allocation is written (ADR-003).
@@ -106,4 +108,5 @@ sequenceDiagram
 | **Invalid / Unowned Shipping Address** | `ADDRESS_NOT_BELONG_TO_USER` (1036) | Selected `addressId` does not belong to user | Throws `AppException`. DB transaction rolls back. All Redisson locks released in `finally`. |
 | **Insufficient Product Stock** | `INSUFFICIENT_STOCK` (1032) | Atomic conditional decrement `stock >= quantity` updates 0 rows | Throws `AppException`. DB transaction rolls back any prior stock movement written in the same transaction. All Redisson locks released in `finally`. |
 | **Voucher Invalid / Expired / Limit Reached** | `VOUCHER_EXPIRED` (1024) / `VOUCHER_ARE_OUT` (1025) | Voucher fails validation rules, or the guarded increment/redemption fails | Throws `AppException`. DB transaction rolls back stock, order, and cart together. All Redisson locks released in `finally`. |
+| **Initial Payment Persistence Failure** | Constraint or persistence error | Initial Payment cannot be stored with the Order-owned amount/currency and stable key | The same DB transaction rolls back Order, items, stock, voucher redemption, and cart changes. All Redisson locks are released in `finally`. |
 | **Repeated idempotency constraint race** | `SYSTEM_ERROR` (1045) | A unique-constraint violation cannot be resolved to the winning order after the bounded retry limit | The transaction rolls back automatically via `TransactionTemplate`. All Redisson locks are released by their matching `finally` blocks. |

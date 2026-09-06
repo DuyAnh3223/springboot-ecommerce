@@ -133,14 +133,17 @@ phút — trái với v1 COD allocation semantics (xem ADR-002 và plan).
 - `maxPerUser` đếm redemption `REDEEMED`; `voucher.usedCount` được giữ làm atomic
   aggregate cho `maxUses`. Plan 05 mới triển khai reversal.
 
-### R-C04-06: Address and COD Contract
+### R-C04-06: Address and Payment Creation Contract
 
 - Chính xác một trong `addressId` hoặc `newAddress` được cung cấp (XOR).
 - Existing address phải thuộc current user; new address phải pass validation.
 - Copy snapshot vào order (recipient name, phone, full address); không chỉ giữ
   live address reference.
-- `paymentMethod` chỉ nhận `COD`.
-- Tạo order `PENDING`, payment `COD/UNPAID` với authoritative amounts.
+- Public checkout dùng `COD`. API chỉ nhận thêm `MOCK` khi dev/test và flag Payment
+  mock được bật theo SPEC-COMMERCE-14.
+- Tạo Order `PENDING` và một initial Payment `PENDING` trong cùng transaction;
+  amount/currency lấy từ authoritative Order total. Payment là source of truth theo
+  SPEC-COMMERCE-14 và ADR-006.
 
 ### R-C04-07: Authoritative Semantic Comparison with the Reviewed Snapshot
 
@@ -370,7 +373,8 @@ Validation:
 - **Schema upgrade prerequisite (bắt buộc trước khi chạy Plan 04 trên database
   đã có dữ liệu)**: Plan 04 thay đổi schema không an toàn với
   `ddl-auto: update` — `Order` thêm `idempotency_key`/`request_hash`/
-  `payment_status` dạng NOT NULL, bỏ bảng `inventory_reservation` và
+  `payment_status` dạng NOT NULL (sau đó được SPEC-COMMERCE-14 thay bằng bảng
+  `payment`), bỏ bảng `inventory_reservation` và
   `voucher_user`, thêm unique constraints và bảng `voucher_redemption`.
   Hibernate update không tự backfill/drop table/constraint cũ; với database cũ,
   schema có thể giữ cấu trúc obsolete. Do đó database dùng cho Plan 04

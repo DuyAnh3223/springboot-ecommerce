@@ -126,7 +126,7 @@ ABTechZone/
 └── docker-compose.prod.yml
 ```
 
-Payment, Shipment, and Notification do not yet have standalone backend packages.
+Shipment and Notification do not yet have standalone backend packages.
 
 ## 🧩 System Modules & Key Features
 
@@ -325,23 +325,30 @@ Owns the persisted on-hand quantity for each SKU and records every supported sto
 
 ### 8. Payment
 
-The current project supports COD state inside Order. A standalone payment module and online gateway workflow are planned.
+The backend has a standalone Payment module. Payment is the source of truth for
+payment method and status, while Order retains payable amounts and fulfillment state.
+COD and online gateway adapters are implemented. MoMo/VNPAY default to sandbox;
+payOS has no separate sandbox and stays disabled until a real-money test is authorized.
+Each gateway is enabled through configuration. See [setup and UAT](server/PAYMENT-GATEWAYS.md).
 
 - **Core Features:**
-  - [x] **COD method:** Create orders with `PaymentMethod.COD`.
-  - [x] **COD status update:** Mark payment `PAID` when the order reaches `DELIVERED`, or `CANCELLED` when the order is cancelled.
-  - [ ] **Payment aggregate:** Store payment identity, order, amount, method, status, and provider reference.
-  - [ ] **Payment attempts:** Track multiple attempts without creating multiple successful charges.
-  - [ ] **Online gateway integration:** Integrate VNPAY/Momo or another provider behind an adapter.
+  - [x] **COD method:** Create a pending COD Payment atomically with the Order; mark it `SUCCEEDED` on delivery or `CANCELLED` when the Order is cancelled.
+  - [x] **Payment aggregate:** Store payment identity, Order, server-owned amount/currency, method, provider, status, provider reference, audit payload, and timestamps.
+  - [x] **Payment attempts:** Persist checkout idempotency receipts, stable merchant IDs and multiple attempts, blocking another charge while the result is uncertain.
+  - [x] **Gateway adapters:** Create checkout, verify callbacks and query MoMo, VNPAY and payOS behind a provider boundary; runtime mock endpoints are retired.
+  - [x] **Checkout UI:** Show enabled providers, open gateway checkout, read server status on return and expose review cases in admin order detail.
+  - [ ] **Gateway UAT:** Complete merchant sandbox acceptance for MoMo/VNPAY and separately authorized payOS live testing.
   - [ ] **Refund workflow:** Record and reconcile full/partial refunds.
 
 - **Key Technical Handling & Edge Cases:**
-  - [ ] **[Amount tampering] Client payment amount differs from Order:** Always derive payment amount from the server-owned Order total.
-  - [ ] **[Duplicate callback] A provider sends the same event repeatedly:** Verify signature and deduplicate by provider event/reference.
-  - [ ] **[Late success] Payment succeeds after timeout/cancellation:** Apply an explicit late-success and inventory-compensation policy.
-  - [ ] **[Out-of-order status] Provider events arrive in the wrong order:** Enforce a payment state machine and monotonic transitions.
-  - [ ] **[Lost callback] The provider succeeds but the application receives nothing:** Reconcile pending attempts with the provider.
-  - [ ] **[Partial failure] Payment succeeds while Order update fails:** Use durable events/outbox and retry-safe processing.
+  - [x] **[Amount tampering] Client/provider data differs from Order:** Derive charge amounts on the server and verify callback money and correlation before confirming.
+  - [x] **[Duplicate callback] An event is repeated:** Serialize on the Order row and enforce unique provider transaction references and one applied payment per Order.
+  - [x] **[Late or extra success] Money arrives after cancellation/deadline or another payment:** Retain financial evidence and flag operator review, without reopening or automatically refunding the Order.
+  - [x] **[Out-of-order result] Failure or create response follows success:** Preserve committed success; browser redirects never mark an Order paid.
+  - [x] **[Timeout/lost callback] A gateway result is uncertain:** Persist query scheduling, recover expired worker leases and use bounded reconciliation with operator review on exhaustion.
+  - [x] **[Expiry] An online Order remains unpaid:** Use a configurable deadline and existing inventory/voucher cancellation compensation.
+  - [x] **[Local partial failure] Payment/Order update fails:** Commit payment application, Order and history together; callbacks retry after rollback.
+  - [ ] **[Cross-service delivery] Payment effects move to separate services:** Add durable outbox/inbox processing when that boundary exists.
 
 ---
 
