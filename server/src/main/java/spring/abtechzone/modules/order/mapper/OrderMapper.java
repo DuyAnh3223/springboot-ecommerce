@@ -22,6 +22,8 @@ public interface OrderMapper {
     @Mapping(target = "itemCount", expression = "java(order.getItems() == null ? 0 : order.getItems().size())")
     @Mapping(target = "allowedTransitions", ignore = true)
     @Mapping(target = "previewItem", ignore = true)
+    @Mapping(target = "paymentMethod", ignore = true)
+    @Mapping(target = "paymentStatus", ignore = true)
     OrderSummaryResponse toOrderSummaryResponse(Order order);
 
     @Mapping(
@@ -40,6 +42,8 @@ public interface OrderMapper {
     @Mapping(target = "allowedTransitions", ignore = true)
     @Mapping(target = "history", ignore = true)
     @Mapping(target = "items", ignore = true)
+    @Mapping(target = "paymentMethod", ignore = true)
+    @Mapping(target = "paymentStatus", ignore = true)
     OrderDetailResponse toOrderDetailResponse(Order order);
 
     List<OrderItemResponse> toOrderItemResponses(List<OrderItem> items);

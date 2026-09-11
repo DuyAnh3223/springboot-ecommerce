@@ -30,12 +30,16 @@ flowchart LR
     API --> CATALOG[Catalog & Product]
     API --> CART[Cart]
     API --> CHECKOUT[Checkout & Order]
+    API --> PAYMENT[Payment]
+    CHECKOUT --> PAYMENT
+    PAYMENT <--> GATEWAYS[MoMo / VNPAY / payOS]
     CHECKOUT --> VOUCHER[Voucher]
     CHECKOUT --> INVENTORY[Inventory]
     AUTH --> POSTGRES[(PostgreSQL)]
     CATALOG --> POSTGRES
     CART --> POSTGRES
     CHECKOUT --> POSTGRES
+    PAYMENT --> POSTGRES
     VOUCHER --> POSTGRES
     INVENTORY --> POSTGRES
     CART --> REDIS[(Redis / Redisson)]
@@ -47,22 +51,24 @@ The backend is organized by business module. PostgreSQL stores transactional dat
 
 ## ✨ Key Engineering Highlights
 
-| Engineering challenge                    | Implementation                                                                                                        | Practical guarantee                                                                                       |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Server-authoritative checkout**        | Reloads cart ownership, SKU price, product state, Inventory, voucher rules, and shipping fee                          | Browser-supplied totals cannot become persisted truth                                                     |
-| **Stale checkout detection**             | Recomputes the review after locks are acquired and compares semantic snapshots                                        | Price/stock/voucher/cart changes return `CHECKOUT_CHANGED` instead of silently creating a different order |
-| **Atomic order boundary**                | Writes Order, OrderItem, history, Inventory movement, VoucherRedemption, and selected-cart cleanup in one transaction | Partial database success is rolled back                                                                   |
-| **Retry-safe order creation**            | UUID idempotency key + canonical payload hash + database uniqueness                                                   | Same request returns the same Order; key reuse with other input is rejected                               |
-| **Oversell prevention**                  | Deterministic Redisson locking plus conditional SQL stock decrement                                                   | A stale read alone cannot drive `onHand` below zero                                                       |
-| **Single inventory source of truth**     | `Inventory.onHand` owns persisted stock; Product/SKU responses delegate to it                                         | Catalog, cart, checkout, and order use the same stock authority                                           |
-| **Auditable stock lifecycle**            | Typed movement reasons including `SALE_OUT` and `ORDER_CANCEL_RETURN`                                                 | Supported stock mutations leave a transactional ledger entry                                              |
-| **Exact-once cancellation compensation** | Locked Order transition, immutable OrderItem quantity, voucher redemption state                                       | Repeated/concurrent cancellation does not intentionally return stock or quota twice                       |
-| **Concurrency-safe voucher usage**       | Atomic usage update with global/per-user conditions and redemption ledger                                             | Competing checkouts cannot all consume the final quota                                                    |
-| **Durable guest-cart merge**             | Request normalization/hash, Redis/Redisson coordination, unique merge ledger, per-item results                        | Login retries do not duplicate merged quantities or silently lose rejected items                          |
-| **Immutable order history**              | Product, SKU, price, quantity, recipient, address, and voucher snapshots                                              | Later catalog/profile changes do not rewrite historical orders                                            |
-| **Customer/admin contract separation**   | Owner-scoped customer queries and explicit admin transitions                                                          | Order visibility and actions follow actor-specific boundaries                                             |
-| **Flexible catalog attributes**          | PostgreSQL JSONB with specification-based filtering and facet metadata                                                | Dynamic product attributes can be filtered without a column per attribute                                 |
-| **Cloud media delivery**                 | AWS S3 object storage and CloudFront URL integration                                                                  | Product media is separated from application/database storage                                              |
+| Engineering challenge                    | Implementation                                                                                                                         | Practical guarantee                                                                                       |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Server-authoritative checkout**        | Reloads cart ownership, SKU price, product state, Inventory, voucher rules, and shipping fee                                           | Browser-supplied totals cannot become persisted truth                                                     |
+| **Stale checkout detection**             | Recomputes the review after locks are acquired and compares semantic snapshots                                                         | Price/stock/voucher/cart changes return `CHECKOUT_CHANGED` instead of silently creating a different order |
+| **Atomic order boundary**                | Writes Order, initial Payment, OrderItem, history, Inventory movement, VoucherRedemption, and selected-cart cleanup in one transaction | Partial database success is rolled back                                                                   |
+| **Verified payment application**         | Validates gateway results, locks Order, and uniquely limits the applied Payment per Order                                              | Payment, Order confirmation, and history commit together; duplicate results do not apply payment twice    |
+| **Uncertain payment recovery**           | Persists merchant attempt IDs, idempotency receipts, query schedules, and worker leases                                                | Unknown results block a new charge; late/extra success is retained for operator review                    |
+| **Retry-safe order creation**            | UUID idempotency key + canonical payload hash + database uniqueness                                                                    | Same request returns the same Order; key reuse with other input is rejected                               |
+| **Oversell prevention**                  | Deterministic Redisson locking plus conditional SQL stock decrement                                                                    | A stale read alone cannot drive `onHand` below zero                                                       |
+| **Single inventory source of truth**     | `Inventory.onHand` owns persisted stock; Product/SKU responses delegate to it                                                          | Catalog, cart, checkout, and order use the same stock authority                                           |
+| **Auditable stock lifecycle**            | Typed movement reasons including `SALE_OUT` and `ORDER_CANCEL_RETURN`                                                                  | Supported stock mutations leave a transactional ledger entry                                              |
+| **Exact-once cancellation compensation** | Locked Order transition, immutable OrderItem quantity, voucher redemption state                                                        | Repeated/concurrent cancellation does not intentionally return stock or quota twice                       |
+| **Concurrency-safe voucher usage**       | Atomic usage update with global/per-user conditions and redemption ledger                                                              | Competing checkouts cannot all consume the final quota                                                    |
+| **Durable guest-cart merge**             | Request normalization/hash, Redis/Redisson coordination, unique merge ledger, per-item results                                         | Login retries do not duplicate merged quantities or silently lose rejected items                          |
+| **Immutable order history**              | Product, SKU, price, quantity, recipient, address, and voucher snapshots                                                               | Later catalog/profile changes do not rewrite historical orders                                            |
+| **Customer/admin contract separation**   | Owner-scoped customer queries and explicit admin transitions                                                                           | Order visibility and actions follow actor-specific boundaries                                             |
+| **Flexible catalog attributes**          | PostgreSQL JSONB with specification-based filtering and facet metadata                                                                 | Dynamic product attributes can be filtered without a column per attribute                                 |
+| **Cloud media delivery**                 | AWS S3 object storage and CloudFront URL integration                                                                                   | Product media is separated from application/database storage                                              |
 
 ## 🗄️ Entity Relationship Diagram
 
@@ -118,7 +124,8 @@ ABTechZone/
 │   │   ├── cart/                   # Cart and guest merge
 │   │   ├── voucher/                # Discount rules and redemption
 │   │   ├── order/                  # Checkout, creation, lifecycle
-│   │   └── inventory/              # On-hand stock and movements
+│   │   ├── inventory/              # On-hand stock and movements
+│   │   └── payment/                # COD, gateway attempts, callbacks, reconciliation
 │   ├── src/test/                   # Unit and integration tests
 │   └── docs/                       # ERD and backend documentation
 ├── .agents/                        # Specs, ADRs, plans, rules, and skills
@@ -126,7 +133,7 @@ ABTechZone/
 └── docker-compose.prod.yml
 ```
 
-Payment, Shipment, and Notification do not yet have standalone backend packages.
+Shipment and Notification do not yet have standalone backend packages.
 
 ## 🧩 System Modules & Key Features
 
@@ -261,16 +268,16 @@ Builds a server-authoritative review of selected cart items and protects order c
   - [x] **[Voucher changes after review] Eligibility or quota changes:** Recalculate before persistence.
   - [x] **[Stale checkout snapshot] Price, cart, voucher, or address meaning changes:** Return `409 CHECKOUT_CHANGED` with the latest review.
   - [x] **[Deadlock-prone selection] Multiple SKU locks are needed:** Normalize, deduplicate, and sort identifiers before acquiring locks.
-  - [ ] **[Online-payment wait] Stock must be held before payment finishes:** Add an accepted allocation/reservation policy before enabling the gateway flow.
+  - [x] **[Online-payment wait] Payment is not yet confirmed:** Deduct stock when creating the Order; cancel and compensate once on expiry. Successful payment does not deduct stock again.
 
 ---
 
 ### 6. Order
 
-Creates immutable order records, exposes customer/admin order views, and controls the COD order lifecycle and cancellation compensation.
+Creates immutable order records, exposes customer/admin order views, and controls fulfillment and cancellation compensation for COD and online orders.
 
 - **Core Features:**
-  - [x] **Atomic order creation:** Persist order, items, history, stock movement, voucher redemption, and cart cleanup in one transaction.
+  - [x] **Atomic order creation:** Persist order, initial payment, items, history, stock movement, voucher redemption, and cart cleanup in one transaction.
   - [x] **Idempotent submission:** Require a canonical UUID idempotency key for create-order retries.
   - [x] **Immutable item snapshots:** Store product name, SKU code, unit price, quantity, and monetary values at purchase time.
   - [x] **Immutable delivery snapshot:** Store recipient, phone, address, and voucher data on the order.
@@ -278,6 +285,7 @@ Creates immutable order records, exposes customer/admin order views, and control
   - [x] **Customer cancellation:** Allow cancellation from the permitted state with a validated reason.
   - [x] **Admin order management:** Search/filter orders, view details, and execute allowed transitions.
   - [x] **COD lifecycle:** Support `PENDING`, `CONFIRMED`, `SHIPPING`, `DELIVERED`, and `CANCELLED`.
+  - [x] **Online confirmation and expiry:** Confirm an eligible pending Order after verified payment; cancel unpaid expired orders and restore stock/voucher usage once.
   - [ ] **Return and refund workflows:** Support partial/full return, refund reasons, approval, and audit history.
   - [ ] **Split fulfillment:** Allocate one order across multiple shipments or warehouses.
 
@@ -307,7 +315,7 @@ Owns the persisted on-hand quantity for each SKU and records every supported sto
   - [x] **Opening balance:** Create the initial audited quantity for a SKU.
   - [x] **Admin adjustments:** Increase, decrease, or adjust to a desired quantity with an explicit reason.
   - [x] **Movement history:** Query a stable newest-first ledger by SKU/reason.
-  - [ ] **Inventory reservation:** Hold, expire, commit, and release stock for future online-payment workflows.
+  - [ ] **Separate inventory reservation:** Introduce a hold/commit/release model if allocation requirements change; current online orders use sale deduction at creation and cancellation return on expiry.
   - [ ] **Multi-warehouse inventory:** Track physical stock, allocation, and availability per location.
 
 - **Key Technical Handling & Edge Cases:**
@@ -325,23 +333,40 @@ Owns the persisted on-hand quantity for each SKU and records every supported sto
 
 ### 8. Payment
 
-The current project supports COD state inside Order. A standalone payment module and online gateway workflow are planned.
+The backend has a standalone Payment module. Payment is the source of truth for
+payment method and status, while Order retains payable amounts and fulfillment state.
+Each Order has an initial Payment and can retain multiple attempts. Order API payment
+summaries are derived from Payment, separate from fulfillment state.
+COD and adapters for MoMo, VNPAY and payOS are implemented. All online gateways
+default to disabled; configured MoMo/VNPAY endpoints target sandbox/test environments.
+The payOS integration requires separately authorized real-money UAT.
+See [gateway setup and UAT](server/PAYMENT-GATEWAYS.md), the
+[accepted gateway specification](.agents/specs/product/commerce-15-online-payment-gateways.md)
+and [payment ownership decision](.agents/decisions/ADR-006-payment-owns-payment-state.md).
 
 - **Core Features:**
-  - [x] **COD method:** Create orders with `PaymentMethod.COD`.
-  - [x] **COD status update:** Mark payment `PAID` when the order reaches `DELIVERED`, or `CANCELLED` when the order is cancelled.
-  - [ ] **Payment aggregate:** Store payment identity, order, amount, method, status, and provider reference.
-  - [ ] **Payment attempts:** Track multiple attempts without creating multiple successful charges.
-  - [ ] **Online gateway integration:** Integrate VNPAY/Momo or another provider behind an adapter.
+  - [x] **COD method:** Create a pending COD Payment atomically with the Order; mark it `SUCCEEDED` on delivery or `CANCELLED` when the Order is cancelled.
+  - [x] **Payment aggregate:** Store payment identity, Order, server-owned amount/currency, method, provider, status, provider reference, audit payload, and timestamps.
+  - [x] **Payment attempts:** Persist checkout idempotency receipts, stable merchant IDs and multiple attempts, blocking another charge while the result is uncertain.
+  - [x] **Gateway adapters:** Create checkout, verify callbacks and query MoMo, VNPAY and payOS behind a provider boundary; runtime mock endpoints are retired.
+  - [x] **Checkout UI:** Show enabled providers, open gateway checkout, read server status on return and expose review cases in admin order detail.
+  - [x] **Provider configuration:** Reject disabled providers and fail startup for enabled gateways with missing credentials or invalid URLs; no mock fallback.
+  - [x] **Operator review:** Display attempts, merchant/transaction references and review reasons in admin order detail for manual investigation.
+  - [ ] **Gateway UAT:** Complete merchant sandbox acceptance for MoMo/VNPAY and separately authorized payOS live testing.
   - [ ] **Refund workflow:** Record and reconcile full/partial refunds.
 
 - **Key Technical Handling & Edge Cases:**
-  - [ ] **[Amount tampering] Client payment amount differs from Order:** Always derive payment amount from the server-owned Order total.
-  - [ ] **[Duplicate callback] A provider sends the same event repeatedly:** Verify signature and deduplicate by provider event/reference.
-  - [ ] **[Late success] Payment succeeds after timeout/cancellation:** Apply an explicit late-success and inventory-compensation policy.
-  - [ ] **[Out-of-order status] Provider events arrive in the wrong order:** Enforce a payment state machine and monotonic transitions.
-  - [ ] **[Lost callback] The provider succeeds but the application receives nothing:** Reconcile pending attempts with the provider.
-  - [ ] **[Partial failure] Payment succeeds while Order update fails:** Use durable events/outbox and retry-safe processing.
+  - [x] **[Amount tampering] Client/provider data differs from Order:** Derive charge amounts on the server and verify callback money and correlation before confirming.
+  - [x] **[Duplicate callback] An event is repeated:** Serialize on the Order row and enforce unique provider transaction references and one applied payment per Order.
+  - [x] **[Checkout retry] A request is repeated or another tab submits:** Replay the same attempt for the same UUID key, including failed attempts; block a new charge until the previous outcome is confirmed as non-payment.
+  - [x] **[Late or extra success] Money arrives after cancellation/deadline or another payment:** Retain financial evidence and flag operator review, without reopening or automatically refunding the Order.
+  - [x] **[Out-of-order result] Failure or create response follows success:** Preserve committed success; browser redirects never mark an Order paid.
+  - [x] **[Timeout/lost callback] A gateway result is uncertain:** Persist query scheduling, recover expired worker leases and use bounded reconciliation with operator review on exhaustion.
+  - [x] **[Expiry] An online Order remains unpaid:** Use a configurable deadline (15 minutes by default), inherited by retries, and existing inventory/voucher cancellation compensation. Local cancellation does not prove the gateway stopped collecting money.
+  - [x] **[Local partial failure] Payment/Order update fails:** Commit payment application, Order and history together; callbacks retry after rollback.
+  - [x] **[Slow gateway] Provider HTTP blocks or times out:** Persist the merchant attempt before outbound HTTP and perform network calls outside database transactions and Order/Redis locks.
+  - [x] **[Sensitive callback data] Provider payload contains private fields:** Retain only whitelisted reconciliation evidence and omit raw payloads from customer/admin responses.
+  - [ ] **[Cross-service delivery] Payment effects move to separate services:** Add durable outbox/inbox processing when that boundary exists.
 
 ---
 
@@ -417,9 +442,22 @@ docker compose up --build
 - Swagger UI: `http://localhost:8080/abtechzone/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8080/abtechzone/api-docs`
 
-## 🧪 Verification Status
+### Payment gateway setup
 
-Latest documentation audit was performed on `dev@479a5b0` on 04-09-2026.
+COD works with all online gateway flags disabled. To enable an online provider,
+follow [Payment gateway setup and verification](server/PAYMENT-GATEWAYS.md) and
+configure the variables in [payment.env.example](server/payment.env.example) in
+the backend process environment. Spring does not automatically load that file.
+For Docker Compose, explicitly pass the payment variables into the backend container;
+placing them only in the root `.env` does not add them to the current service configuration.
+For an existing payment database, follow the guide's manual schema-upgrade step
+before startup; the SQL script is not run automatically.
+
+Merchant callbacks require public HTTPS. Browser return parameters never mark an
+Order paid; the customer page reads verified backend status. Gateway acceptance
+remains **UAT PENDING**, including separately authorized payOS live testing.
+
+## 🧪 Verification Status
 
 | Check                              | Result                            | Notes                                                                                                                         |
 | ---------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |

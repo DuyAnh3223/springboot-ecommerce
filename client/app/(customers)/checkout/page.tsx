@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getPaymentProviders } from "@/features/payments/services/payment.service";
 import { redirect } from "next/navigation";
 import { getUserSession } from "@/features/auth/actions";
 import { getAddresses } from "@/features/users/services/address.service";
@@ -64,9 +65,10 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
     redirect(buildSignInCallbackUrl(checkoutUrl));
   }
 
-  const [reviewResult, addressResult] = await Promise.all([
+  const [reviewResult, addressResult, paymentProviders] = await Promise.all([
     reviewCheckoutAction({ selectedSkuIds, voucherCode }),
     getAddresses({ size: 50, sortBy: "id", order: "desc" }).catch(() => null),
+    getPaymentProviders().catch(() => []),
   ]);
 
   if (!reviewResult.success && reviewResult.error.status === 401) {
@@ -89,6 +91,7 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
       </div>
 
       <CheckoutPageClient
+        paymentProviders={paymentProviders}
         selectedSkuIds={selectedSkuIds}
         initialVoucherCode={voucherCode}
         initialReview={reviewResult.success ? reviewResult.data : null}

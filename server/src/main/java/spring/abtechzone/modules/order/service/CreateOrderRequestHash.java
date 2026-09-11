@@ -95,7 +95,15 @@ public final class CreateOrderRequestHash {
             appendField(sb, "none");
         }
 
-        appendField(sb, PAYMENT_METHOD);
+        // Preserve existing COD replay hashes; online provider is part of the new contract.
+        appendField(
+                sb,
+                request.getPaymentMethod() == null
+                        ? PAYMENT_METHOD
+                        : request.getPaymentMethod().name());
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE) {
+            appendField(sb, request.getPaymentProvider());
+        }
 
         return sha256(sb.toString());
     }

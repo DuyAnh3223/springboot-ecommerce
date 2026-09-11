@@ -137,10 +137,12 @@ export interface CreateCheckoutOrderRequest {
   reviewedCheckout: ReviewedCheckoutRequest;
   addressId: string | null;
   newUserAddress: CheckoutNewAddressRequest | null;
-  paymentMethod: "COD";
+  paymentMethod: "COD" | "ONLINE";
+  paymentProvider?: "MOMO" | "VNPAY" | "PAYOS";
 }
 
 export interface CheckoutOrderResponse {
+  paymentCheckoutUrl?: string;
   id: number;
   orderCode: string;
   status: string;

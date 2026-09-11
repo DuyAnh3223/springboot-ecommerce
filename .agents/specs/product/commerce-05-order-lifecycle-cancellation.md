@@ -61,13 +61,16 @@ cho mutation theo `orderCode`; `@Version` đã có từ Plan 04.
   | Admin | SHIPPING | DELIVERED |
   | Bất kỳ | DELIVERED/CANCELLED | Không có transition mới |
 
-- Payment mapping COD:
+- Với MOCK theo SPEC-COMMERCE-14, admin không thể `PENDING -> CONFIRMED` khi chưa
+  thanh toán và không thể cancel Payment đã thành công vì L1 chưa có refund.
+- Payment mapping COD được ghi trên Payment aggregate:
   - Tạo order: `UNPAID`.
   - Sang `DELIVERED`: `PAID`.
   - Hủy trước giao: `CANCELLED`.
 - `DELIVERED` và `CANCELLED` là terminal. Không triển khai refund/return sau
   delivered (roadmap khác).
-- `PaymentStatus` bổ sung `PAID`, `CANCELLED`.
+- `PaymentStatus` bổ sung `PAID`, `CANCELLED` cho response compatibility; persisted
+  attempt state thuộc Payment theo SPEC-COMMERCE-14 và ADR-006.
 
 ### R-C05-02: Owner-Safe Customer APIs
 
@@ -144,8 +147,9 @@ lock):
 
 Given một order ở mỗi current status và một actor (customer owner / admin),
 When một transition được yêu cầu,
-Then transition hợp lệ theo bảng R-C05-01 được áp dụng, payment mapping COD
-(`DELIVERED` → `PAID`, cancel trước giao → `CANCELLED`) được cập nhật cùng
+Then transition hợp lệ theo bảng R-C05-01 và Payment guard của SPEC-COMMERCE-14
+được áp dụng, payment mapping COD (`DELIVERED` → `PAID`, cancel trước giao →
+`CANCELLED`) được cập nhật trên Payment cùng
 transaction, và mọi transition không hợp lệ hoặc từ terminal state bị reject
 với `409 ORDER_STATUS_CONFLICT` không mutation.
 
@@ -332,7 +336,8 @@ Status body:
   (`reverseRedemptionByOrderId`) và atomic `decreaseUsedCount` guard không âm;
   cả hai row-count phải được kiểm tra trong cùng transaction.
 - `StockMovement.reason` dùng `ORDER_CANCEL_RETURN` (length 30 OK).
-- `PaymentStatus`: thêm `PAID`, `CANCELLED`.
+- `PaymentStatus`: giữ `PAID`, `CANCELLED` cho response; trạng thái persisted nằm
+  trong Payment aggregate theo SPEC-COMMERCE-14.
 - Trước Plan 10: JPA update phục vụ development/test; ghi rõ schema
   incompatibility nếu có (không tạo legacy backfill vì production sẽ reset).
 

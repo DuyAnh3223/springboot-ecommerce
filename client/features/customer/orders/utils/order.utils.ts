@@ -101,7 +101,7 @@ export function getHistoryTargetStatus(
 }
 
 export function getPaymentMethodLabel(paymentMethod: string): string {
-  return paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)" : "Phương thức thanh toán";
+  return paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)" : paymentMethod === "ONLINE" ? "Thanh toán trực tuyến" : "Phương thức thanh toán";
 }
 
 export function getPaymentStatusLabel(paymentStatus: string): string {

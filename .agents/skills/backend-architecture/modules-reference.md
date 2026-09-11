@@ -12,6 +12,7 @@
 | **category** | `CategoryService`, `AttributeService` | `Category`, `Attribute`, `CategoryAttribute` | Parent-child taxonomy, category-attribute mapping, slug generation |
 | **cart** | `CartService` | `Cart`, `CartItem` | Active cart management (`findByUserIdAndStatus`), quantity accumulation, price sync |
 | **order** | `CheckoutService`, `OrderCreationService`, `OrderLifecycleService` | `Order`, `OrderItem`, `OrderStatusHistory` | Checkout calculation, atomic order creation, and order query/status lifecycle |
+| **payment** | `PaymentService`, `OrderPaymentService` | `Payment`, `PaymentAttemptStatus`, `PaymentProvider` | Payment source of truth, COD settlement, dev/test mock attempts, idempotent result processing, and payment summaries |
 | **inventory** | `InventoryService` | `Inventory`, `ProductSku`, `StockMovement` | Inventory-owned on-hand reads, guarded stock mutations, and auditable movements; committed quantities live on `OrderItem` |
 | **voucher** | `VoucherService`, `VoucherValidator` | `Voucher`, `VoucherRedemption`, `VoucherType`, `VoucherApplyScope` | Coupon validation, atomic aggregate limits, and canonical per-order usage ledger |
 | **common** | `AwsS3FileService` | `AwsS3FileResponse`, `AwsS3AccessUrlResponse`, `ErrorCode` | Storage (dual-mode CloudFront public/signed URL), exception handling, app initialization |
@@ -73,21 +74,43 @@
   - Owns customer/admin order queries, status transitions, and atomic
     cancellation compensation.
 
-### 2.7 Inventory Module (`spring.abtechzone.modules.inventory`)
+### 2.7 Payment Module (`spring.abtechzone.modules.payment`)
+- **`PaymentService`**:
+  - Owns Payment attempt creation, transitions, provider-reference uniqueness,
+    COD settlement/cancellation, and Order payment summaries.
+  - Payment amount and currency are copied from the server-owned Order; Order does
+    not persist duplicate payment method/status fields.
+- **`OrderPaymentService`**:
+  - Serves owner/admin payment-attempt views and exposes retry state from the
+    Payment aggregate; runtime mock mutation endpoints are test-only fixtures.
+  - **`OnlinePaymentService`** persists an initial attempt before gateway HTTP,
+    uses a UUID idempotency receipt, leases remote work, and applies verified
+    callback/query results while holding the Order lock.
+  - **Gateway adapters** (`MomoGateway`, `VnpayGateway`, `PayosGateway`) own
+    provider signing, callback verification, query and ACK rules behind the
+    `PaymentGateway` contract. MOMO/VNPAY are sandbox-configurable; payOS is
+    disabled by default because its test environment uses real linked-bank money.
+  - Deadline expiry invokes existing stock/voucher cancellation compensation;
+    reconciliation retries pending provider queries with bounded leases and
+    records late/extra success as `REVIEW_REQUIRED` without auto-refund.
+  - Refunds, settlement ledger, broker/outbox infrastructure and live rollout
+    remain future work.
+
+### 2.8 Inventory Module (`spring.abtechzone.modules.inventory`)
 - **`InventoryService`**:
   - Owns the shared-primary-key `Inventory(skuId, onHand)` balance and bulk read projections; this is the sole current-stock source of truth.
   - Creates opening-balance movements, provides audited adjust-to for existing SKU flows, and provides atomic conditional decrement/increment for order sale/cancellation.
   - Exposes ADMIN-only stock adjustment and paged movement-history commands; adjustment writes use typed reasons, signed deltas, and the authenticated actor.
   - Missing rows fail closed (zero for reads, business/system errors for mutations); no `reserved` counter or committed-order reservation row.
 
-### 2.8 Voucher Module (`spring.abtechzone.modules.voucher`)
+### 2.9 Voucher Module (`spring.abtechzone.modules.voucher`)
 - **`VoucherService` & `VoucherValidator`**:
   - `VoucherType`: `PERCENTAGE` or `FIXED_AMOUNT`.
   - `VoucherApplyScope`: `ALL`, `SPECIFIC`.
   - `VoucherValidator`: Validates start/end dates, `minOrderValue`, `maxUses`, and `maxPerUser` from active `VoucherRedemption` rows.
   - `VoucherRedemption`: Canonical per-order/user usage ledger (`REDEEMED`/`REVERSED`); there is no `voucher_user` usage table.
 
-### 2.9 Common Package (`spring.abtechzone.common`)
+### 2.10 Common Package (`spring.abtechzone.common`)
 - **`AwsS3FileService`**:
   - Upload API: `upload(MultipartFile file, String folderName)` is the sole upload method and stores at `${folderName}/${uuid}`.
   - Public Folders Config: Read from property key `aws.s3.public-folders` (fallback defaults: `products`, `categories`, `avatars`).

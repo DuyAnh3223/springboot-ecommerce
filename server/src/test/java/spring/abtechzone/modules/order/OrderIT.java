@@ -55,6 +55,8 @@ import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.payment.constant.PaymentAttemptStatus;
+import spring.abtechzone.modules.payment.repository.PaymentRepository;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
@@ -104,6 +106,12 @@ class OrderIT extends BaseIT {
     private OrderRepository orderRepository;
 
     @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private spring.abtechzone.modules.payment.service.OnlinePaymentService onlinePaymentService;
+
+    @Autowired
     private OrderItemRepository orderItemRepository;
 
     @Autowired
@@ -151,6 +159,7 @@ class OrderIT extends BaseIT {
         stockMovementRepository.deleteAll();
         orderStatusHistoryRepository.deleteAll();
         orderItemRepository.deleteAll();
+        paymentRepository.deleteAll();
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
@@ -803,7 +812,9 @@ class OrderIT extends BaseIT {
 
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(cancelled.getPaymentStatus().name()).isEqualTo("CANCELLED");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(cancelled.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.CANCELLED);
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
                 .hasSize(2); // created + cancelled
     }
@@ -935,7 +946,9 @@ class OrderIT extends BaseIT {
 
         Order unchanged = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(unchanged.getPaymentStatus().name()).isEqualTo("UNPAID");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(unchanged.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.PENDING);
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(unchanged.getId()))
                 .hasSize(1); // create history only
 
@@ -949,6 +962,100 @@ class OrderIT extends BaseIT {
         List<VoucherRedemption> redemptions = voucherRedemptionRepository.findAll();
         assertThat(redemptions).hasSize(1);
         assertThat(redemptions.get(0).getStatus()).isEqualTo(VoucherRedemptionStatus.REDEEMED);
+    }
+
+    @Test
+    void onlineLateSuccessRacingExpiryCompensatesStockAndVoucherOnce() throws Exception {
+        Voucher voucher = onlineVoucher("ONLINE-EXPIRY");
+        String code = createOrderViaApi(voucher.getCode(), "100000");
+        var payment = expiredOnlineAttempt(code);
+        var result = new spring.abtechzone.modules.payment.gateway.PaymentGateway.Result(
+                payment.getMerchantRequestId(),
+                payment.getAmount(),
+                "VND",
+                spring.abtechzone.modules.payment.gateway.PaymentGateway.Outcome.SUCCEEDED,
+                "ONLINE-SETTLED",
+                null);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            var expiry = executor.submit(() -> {
+                start.await();
+                onlinePaymentService.expire(payment.getId());
+                return null;
+            });
+            var callback = executor.submit(() -> {
+                start.await();
+                return onlinePaymentService.apply(payment.getProvider(), result);
+            });
+            start.countDown();
+            expiry.get(20, TimeUnit.SECONDS);
+            callback.get(20, TimeUnit.SECONDS);
+        }
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
+        assertThat(stockMovementRepository.findAll())
+                .filteredOn(m -> m.getReason() == StockMovementReason.ORDER_CANCEL_RETURN)
+                .hasSize(1);
+        assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
+                .isZero();
+        assertThat(voucherRedemptionRepository.findAll())
+                .allMatch(r -> r.getStatus() == VoucherRedemptionStatus.REVERSED);
+        assertThat(orderRepository.findByOrderCode(code).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.CANCELLED);
+        var paid = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(paid.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+        assertThat(paid.getReviewReason()).isEqualTo("LATE_SUCCESS");
+    }
+
+    @Test
+    void onlineExpiryCompensationFailureRollsBackAllResources() throws Exception {
+        Voucher voucher = onlineVoucher("ONLINE-ROLLBACK");
+        String code = createOrderViaApi(voucher.getCode(), "100000");
+        var payment = expiredOnlineAttempt(code);
+        doThrow(new AppException(ErrorCode.SYSTEM_ERROR))
+                .when(voucherRepository)
+                .decreaseUsedCount(anyLong());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> onlinePaymentService.expire(payment.getId()))
+                .isInstanceOf(AppException.class);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
+        assertThat(stockMovementRepository.findAll())
+                .noneMatch(m -> m.getReason() == StockMovementReason.ORDER_CANCEL_RETURN);
+        assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
+                .isEqualTo(1);
+        assertThat(voucherRedemptionRepository.findAll())
+                .allMatch(r -> r.getStatus() == VoucherRedemptionStatus.REDEEMED);
+        assertThat(orderRepository.findByOrderCode(code).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PENDING);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus())
+                .isEqualTo(PaymentAttemptStatus.PENDING);
+    }
+
+    private Voucher onlineVoucher(String code) {
+        return voucherRepository.save(Voucher.builder()
+                .name("Online voucher")
+                .code(code)
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(100000))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .usedCount(0)
+                .build());
+    }
+
+    private spring.abtechzone.modules.payment.entity.Payment expiredOnlineAttempt(String code) {
+        // Reuse the real checkout fixture, then seed an initiated online attempt for the expiry boundary.
+        Order order = orderRepository.findByOrderCode(code).orElseThrow();
+        var payment = paymentRepository
+                .findByOrderIdOrderByCreatedAtAscIdAsc(order.getId())
+                .getFirst();
+        payment.setMethod(spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE);
+        payment.setProvider(spring.abtechzone.modules.payment.constant.PaymentProvider.MOMO);
+        payment.setMerchantRequestId("online-" + payment.getId());
+        payment.setInitiationState("READY");
+        payment.setApplicationStatus("NONE");
+        payment.setPaymentDeadline(java.time.OffsetDateTime.now().minusSeconds(1));
+        return paymentRepository.saveAndFlush(payment);
     }
 
     @Test
@@ -1075,7 +1182,9 @@ class OrderIT extends BaseIT {
                 .andExpect(jsonPath("$.result.status").value("DELIVERED"));
 
         Order delivered = orderRepository.findByOrderCode(orderCode).orElseThrow();
-        assertThat(delivered.getPaymentStatus().name()).isEqualTo("PAID");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(delivered.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.SUCCEEDED);
 
         // Terminal state: no further transition
         mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)

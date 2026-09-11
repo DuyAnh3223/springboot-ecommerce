@@ -76,7 +76,8 @@ export function buildCreateCheckoutOrderRequest(
             saveAddress: values.newAddress.saveAddress,
           }
         : null,
-    paymentMethod: "COD",
+    paymentMethod: values.paymentProvider && values.paymentProvider !== "COD" ? "ONLINE" : "COD",
+    ...(values.paymentProvider && values.paymentProvider !== "COD" ? { paymentProvider: values.paymentProvider } : {}),
   };
 
   return request;
