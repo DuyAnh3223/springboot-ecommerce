@@ -291,6 +291,37 @@ class OrderLifecycleServiceTest {
         }
 
         @Test
+        @DisplayName("SHIPPING -> DELIVERY_FAILED stores admin reason and keeps COD unpaid")
+        void deliveryFailed_storesReasonWithoutMarkingPaymentPaid() {
+            order.setStatus(OrderStatus.SHIPPING);
+            stubLockedOrder();
+
+            OrderResponse response = orderService.updateOrderStatus(
+                    "ORD-20260818-ABCD1234", OrderStatus.DELIVERY_FAILED, "  Không liên lạc được  ", admin);
+
+            assertThat(response.getStatus()).isEqualTo("DELIVERY_FAILED");
+            verify(paymentService, never()).markCodSucceeded(order);
+            ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+            verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+            assertThat(historyCaptor.getValue().getNote()).isEqualTo("Không liên lạc được");
+            assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("DELIVERY_FAILED");
+        }
+
+        @Test
+        @DisplayName("SHIPPING -> DELIVERY_FAILED requires an admin reason")
+        void deliveryFailed_requiresReason() {
+            order.setStatus(OrderStatus.SHIPPING);
+            stubLockedOrder();
+
+            assertThatThrownBy(() -> orderService.updateOrderStatus(
+                            "ORD-20260818-ABCD1234", OrderStatus.DELIVERY_FAILED, "  ", admin))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage(ErrorCode.INVALID_KEY.getMessage());
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+            verify(orderStatusHistoryRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("Invalid transition (PENDING -> DELIVERED) returns 409 and no mutation")
         void invalidTransition_returns409() {
             stubLockedOrder();

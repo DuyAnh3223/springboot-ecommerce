@@ -70,7 +70,7 @@ public class AdminOrderController {
             summary = "Update order status",
             description =
                     "Apply an allowed lifecycle transition (PENDING->CONFIRMED|CANCELLED, CONFIRMED->SHIPPING|CANCELLED, "
-                            + "SHIPPING->DELIVERED) through the shared service state machine. Requires ADMIN role")
+                            + "SHIPPING->DELIVERED|DELIVERY_FAILED) through the shared service state machine. Requires ADMIN role")
     @ApiResponse(responseCode = "200", description = "Status updated")
     @ApiResponse(responseCode = "403", description = "Access denied")
     @ApiResponse(responseCode = "404", description = "Order not found")

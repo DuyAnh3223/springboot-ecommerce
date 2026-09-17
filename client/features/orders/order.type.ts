@@ -3,6 +3,7 @@ export type OrderStatus =
   | "CONFIRMED"
   | "SHIPPING"
   | "DELIVERED"
+  | "DELIVERY_FAILED"
   | "CANCELLED";
 
 export type OrderPaymentStatus = "UNPAID" | "PAID" | "CANCELLED";

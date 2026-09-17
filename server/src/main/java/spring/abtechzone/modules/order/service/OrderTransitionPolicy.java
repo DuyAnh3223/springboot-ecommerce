@@ -33,11 +33,12 @@ public final class OrderTransitionPolicy {
         ALLOWED.get(Actor.CUSTOMER).put(OrderStatus.PENDING, EnumSet.of(OrderStatus.CANCELLED));
 
         // Admin: PENDING -> CONFIRMED|CANCELLED, CONFIRMED -> SHIPPING|CANCELLED,
-        // SHIPPING -> DELIVERED. DELIVERED/CANCELLED are terminal.
+        // SHIPPING -> DELIVERED|DELIVERY_FAILED. DELIVERED/DELIVERY_FAILED/CANCELLED are terminal.
         ALLOWED.put(Actor.ADMIN, new EnumMap<>(OrderStatus.class));
         ALLOWED.get(Actor.ADMIN).put(OrderStatus.PENDING, EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
         ALLOWED.get(Actor.ADMIN).put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.SHIPPING, OrderStatus.CANCELLED));
-        ALLOWED.get(Actor.ADMIN).put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.DELIVERED));
+        ALLOWED.get(Actor.ADMIN)
+                .put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED));
     }
 
     private OrderTransitionPolicy() {}
@@ -84,6 +85,8 @@ public final class OrderTransitionPolicy {
     }
 
     public static boolean isTerminal(OrderStatus status) {
-        return status == OrderStatus.DELIVERED || status == OrderStatus.CANCELLED;
+        return status == OrderStatus.DELIVERED
+                || status == OrderStatus.DELIVERY_FAILED
+                || status == OrderStatus.CANCELLED;
     }
 }

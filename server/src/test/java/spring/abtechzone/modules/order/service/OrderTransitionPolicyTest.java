@@ -36,6 +36,7 @@ class OrderTransitionPolicyTest {
         "ADMIN, CONFIRMED, CANCELLED, true",
         "ADMIN, CONFIRMED, DELIVERED, false",
         "ADMIN, SHIPPING, DELIVERED, true",
+        "ADMIN, SHIPPING, DELIVERY_FAILED, true",
         "ADMIN, SHIPPING, CANCELLED, false",
         "ADMIN, SHIPPING, CONFIRMED, false",
         // Terminal states: no transition at all
@@ -64,8 +65,10 @@ class OrderTransitionPolicyTest {
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.CONFIRMED, Actor.ADMIN))
                 .containsExactly(OrderStatus.CANCELLED, OrderStatus.SHIPPING);
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.SHIPPING, Actor.ADMIN))
-                .containsExactly(OrderStatus.DELIVERED);
+                .containsExactly(OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED);
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.DELIVERED, Actor.ADMIN))
+                .isEmpty();
+        assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.DELIVERY_FAILED, Actor.ADMIN))
                 .isEmpty();
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.CANCELLED, Actor.ADMIN))
                 .isEmpty();
@@ -83,9 +86,11 @@ class OrderTransitionPolicyTest {
     }
 
     @Test
-    @DisplayName("DELIVERED and CANCELLED are terminal")
+    @DisplayName("DELIVERED, DELIVERY_FAILED and CANCELLED are terminal")
     void terminalStates() {
         assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.DELIVERED)).isTrue();
+        assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.DELIVERY_FAILED))
+                .isTrue();
         assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.CANCELLED)).isTrue();
         assertThat(List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPING))
                 .allMatch(status -> !OrderTransitionPolicy.isTerminal(status));

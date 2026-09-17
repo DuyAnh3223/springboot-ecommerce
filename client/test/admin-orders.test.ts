@@ -12,8 +12,8 @@ import {
 import { adminOrderStatusSchema } from "../features/admin/orders/schemas/admin-order.schema.ts";
 import { getAdminOrderErrorMessage, shouldRefreshAdminOrderAfterError } from "../features/admin/orders/utils/admin-order-error.utils.ts";
 
-test("uses exactly the five backend statuses and Vietnamese labels", () => {
-  assert.deepEqual(Object.keys(ADMIN_ORDER_STATUS_META), ["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED", "CANCELLED"]);
+test("uses all backend statuses and Vietnamese labels", () => {
+  assert.deepEqual(Object.keys(ADMIN_ORDER_STATUS_META), ["PENDING", "CONFIRMED", "SHIPPING", "DELIVERED", "DELIVERY_FAILED", "CANCELLED"]);
   assert.equal(ADMIN_ORDER_STATUS_META.SHIPPING.label, "Đang giao");
 });
 
@@ -43,6 +43,7 @@ test("shows only backend-authorized transition targets", () => {
 test("trims notes and enforces cancellation reason", () => {
   assert.equal(normalizeAdminNote("  lý do  "), "lý do");
   assert.equal(adminOrderStatusSchema.safeParse({ status: "CANCELLED", note: " " }).success, false);
+  assert.equal(adminOrderStatusSchema.safeParse({ status: "DELIVERY_FAILED", note: " " }).success, false);
   assert.equal(adminOrderStatusSchema.safeParse({ status: "CONFIRMED", note: " ok " }).data?.note, "ok");
   assert.equal(adminOrderStatusSchema.safeParse({ status: "CONFIRMED", note: "x".repeat(501) }).success, false);
 });

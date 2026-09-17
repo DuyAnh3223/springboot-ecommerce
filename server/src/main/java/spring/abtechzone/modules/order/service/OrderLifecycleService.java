@@ -170,6 +170,9 @@ public class OrderLifecycleService {
                 && !OrderTransitionPolicy.isAllowed(order.getStatus(), target, Actor.ADMIN, payment)) {
             throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
         }
+        if (target == OrderStatus.DELIVERY_FAILED && (note == null || note.isBlank())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
         if (order.getStatus() != OrderStatus.CANCELLED && target == OrderStatus.CANCELLED) {
             compensateCancellation(order);
             paymentService.cancelPendingPayments(order);
