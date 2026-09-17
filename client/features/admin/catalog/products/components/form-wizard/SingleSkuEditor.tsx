@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { SkuDraft } from "@/features/products/types/sku.draft.type";
 import { SkuGalleryDialog, SkuGalleryItem } from "../SkuGalleryDialog";
+import { fromSkuGalleryItems, toSkuGalleryItems } from "../../utils/sku-gallery.utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,17 +17,9 @@ interface SingleSkuEditorProps {
 
 export function SingleSkuEditor({ skuDraft, onChange, productSlug }: SingleSkuEditorProps) {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [galleryItems, setGalleryItems] = useState<SkuGalleryItem[]>(() => {
-    if (!skuDraft.images) return [];
-    return skuDraft.images.map((img, idx) => ({
-      url: img.url,
-      previewUrl: img.url,
-      isPrimary: Boolean(img.isPrimary),
-      sortOrder: img.sortOrder ?? idx,
-    }));
-  });
+  const galleryItems = toSkuGalleryItems(skuDraft.images);
 
-  const handleFieldChange = (field: keyof SkuDraft, value: any) => {
+  const handleFieldChange = <K extends keyof SkuDraft>(field: K, value: SkuDraft[K]) => {
     onChange({
       ...skuDraft,
       [field]: value,
@@ -34,16 +27,9 @@ export function SingleSkuEditor({ skuDraft, onChange, productSlug }: SingleSkuEd
   };
 
   const handleGalleryChange = (newItems: SkuGalleryItem[]) => {
-    setGalleryItems(newItems);
-    const updatedImages = newItems.map((item) => ({
-      url: item.url || item.previewUrl,
-      file: item.file,
-      isPrimary: item.isPrimary,
-      sortOrder: item.sortOrder,
-    }));
     onChange({
       ...skuDraft,
-      images: updatedImages,
+      images: fromSkuGalleryItems(newItems),
     });
   };
 

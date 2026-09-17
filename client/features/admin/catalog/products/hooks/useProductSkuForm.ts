@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { skuImagesToDraft } from "../utils/sku-gallery.utils";
 import { ProductResponse } from "@/features/products/product.type";
 import { CategoryAttributeResponse } from "@/features/attributes/attribute.type";
 import { SellingMode, SkuDraft } from "@/features/products/types/sku.draft.type";
@@ -30,7 +31,6 @@ export function useProductSkuForm({
   product,
   productSlug,
   categoryAttributes,
-  selectedVariants,
   setSelectedVariants,
   resetWizard,
   setSavedProductId,
@@ -39,8 +39,19 @@ export function useProductSkuForm({
   setLoadingAttributes,
   basicInfoReset,
 }: UseProductSkuFormParams) {
-  const [sellingMode, setSellingMode] = useState<SellingMode>("single");
-  const [singleSku, setSingleSku] = useState<SkuDraft>({
+  const initialDrafts = useMemo<SkuDraft[]>(() => (product?.skus || []).map((sku) => ({
+    id: sku.id,
+    sku: sku.sku,
+    price: Number(sku.price),
+    stock: sku.stock,
+    weightGram: sku.weightGram ?? 0,
+    currency: sku.currency ?? "VND",
+    attributes: sku.attributes || {},
+    images: skuImagesToDraft(sku.images),
+  })), [product]);
+  const initialMode: SellingMode = initialDrafts.length > 1 || Object.keys(initialDrafts[0]?.attributes || {}).length > 0
+    ? "multi" : "single";
+  const initialSingleSku: SkuDraft = initialDrafts[0] || {
     sku: "",
     price: 0,
     stock: 0,
@@ -48,11 +59,24 @@ export function useProductSkuForm({
     currency: "VND",
     attributes: {},
     images: [],
-  });
+  };
 
-  const [skus, setSkus] = useState<SkuDraft[]>([]);
+  const [sellingMode, setSellingMode] = useState<SellingMode>(initialMode);
+  const [singleSku, setSingleSku] = useState<SkuDraft>(initialSingleSku);
+  const [skus, setSkus] = useState<SkuDraft[]>(initialMode === "multi" ? initialDrafts : []);
   const [removedSkuIds, setRemovedSkuIds] = useState<number[]>([]);
-  const [existingSkus, setExistingSkus] = useState<SkuDraft[]>([]);
+  const existingSkus = initialDrafts;
+  const [previousProduct, setPreviousProduct] = useState(product);
+
+  // Reset editable local state before rendering a different server product.
+  // Wizard-store and async catalogue synchronization remain in the effect below.
+  if (product !== previousProduct) {
+    setPreviousProduct(product);
+    setSellingMode(initialMode);
+    setSingleSku(initialSingleSku);
+    setSkus(initialMode === "multi" ? initialDrafts : []);
+    setRemovedSkuIds([]);
+  }
 
   const variantDefs = useMemo(() => {
     return categoryAttributes.filter((ca) => Boolean(ca.isVariantDefining));
@@ -73,29 +97,7 @@ export function useProductSkuForm({
       setNonVariantValues(product.attributes || {});
 
       if (product.skus && product.skus.length > 0) {
-        const initialDrafts: SkuDraft[] = product.skus.map((s) => ({
-          id: s.id,
-          sku: s.sku,
-          price: Number(s.price),
-          stock: s.stock,
-          weightGram: s.weightGram ?? 0,
-          currency: s.currency ?? "VND",
-          attributes: s.attributes || {},
-          images: (s.images || []).map((img) => ({
-            url: img.url,
-            isPrimary: Boolean(img.primary),
-            sortOrder: img.sortOrder,
-          })),
-        }));
-
-        setExistingSkus(initialDrafts);
-
-        const isMulti = product.skus.length > 1 || Object.keys(product.skus[0]?.attributes || {}).length > 0;
-        setSellingMode(isMulti ? "multi" : "single");
-
-        if (isMulti) {
-          setSkus(initialDrafts);
-
+        if (initialMode === "multi") {
           const initialSelectedVariants: Record<string, string[]> = {};
           initialDrafts.forEach((draft) => {
             if (draft.attributes) {
@@ -113,16 +115,6 @@ export function useProductSkuForm({
             }
           });
           setSelectedVariants(initialSelectedVariants);
-        } else {
-          setSingleSku(initialDrafts[0] || {
-            sku: product.slug.toUpperCase(),
-            price: 0,
-            stock: 0,
-            weightGram: 0,
-            currency: "VND",
-            attributes: {},
-            images: [],
-          });
         }
       }
 
@@ -136,18 +128,8 @@ export function useProductSkuForm({
           })
           .finally(() => setLoadingAttributes(false));
       }
-    } else {
-      setSingleSku({
-        sku: "",
-        price: 0,
-        stock: 0,
-        weightGram: 0,
-        currency: "VND",
-        attributes: {},
-        images: [],
-      });
     }
-  }, [product, basicInfoReset, resetWizard, setSavedProductId, setCategoryAttributes, setLoadingAttributes, setNonVariantValues, setSelectedVariants]);
+  }, [product, initialDrafts, initialMode, basicInfoReset, resetWizard, setSavedProductId, setCategoryAttributes, setLoadingAttributes, setNonVariantValues, setSelectedVariants]);
 
   const handleVariantSelectionsChange = (newSelections: Record<string, string[]>) => {
     setSelectedVariants(newSelections);
