@@ -10,8 +10,12 @@ export const checkoutNewAddressSchema = z.object({
     .min(10, "Số điện thoại phải có ít nhất 10 chữ số.")
     .regex(/^[0-9]+$/, "Số điện thoại chỉ được chứa chữ số."),
   province: requiredText("Vui lòng nhập tỉnh/thành phố."),
+  district: requiredText("Vui lòng nhập quận/huyện."),
   ward: requiredText("Vui lòng nhập phường/xã."),
   street: requiredText("Vui lòng nhập địa chỉ chi tiết."),
+  ghnProvinceId: z.coerce.number().int().positive("Vui lòng nhập mã tỉnh GHN."),
+  ghnDistrictId: z.coerce.number().int().positive("Vui lòng nhập mã quận/huyện GHN."),
+  ghnWardCode: requiredText("Vui lòng nhập mã phường/xã GHN."),
   saveAddress: z.boolean(),
 });
 
@@ -24,8 +28,12 @@ const inactiveNewAddressSchema = z.object({
   recipientName: z.string().optional(),
   phone: z.string().optional(),
   province: z.string().optional(),
+  district: z.string().optional(),
   ward: z.string().optional(),
   street: z.string().optional(),
+  ghnProvinceId: z.number().optional(),
+  ghnDistrictId: z.number().optional(),
+  ghnWardCode: z.string().optional(),
   saveAddress: z.boolean().optional(),
 });
 

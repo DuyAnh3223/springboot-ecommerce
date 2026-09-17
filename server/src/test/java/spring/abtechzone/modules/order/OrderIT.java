@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -135,6 +137,12 @@ class OrderIT extends BaseIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @MockitoSpyBean
+    private spring.abtechzone.modules.shipment.service.ShippingFeeService shippingFeeService;
+
+    @MockitoSpyBean
+    private spring.abtechzone.modules.shipment.service.ShippingLocationService shippingLocationService;
+
     @Autowired
     private spring.abtechzone.modules.auth.repository.RoleRepository roleRepository;
 
@@ -151,9 +159,24 @@ class OrderIT extends BaseIT {
 
     private static final String IDEMPOTENCY_KEY = "550e8400-e29b-41d4-a716-446655440000";
     private static final UUID GLOBAL_SCOPE_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SHIPPING_ADDRESS = """
+			{"recipientName":"Tran Thi B","phone":"0123456789",
+			"province":"Da Nang","district":"Hai Chau","ward":"Thuan Phuoc",
+			"street":"100 Le Loi","ghnProvinceId":201,"ghnDistrictId":202,"ghnWardCode":"203"}
+			""";
+    private static final String NEW_USER_ADDRESS = SHIPPING_ADDRESS.replace("}", ",\"saveAddress\":false}");
 
     @BeforeEach
     void setUp() {
+        // Keep GHN deterministic; checkout, inventory and rollback use real PostgreSQL.
+        doReturn(new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                        BigDecimal.valueOf(30000), java.time.OffsetDateTime.now()))
+                .when(shippingFeeService)
+                .calculate(any());
+        doReturn(new spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute(
+                        201, "Da Nang", 202, "Hai Chau", "203", "Thuan Phuoc"))
+                .when(shippingLocationService)
+                .resolveRoute(201, 202, "203");
         jdbcTemplate.update("UPDATE product_sku SET deleted_at = NULL WHERE deleted_at IS NOT NULL");
         voucherRedemptionRepository.deleteAll();
         stockMovementRepository.deleteAll();
@@ -245,16 +268,12 @@ class OrderIT extends BaseIT {
 					"items": [{"skuId": %d, "quantity": 2, "unitPrice": 1000000, "lineTotal": 2000000}],
 					"subtotal": 2000000, "eligibleSubtotal": 2000000, "shippingFee": 30000,
 					"discountAmount": %s, "totalAmount": %s%s,
-					"canPlaceOrder": true
+					"canPlaceOrder": true, "shippingAddress": %s
 				},
-				"newUserAddress": {
-					"recipientName": "Tran Thi B", "phone": "0123456789",
-					"province": "Da Nang", "ward": "Thuan Phuoc", "street": "100 Le Loi",
-					"saveAddress": false
-				},
+				"newUserAddress": %s,
 				"paymentMethod": "COD"
 				}
-				""".formatted(sku.getId(), discountAmount, totalAmount, voucherJson);
+				""".formatted(sku.getId(), discountAmount, totalAmount, voucherJson, SHIPPING_ADDRESS, NEW_USER_ADDRESS);
     }
 
     @Test
@@ -387,7 +406,9 @@ class OrderIT extends BaseIT {
                         .with(jwt().jwt(j -> j.subject("testuser")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createOrderBody("ROLLBACK10", "100000")))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VOUCHER_ARE_OUT.getCode()));
+        verify(voucherRedemptionRepository).save(any(VoucherRedemption.class));
 
         // Full rollback of every mutated row (AC-C04-07):
         assertThat(orderRepository.count()).isZero();
@@ -632,12 +653,21 @@ class OrderIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("Concurrent different-key orders for the same SKU never oversell")
+    @DisplayName(
+            "50 concurrent checkouts: PostgreSQL commits only available stock, with consistent orders and SALE_OUT")
     void concurrentDifferentKeys_sameSku_doesNotOversell() throws Exception {
-        inventoryService.setOnHand(sku.getId(), 2);
+        // Real PostgreSQL transactions are essential here. TestRedisConfig deliberately
+        // lets every lock through, so Redis cannot hide a broken database stock guard.
+        int initialStock = 20;
+        int quantityPerCheckout = 2;
+        int expectedOrders = initialStock / quantityPerCheckout;
+        inventoryService.setOnHand(sku.getId(), initialStock);
 
-        int threads = 4;
+        String body = createOrderBody(null, "0");
+
+        int threads = 50;
         List<User> buyers = new java.util.ArrayList<>();
+        List<Cart> carts = new java.util.ArrayList<>();
         for (int i = 0; i < threads; i++) {
             User buyer = userRepository.save(User.builder()
                     .username("concurrent-user-" + i)
@@ -650,53 +680,112 @@ class OrderIT extends BaseIT {
                     .build());
             Cart cart = cartRepository.save(
                     Cart.builder().user(buyer).status(CartStatus.ACTIVE).build());
-            cartItemRepository.save(
-                    CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+            cartItemRepository.save(CartItem.builder()
+                    .cart(cart)
+                    .productSku(sku)
+                    .quantity(quantityPerCheckout)
+                    .build());
             buyers.add(buyer);
+            carts.add(cart);
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threads);
+        List<java.util.concurrent.Future<org.springframework.test.web.servlet.MvcResult>> futures =
+                new java.util.ArrayList<>();
         List<org.springframework.mock.web.MockHttpServletResponse> responses =
                 java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
-        for (int i = 0; i < threads; i++) {
-            String key = UUID.randomUUID().toString();
-            String username = buyers.get(i).getUsername();
-            executor.submit(() -> {
-                ready.countDown();
-                try {
-                    start.await();
-                    responses.add(mockMvc.perform(post("/orders")
+        try {
+            for (User buyer : buyers) {
+                String key = UUID.randomUUID().toString();
+                String username = buyer.getUsername();
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    assertThat(start.await(15, TimeUnit.SECONDS)).isTrue();
+                    return mockMvc.perform(post("/orders")
                                     .header("Idempotency-Key", key)
                                     .with(jwt().jwt(j -> j.subject(username)))
                                     .contentType(MediaType.APPLICATION_JSON)
-                                    .content(createOrderBody(null, "0")))
-                            .andReturn()
-                            .getResponse());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    done.countDown();
+                                    .content(body))
+                            .andReturn();
+                }));
+            }
+            assertThat(ready.await(15, TimeUnit.SECONDS))
+                    .as("all 50 workers must be ready before releasing checkout requests")
+                    .isTrue();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+            start.countDown();
+            // Read every Future: worker exceptions must fail the test, never disappear.
+            for (var future : futures) {
+                var result = future.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+                var response = result.getResponse();
+                if (response.getStatus() != 200) {
+                    assertThat(response.getStatus())
+                            .as("checkout response: %s", response.getContentAsString())
+                            .isIn(400, 409);
+                    assertThat((Integer) com.jayway.jsonpath.JsonPath.read(response.getContentAsString(), "$.code"))
+                            .as(
+                                    "checkout response: %s; exception: %s",
+                                    response.getContentAsString(), result.getResolvedException())
+                            .isIn(ErrorCode.INSUFFICIENT_STOCK.getCode(), ErrorCode.CHECKOUT_CHANGED.getCode());
                 }
-            });
+                responses.add(response);
+            }
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
         }
-        ready.await();
-        start.countDown();
-        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
-        executor.shutdown();
 
         assertThat(responses).hasSize(threads);
         assertThat(responses.stream().filter(response -> response.getStatus() == 200))
-                .hasSize(1);
+                .hasSize(expectedOrders);
         assertThat(responses.stream().filter(response -> response.getStatus() != 200))
-                .hasSize(threads - 1)
-                .allSatisfy(response -> assertThat(response.getStatus()).isIn(400, 409));
-        assertThat(orderRepository.count()).isEqualTo(1);
+                .hasSize(threads - expectedOrders)
+                .allSatisfy(response -> {
+                    int code = com.jayway.jsonpath.JsonPath.read(response.getContentAsString(), "$.code");
+                    if (code == ErrorCode.INSUFFICIENT_STOCK.getCode()) {
+                        assertThat(response.getStatus()).isEqualTo(400);
+                    } else {
+                        assertThat(response.getStatus()).isEqualTo(409);
+                        assertThat(code).isEqualTo(ErrorCode.CHECKOUT_CHANGED.getCode());
+                        assertThat((String) com.jayway.jsonpath.JsonPath.read(
+                                        response.getContentAsString(), "$.result.items[0].issueCode"))
+                                .isEqualTo(ErrorCode.INSUFFICIENT_STOCK.name());
+                    }
+                });
+        assertThat(orderRepository.count()).isEqualTo(expectedOrders);
+        assertThat(orderItemRepository.findAll())
+                .hasSize(expectedOrders)
+                .allSatisfy(item -> assertThat(item.getQuantity()).isEqualTo(quantityPerCheckout));
+        assertThat(orderStatusHistoryRepository.count()).isEqualTo(expectedOrders);
+        assertThat(paymentRepository.count()).isEqualTo(expectedOrders);
+        assertThat(stockMovementRepository.findAll())
+                .filteredOn(movement -> movement.getReason() == StockMovementReason.SALE_OUT)
+                .hasSize(expectedOrders)
+                .allSatisfy(movement -> assertThat(movement.getChangeQty()).isEqualTo(-quantityPerCheckout));
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(movement -> movement.getReason() == StockMovementReason.SALE_OUT)
+                        .map(StockMovement::getReferenceId))
+                .containsExactlyInAnyOrderElementsOf(orderRepository.findAll().stream()
+                        .map(order -> String.valueOf(order.getId()))
+                        .toList());
         assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isZero();
+        for (int i = 0; i < threads; i++) {
+            boolean succeeded = responses.get(i).getStatus() == 200;
+            Cart cart = cartRepository.findById(carts.get(i).getId()).orElseThrow();
+            assertThat(cart.getStatus()).isEqualTo(succeeded ? CartStatus.COMPLETED : CartStatus.ACTIVE);
+            assertThat(cartItemRepository
+                            .findByCartIdAndProductSkuId(cart.getId(), sku.getId())
+                            .isPresent())
+                    .isEqualTo(!succeeded);
+            assertThat(orderRepository.findByUserIdOrderByCreatedAtDesc(
+                            buyers.get(i).getId()))
+                    .hasSize(succeeded ? 1 : 0);
+        }
     }
 
     @Test
@@ -726,9 +815,9 @@ class OrderIT extends BaseIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
 								{
-								"selectedSkuIds": [%d]
+								"selectedSkuIds": [%d], "newUserAddress": %s
 								}
-								""".formatted(sku.getId())))
+								""".formatted(sku.getId(), NEW_USER_ADDRESS)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.items[0].skuId").value(sku.getId()))
                 .andExpect(jsonPath("$.result.items[0].lineTotal").value(2000000))

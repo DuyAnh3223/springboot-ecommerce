@@ -563,7 +563,7 @@ class OrderServiceTest {
 
             CheckoutResponse response = checkoutService.checkoutReview(request(100L));
 
-            assertThat(response).hasNoNullFieldsOrPropertiesExcept("voucher", "subtotal");
+            assertThat(response).hasNoNullFieldsOrPropertiesExcept("voucher", "subtotal", "shippingAddress");
             // Sanity: the reviewed snapshot exposes only order-affecting + display fields
             assertThat(response.getItems().get(0)).hasNoNullFieldsOrPropertiesExcept("issueCode", "imageUrl");
         }

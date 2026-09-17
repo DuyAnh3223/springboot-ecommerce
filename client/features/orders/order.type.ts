@@ -70,6 +70,8 @@ export interface CancelOrderRequest {
 export interface CheckoutReviewRequest {
   selectedSkuIds: number[];
   voucherCode?: string;
+  addressId?: string;
+  newUserAddress?: CheckoutNewAddressRequest;
 }
 
 export interface CheckoutItemResponse {
@@ -98,7 +100,21 @@ export interface CheckoutResponse {
   discountAmount: number;
   totalAmount: number;
   voucher: VoucherReviewResponse | null;
+  shippingAddress?: ShippingAddressSnapshot | null;
   canPlaceOrder: boolean;
+}
+
+export interface ShippingAddressSnapshot {
+  addressId: string | null;
+  recipientName: string;
+  phone: string;
+  province: string;
+  district: string;
+  ward: string;
+  street: string;
+  ghnProvinceId: number | null;
+  ghnDistrictId: number | null;
+  ghnWardCode: string | null;
 }
 
 export interface ReviewedCheckoutItemRequest {
@@ -121,6 +137,7 @@ export interface ReviewedCheckoutRequest {
   discountAmount: number;
   totalAmount: number;
   voucher: ReviewedVoucherRequest | null;
+  shippingAddress?: ShippingAddressSnapshot | null;
   canPlaceOrder: boolean;
 }
 
@@ -128,8 +145,12 @@ export interface CheckoutNewAddressRequest {
   recipientName: string;
   phone: string;
   province: string;
+  district: string;
   ward: string;
   street: string;
+  ghnProvinceId: number;
+  ghnDistrictId: number;
+  ghnWardCode: string;
   saveAddress: boolean;
 }
 

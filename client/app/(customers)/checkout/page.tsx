@@ -65,17 +65,23 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
     redirect(buildSignInCallbackUrl(checkoutUrl));
   }
 
-  const [reviewResult, addressResult, paymentProviders] = await Promise.all([
-    reviewCheckoutAction({ selectedSkuIds, voucherCode }),
+  const [addressResult, paymentProviders] = await Promise.all([
     getAddresses({ size: 50, sortBy: "id", order: "desc" }).catch(() => null),
     getPaymentProviders().catch(() => []),
   ]);
+
+  const addresses = addressResult?.content || [];
+  const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0];
+  const reviewResult = await reviewCheckoutAction({
+    selectedSkuIds,
+    voucherCode,
+    addressId: defaultAddress?.id,
+  });
 
   if (!reviewResult.success && reviewResult.error.status === 401) {
     redirect(buildSignInCallbackUrl(checkoutUrl));
   }
 
-  const addresses = addressResult?.content || [];
   const addressError = addressResult
     ? null
     : "Không thể tải danh sách địa chỉ đã lưu.";

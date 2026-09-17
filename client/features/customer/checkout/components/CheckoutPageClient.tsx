@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency } from "@/shared/utils";
+import { ShippingAddressFields } from "@/features/shipment/components/ShippingAddressFields";
 import type { AddressResponse } from "@/features/users/address.type";
 import type { CheckoutResponse } from "@/features/orders/order.type";
 import { useCartHydration } from "@/features/customer/cart/components/CartInitializer";
@@ -47,8 +48,12 @@ const DEFAULT_NEW_ADDRESS: CheckoutFormValues["newAddress"] = {
   recipientName: "",
   phone: "",
   province: "",
+  district: "",
   ward: "",
   street: "",
+  ghnProvinceId: 0,
+  ghnDistrictId: 0,
+  ghnWardCode: "",
   saveAddress: false,
 };
 
@@ -57,7 +62,7 @@ function getDefaultAddress(addresses: AddressResponse[]): AddressResponse | unde
 }
 
 function formatAddress(address: AddressResponse): string {
-  return [address.street, address.ward, address.province].filter(Boolean).join(", ");
+  return [address.street, address.ward, address.district, address.province].filter(Boolean).join(", ");
 }
 
 function ReviewLoading({ message = "Đang cập nhật thông tin checkout..." }: { message?: string }) {
@@ -177,6 +182,7 @@ export function CheckoutPageClient({
   const { run: runReview, isLoading: isReviewLoading } = useAsyncAction();
   const { run: runSubmit, isLoading: isSubmitLoading } = useAsyncAction();
   const attemptRef = useRef<IdempotencyAttempt | null>(null);
+  const reviewRequestVersionRef = useRef(0);
   const reviewStartedRef = useRef(false);
   const [review, setReview] = useState<CheckoutResponse | null>(initialReview);
   const [reviewError, setReviewError] = useState<string | null>(initialReviewError || null);
@@ -202,22 +208,55 @@ export function CheckoutPageClient({
     formState: { errors },
   } = form;
   const addressMode = useWatch({ control: form.control, name: "addressMode" });
+  const newAddress = useWatch({ control: form.control, name: "newAddress" });
   const voucherCode = useWatch({ control: form.control, name: "voucherCode" });
   const paymentProvider = useWatch({ control: form.control, name: "paymentProvider" });
+  const previousNewAddressRef = useRef(JSON.stringify(newAddress));
+
+  useEffect(() => {
+    const fingerprint = JSON.stringify(newAddress);
+    if (fingerprint !== previousNewAddressRef.current) {
+      previousNewAddressRef.current = fingerprint;
+      reviewRequestVersionRef.current += 1;
+      setReview(null);
+      attemptRef.current = null;
+    }
+  }, [newAddress]);
 
   const refreshReview = useCallback(
     async (code?: string | null): Promise<CheckoutActionResult<CheckoutResponse> | null> => {
+      const requestVersion = ++reviewRequestVersionRef.current;
+      const values = form.getValues();
       const result = await runReview(() =>
         reviewCheckoutAction({
           selectedSkuIds,
           voucherCode: normalizeVoucherCode(code),
+          addressId: values.addressMode === "EXISTING" ? values.addressId : undefined,
+          newUserAddress:
+            values.addressMode === "NEW"
+              ? {
+                  recipientName: values.newAddress.recipientName.trim(),
+                  phone: values.newAddress.phone.trim(),
+                  province: values.newAddress.province.trim(),
+                  district: values.newAddress.district.trim(),
+                  ward: values.newAddress.ward.trim(),
+                  street: values.newAddress.street.trim(),
+                  ghnProvinceId: values.newAddress.ghnProvinceId,
+                  ghnDistrictId: values.newAddress.ghnDistrictId,
+                  ghnWardCode: values.newAddress.ghnWardCode.trim(),
+                  saveAddress: values.newAddress.saveAddress,
+                }
+              : undefined,
         }),
       );
 
       if (!result) {
+        if (requestVersion !== reviewRequestVersionRef.current) return null;
         setReviewError("Không thể kết nối đến hệ thống checkout. Vui lòng thử lại sau.");
         return null;
       }
+
+      if (requestVersion !== reviewRequestVersionRef.current) return null;
 
       if (!result.success) {
         setReviewError(result.error.message);
@@ -230,7 +269,7 @@ export function CheckoutPageClient({
       setRequiresReconfirmation(false);
       return result;
     },
-    [runReview, selectedSkuIds, setRequiresReconfirmation, setReview, setReviewError, setSubmitError],
+    [form, runReview, selectedSkuIds, setRequiresReconfirmation, setReview, setReviewError, setSubmitError],
   );
 
   useEffect(() => {
@@ -353,31 +392,8 @@ export function CheckoutPageClient({
     );
   }
 
-  if (reviewError && !review) {
-    return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-center">
-        <h2 className="text-lg font-bold text-rose-950">Không thể tải checkout</h2>
-        <p className="mt-2 text-sm text-rose-800">{reviewError}</p>
-        <Button
-          type="button"
-          className="mt-4 bg-rose-700 text-white hover:bg-rose-800"
-          onClick={() => {
-            reviewStartedRef.current = false;
-            void refreshReview(voucherCode);
-          }}
-        >
-          Thử lại
-        </Button>
-      </div>
-    );
-  }
-
-  if (!review) {
-    return <ReviewLoading />;
-  }
-
   const addressModeRegistration = register("addressMode");
-  const canSubmit = review.canPlaceOrder && !isReviewLoading && !isSubmitLoading;
+  const canSubmit = Boolean(review?.canPlaceOrder) && !isReviewLoading && !isSubmitLoading;
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     void handleSubmit(handleSubmitOrder)(event);
   };
@@ -385,7 +401,28 @@ export function CheckoutPageClient({
   return (
     <form onSubmit={handleFormSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div className="space-y-6">
-        <ReviewSummary review={review} />
+        {review ? (
+          <ReviewSummary review={review} />
+        ) : (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm md:p-6">
+            <h2 className="text-lg font-black text-amber-950">Chưa có báo giá vận chuyển</h2>
+            <p className="mt-2 text-sm text-amber-800">
+              {reviewError || "Nhập địa chỉ nhận hàng để tính phí vận chuyển."}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              disabled={isReviewLoading}
+              onClick={() => {
+                reviewStartedRef.current = false;
+                void refreshReview(voucherCode);
+              }}
+            >
+              {isReviewLoading ? "Đang thử lại..." : "Thử lại"}
+            </Button>
+          </section>
+        )}
 
         <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6">
           <div className="border-b border-slate-100 pb-4">
@@ -415,6 +452,7 @@ export function CheckoutPageClient({
                       shouldValidate: true,
                     });
                     setValue("addressId", defaultAddress?.id, { shouldValidate: true });
+                    void refreshReview(voucherCode);
                   }}
                 />
                 <span className="text-sm font-semibold text-slate-800">Dùng địa chỉ đã lưu</span>
@@ -431,6 +469,7 @@ export function CheckoutPageClient({
                     shouldValidate: true,
                   });
                   setValue("addressId", undefined, { shouldValidate: true });
+                  setReview(null);
                 }}
               />
               <span className="text-sm font-semibold text-slate-800">Nhập địa chỉ mới</span>
@@ -443,6 +482,10 @@ export function CheckoutPageClient({
               <select
                 id="checkout-address"
                 {...register("addressId")}
+                onChange={(event) => {
+                  setValue("addressId", event.target.value, { shouldValidate: true });
+                  void refreshReview(voucherCode);
+                }}
                 className="h-11 w-full rounded-lg border border-input bg-white px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="">Chọn địa chỉ</option>
@@ -474,7 +517,24 @@ export function CheckoutPageClient({
                   )}
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <ShippingAddressFields
+                provinceId={newAddress?.ghnProvinceId}
+                districtId={newAddress?.ghnDistrictId}
+                wardCode={newAddress?.ghnWardCode}
+                provinceError={errors.newAddress?.province?.message || errors.newAddress?.ghnProvinceId?.message}
+                districtError={errors.newAddress?.district?.message || errors.newAddress?.ghnDistrictId?.message}
+                wardError={errors.newAddress?.ward?.message || errors.newAddress?.ghnWardCode?.message}
+                onChange={(selection) => {
+                  setValue("newAddress.province", selection.province, { shouldValidate: true });
+                  setValue("newAddress.district", selection.district, { shouldValidate: true });
+                  setValue("newAddress.ward", selection.ward, { shouldValidate: true });
+                  setValue("newAddress.ghnProvinceId", selection.provinceId ?? 0, { shouldValidate: true });
+                  setValue("newAddress.ghnDistrictId", selection.districtId ?? 0, { shouldValidate: true });
+                  setValue("newAddress.ghnWardCode", selection.wardCode, { shouldValidate: true });
+                  setReview(null);
+                }}
+              />
+              <div className="hidden grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="province">Tỉnh/Thành phố</Label>
                   <Input id="province" {...register("newAddress.province")} />
@@ -497,6 +557,23 @@ export function CheckoutPageClient({
                   <p className="text-xs text-destructive">{errors.newAddress.street.message}</p>
                 )}
               </div>
+              <div className="hidden grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="ghnProvinceId">Mã tỉnh GHN</Label>
+                  <Input id="ghnProvinceId" type="number" min="1" {...register("newAddress.ghnProvinceId", { valueAsNumber: true })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ghnDistrictId">Mã quận/huyện GHN</Label>
+                  <Input id="ghnDistrictId" type="number" min="1" {...register("newAddress.ghnDistrictId", { valueAsNumber: true })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ghnWardCode">Mã phường/xã GHN</Label>
+                  <Input id="ghnWardCode" {...register("newAddress.ghnWardCode")} />
+                </div>
+              </div>
+              <Button type="button" variant="outline" disabled={isReviewLoading} onClick={() => void refreshReview(voucherCode)}>
+                {isReviewLoading ? "Đang tính phí..." : "Tính lại phí vận chuyển"}
+              </Button>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" {...register("newAddress.saveAddress")} />
                 Lưu địa chỉ này cho lần mua sau
@@ -534,7 +611,7 @@ export function CheckoutPageClient({
               {isReviewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Áp dụng"}
             </Button>
           </div>
-          {review.voucher?.code && (
+          {review?.voucher?.code && (
             <Button
               type="button"
               variant="ghost"

@@ -63,6 +63,7 @@ export function buildCreateCheckoutOrderRequest(
           }
         : null,
       canPlaceOrder: review.canPlaceOrder,
+      ...(review.shippingAddress ? { shippingAddress: review.shippingAddress } : {}),
     },
     addressId: values.addressMode === "EXISTING" ? values.addressId || null : null,
     newUserAddress:
@@ -71,8 +72,12 @@ export function buildCreateCheckoutOrderRequest(
             recipientName: values.newAddress.recipientName.trim(),
             phone: values.newAddress.phone.trim(),
             province: values.newAddress.province.trim(),
+            district: values.newAddress.district.trim(),
             ward: values.newAddress.ward.trim(),
             street: values.newAddress.street.trim(),
+            ghnProvinceId: values.newAddress.ghnProvinceId,
+            ghnDistrictId: values.newAddress.ghnDistrictId,
+            ghnWardCode: values.newAddress.ghnWardCode.trim(),
             saveAddress: values.newAddress.saveAddress,
           }
         : null,
@@ -115,6 +120,12 @@ export function getCheckoutErrorMessage(code?: number, status?: number): string 
     case 1036:
     case 1037:
       return "Địa chỉ nhận hàng không hợp lệ hoặc không còn khả dụng.";
+    case 1079:
+      return "Địa chỉ nhận hàng thiếu mã tuyến GHN. Vui lòng kiểm tra lại.";
+    case 1080:
+      return "Không thể tính phí vận chuyển lúc này. Vui lòng thử lại sau.";
+    case 1081:
+      return "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch Ä‘á»‹a chá»‰ GHN. Vui lÃ²ng thá»­ láº¡i sau.";
     case 1038:
       return "Voucher đã đạt giới hạn sử dụng của tài khoản.";
     case 1044:

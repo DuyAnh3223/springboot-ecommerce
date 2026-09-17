@@ -14,6 +14,7 @@ import spring.abtechzone.modules.order.dto.request.AddressRequest;
 import spring.abtechzone.modules.order.dto.request.CreateOrderRequest;
 import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutItemRequest;
 import spring.abtechzone.modules.order.dto.request.ReviewedCheckoutRequest;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
 
 /**
  * Canonical SHA-256 request hash for idempotency replay detection. The
@@ -91,8 +92,35 @@ public final class CreateOrderRequestHash {
                     trim(address.getStreet()));
             // saveAddress persists an Address row (side effect): it must be part of the hash
             appendField(sb, address.isSaveAddress());
+            if (hasRouteExtension(address)) {
+                appendField(sb, "address-extension:v3");
+                appendFields(
+                        sb,
+                        trim(address.getDistrict()),
+                        address.getGhnProvinceId(),
+                        address.getGhnDistrictId(),
+                        trim(address.getGhnWardCode()));
+            }
         } else {
             appendField(sb, "none");
+        }
+
+        ShippingAddressSnapshot shippingAddress = reviewed.getShippingAddress();
+        if (shippingAddress != null) {
+            appendField(sb, "review-address:v3");
+            appendField(sb, "review-address:present");
+            appendFields(
+                    sb,
+                    shippingAddress.addressId(),
+                    trim(shippingAddress.recipientName()),
+                    trim(shippingAddress.phone()),
+                    trim(shippingAddress.province()),
+                    trim(shippingAddress.district()),
+                    trim(shippingAddress.ward()),
+                    trim(shippingAddress.street()),
+                    shippingAddress.ghnProvinceId(),
+                    shippingAddress.ghnDistrictId(),
+                    trim(shippingAddress.ghnWardCode()));
         }
 
         // Preserve existing COD replay hashes; online provider is part of the new contract.
@@ -106,6 +134,13 @@ public final class CreateOrderRequestHash {
         }
 
         return sha256(sb.toString());
+    }
+
+    private static boolean hasRouteExtension(AddressRequest address) {
+        return address.getDistrict() != null
+                || address.getGhnProvinceId() != null
+                || address.getGhnDistrictId() != null
+                || address.getGhnWardCode() != null;
     }
 
     /**
