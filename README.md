@@ -414,21 +414,11 @@ Notification delivery is planned. The first target is an in-app notification cen
 ### Prerequisites
 
 - Docker Desktop and Docker Compose, or Java 21 + Maven + Node.js/npm for running services separately.
-- A root `.env` file containing the variables referenced by Docker Compose. The repository does not currently provide an `.env.example`.
+- A root `.env` file copied manually from [.env.example](.env.example). This is the central backend and Docker Compose template, including GHN, payment, database, and storage settings. Fill in the required credentials before starting services.
 
-Minimum local Compose configuration includes:
+For a frontend running outside Docker, copy [client/.env.example](client/.env.example) to `client/.env`. Next.js loads that file automatically. Spring Boot started through an IDE or Maven requires the root template's values in its process environment; it does not automatically read `.env`. For a backend running on the host, use the local `SPRING_DATASOURCE_*` values and change `REDIS_ADDRESS` to `redis://localhost:3308`.
 
-```dotenv
-POSTGRES_USER=your_local_user
-POSTGRES_PASSWORD=your_local_password
-POSTGRES_DB=abtechzone
-SPRING_PROFILES_ACTIVE=dev
-JWT_SIGNER_KEY=replace_with_a_long_local_secret
-REDIS_ADDRESS=redis://redis:6379
-NEXT_PUBLIC_SPRING_API_URL=http://localhost:8080/abtechzone
-```
-
-AWS/CloudFront variables must also be configured when testing product-image functionality.
+Both Compose configurations load the root `.env` into the backend container; their explicit `environment` entries take precedence. GHN needs a matching token, shop ID, pickup district, and pickup ward from the selected GHN environment. Keep these credentials in the backend configuration. AWS keys are required by the current S3 client initialization; configure CloudFront when testing product-image functionality.
 
 ```powershell
 docker volume create postgres_data
@@ -446,10 +436,9 @@ docker compose up --build
 
 COD works with all online gateway flags disabled. To enable an online provider,
 follow [Payment gateway setup and verification](server/PAYMENT-GATEWAYS.md) and
-configure the variables in [payment.env.example](server/payment.env.example) in
+configure the payment variables in [.env.example](.env.example) in
 the backend process environment. Spring does not automatically load that file.
-For Docker Compose, explicitly pass the payment variables into the backend container;
-placing them only in the root `.env` does not add them to the current service configuration.
+For Docker Compose, the backend receives these variables through the root `.env`.
 For an existing payment database, follow the guide's manual schema-upgrade step
 before startup; the SQL script is not run automatically.
 
