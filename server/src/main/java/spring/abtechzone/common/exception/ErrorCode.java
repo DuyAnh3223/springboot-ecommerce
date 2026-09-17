@@ -90,6 +90,9 @@ public enum ErrorCode {
     PAYMENT_AMOUNT_MISMATCH(1076, "Payment amount or currency does not match the order", HttpStatus.BAD_REQUEST),
     PAYMENT_REFERENCE_CONFLICT(1077, "Payment reference is already in use", HttpStatus.CONFLICT),
     PAYMENT_METHOD_NOT_AVAILABLE(1078, "Payment method is not available", HttpStatus.BAD_REQUEST),
+    SHIPPING_ADDRESS_INVALID(1079, "Shipping address is missing GHN route data", HttpStatus.BAD_REQUEST),
+    SHIPPING_PROVIDER_UNAVAILABLE(1080, "Shipping fee provider is unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+    SHIPPING_LOCATION_UNAVAILABLE(1081, "Shipping location provider is unavailable", HttpStatus.SERVICE_UNAVAILABLE),
     ;
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
