@@ -16,15 +16,7 @@ export default function AddressCard({ address, onEdit }: AddressCardProps) {
 
     const handleSetDefault = () => {
         runSetDefault(async () => {
-            const payload = {
-                recipientName: address.recipientName,
-                phone: address.phone,
-                province: address.province,
-                ward: address.ward,
-                street: address.street,
-                country: address.country || "VN",
-                isDefault: true,
-            };
+            const payload = { isDefault: true };
             const result = await updateAddressAction(address.id, payload);
             if (result.error) {
                 throw new Error(result.error);
@@ -58,7 +50,7 @@ export default function AddressCard({ address, onEdit }: AddressCardProps) {
                     )}
                 </div>
                 <div className="text-slate-600 text-xs sm:text-sm leading-relaxed truncate sm:whitespace-normal">
-                    {address.street}, {address.ward}, {address.province}
+                    {[address.street, address.ward, address.district, address.province].filter(Boolean).join(", ")}
                 </div>
             </div>
 
