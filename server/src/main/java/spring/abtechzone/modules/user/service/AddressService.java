@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute;
+import spring.abtechzone.modules.shipment.service.ShippingLocationService;
 import spring.abtechzone.modules.user.dto.request.AddressRequest;
 import spring.abtechzone.modules.user.dto.request.AddressSearchRequest;
 import spring.abtechzone.modules.user.dto.response.AddressResponse;
@@ -31,10 +33,15 @@ public class AddressService {
     AddressRepository addressRepository;
     AddressMapper addressMapper;
     UserService userService;
+    ShippingLocationService shippingLocationService;
 
     public AddressResponse create(AddressRequest request) {
         User currentUser = userService.getCurrentUser();
+        if (shippingLocationService != null) {
+            validateAddressFields(request, true);
+        }
         Address address = addressMapper.toAddress(request);
+        applyCanonicalRoute(request, address, true);
         address.setUser(currentUser);
 
         boolean hasDefault = addressRepository.existsByUserIdAndIsDefaultTrue(currentUser.getId());
@@ -58,7 +65,7 @@ public class AddressService {
         User currentUser = userService.getCurrentUser();
         Address address = findUserAddressWithOwnershipCheck(addressId);
 
-        if (!address.getUser().getId().equals(currentUser.getId())) {
+        if (address.getUser() == null || !address.getUser().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED);
         }
 
@@ -68,12 +75,16 @@ public class AddressService {
     public AddressResponse updateAddress(UUID addressId, AddressRequest request) {
         User currentUser = userService.getCurrentUser();
         Address address = findUserAddressWithOwnershipCheck(addressId);
+        if (shippingLocationService != null) {
+            validateAddressFields(request, false);
+        }
 
         if (Boolean.TRUE.equals(request.getIsDefault())) {
             addressRepository.unsetDefaultAddressesByUserId(currentUser.getId());
         }
 
         addressMapper.updateAddress(address, request);
+        applyCanonicalRoute(request, address, false);
         return addressMapper.toAddressResponse(addressRepository.save(address));
     }
 
@@ -99,7 +110,7 @@ public class AddressService {
         Address address =
                 addressRepository.findById(addressId).orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
 
-        if (!address.getUser().getId().equals(currentUser.getId())) {
+        if (address.getUser() == null || !address.getUser().getId().equals(currentUser.getId())) {
             throw new AppException(ErrorCode.ACCESS_DENIED); // 403 Forbidden
         }
         return address;
@@ -111,9 +122,67 @@ public class AddressService {
             String likeValue = "%" + keyword.toLowerCase() + "%";
             return cb.or(
                     cb.like(cb.lower(root.get("province")), likeValue),
+                    cb.like(cb.lower(root.get("district")), likeValue),
                     cb.like(cb.lower(root.get("ward")), likeValue),
                     cb.like(cb.lower(root.get("street")), likeValue),
                     cb.like(cb.lower(root.get("country")), likeValue));
         });
+    }
+
+    private void applyCanonicalRoute(AddressRequest request, Address address, boolean required) {
+        if (request == null) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        if (request.getCountry() != null
+                && !request.getCountry().isBlank()
+                && !"VN".equalsIgnoreCase(request.getCountry().trim())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        boolean hasAnyRoute = request.getGhnProvinceId() != null
+                || request.getGhnDistrictId() != null
+                || request.getGhnWardCode() != null
+                || request.getProvince() != null
+                || request.getDistrict() != null
+                || request.getWard() != null;
+        if (!required && !hasAnyRoute) {
+            return;
+        }
+        if (shippingLocationService == null) {
+            return;
+        }
+        if (request.getGhnProvinceId() == null
+                || request.getGhnDistrictId() == null
+                || request.getGhnWardCode() == null
+                || request.getGhnProvinceId() <= 0
+                || request.getGhnDistrictId() <= 0
+                || request.getGhnWardCode().isBlank()) {
+            throw new AppException(ErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+        ResolvedShippingRoute route = shippingLocationService.resolveRoute(
+                request.getGhnProvinceId(), request.getGhnDistrictId(), request.getGhnWardCode());
+        address.setGhnProvinceId(route.provinceId());
+        address.setGhnDistrictId(route.districtId());
+        address.setGhnWardCode(route.wardCode());
+        address.setProvince(route.province());
+        address.setDistrict(route.district());
+        address.setWard(route.ward());
+    }
+
+    private void validateAddressFields(AddressRequest request, boolean required) {
+        if (request == null) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
+        validateText(request.getRecipientName(), required);
+        validateText(request.getPhone(), required);
+        validateText(request.getProvince(), required);
+        validateText(request.getDistrict(), required);
+        validateText(request.getWard(), required);
+        validateText(request.getStreet(), required);
+    }
+
+    private void validateText(String value, boolean required) {
+        if ((required || value != null) && (value == null || value.isBlank())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
     }
 }

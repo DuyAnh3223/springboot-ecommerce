@@ -16,7 +16,11 @@ public class AddressResponse {
     String recipientName;
     String phone;
     String province;
+    String district;
     String ward;
+    Integer ghnProvinceId;
+    Integer ghnDistrictId;
+    String ghnWardCode;
     String street;
     String country;
     Boolean isDefault;
