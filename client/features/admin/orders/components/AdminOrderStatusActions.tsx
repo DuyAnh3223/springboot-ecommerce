@@ -19,7 +19,10 @@ export function AdminOrderStatusActions({ orderCode, allowedTransitions }: { ord
   async function submit() {
     if (!selected) return;
     const result = await run(() => updateAdminOrderStatusAction(orderCode, { status: selected, note: normalizeAdminNote(note) }));
-    if (result?.ok) { setSelected(null); setNote(""); router.refresh(); }
+    if (result?.ok) {
+      window.location.reload();
+      return;
+    }
     else if (result) { setError(result.error); if (result.refresh) router.refresh(); }
   }
   return <div className="space-y-3 rounded-lg border p-4"><h2 className="font-semibold">Cập nhật trạng thái</h2><div className="flex flex-wrap gap-2">{actions.map((action) => <Button key={action.status} type="button" variant={action.status === "CANCELLED" || action.status === "DELIVERY_FAILED" ? "destructive" : "default"} disabled={isLoading} onClick={() => setSelected(action.status)}>{action.label}</Button>)}</div>{selected && <div className="space-y-2"><p className="text-sm">Ghi chú {selected === "CANCELLED" || selected === "DELIVERY_FAILED" ? "(bắt buộc)" : "(không bắt buộc)"}</p><Textarea value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} placeholder="Nhập ghi chú tối đa 500 ký tự" /><div className="flex gap-2"><Button type="button" disabled={isLoading || ((selected === "CANCELLED" || selected === "DELIVERY_FAILED") && !note.trim())} onClick={submit}>{isLoading ? "Đang cập nhật..." : "Xác nhận"}</Button><Button type="button" variant="outline" disabled={isLoading} onClick={() => setSelected(null)}>Đóng</Button></div></div>}{error && <p className="text-sm text-destructive">{error}</p>}</div>;
