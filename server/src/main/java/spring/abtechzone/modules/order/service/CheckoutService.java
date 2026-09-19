@@ -92,6 +92,17 @@ public class CheckoutService {
 
     AuthoritativeCheckout recomputeCheckout(
             User user, List<Long> selectedSkuIds, String voucherCode, ShippingAddressData shippingAddress) {
+        return recomputeCheckout(
+                user, selectedSkuIds, voucherCode, shippingAddress, resolveShippingFee(shippingAddress));
+    }
+
+    /** Create-order supplies an external quote obtained before acquiring its locks. */
+    AuthoritativeCheckout recomputeCheckout(
+            User user,
+            List<Long> selectedSkuIds,
+            String voucherCode,
+            ShippingAddressData shippingAddress,
+            BigDecimal shippingFee) {
         Cart cart = getActiveCart(user);
         Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
                 .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
@@ -116,7 +127,6 @@ public class CheckoutService {
         }
 
         VoucherReview voucherReview = evaluateVoucherReview(voucherCode, user, skuSubtotals, subtotal);
-        BigDecimal shippingFee = resolveShippingFee(shippingAddress);
         boolean shippingAvailable = shippingFee != null;
         boolean canPlaceOrder = allLinesSellable && voucherReview.applicable() && shippingAvailable;
         BigDecimal totalAmount = calculateCheckoutTotal(subtotal, shippingFee, voucherReview.discountAmount());

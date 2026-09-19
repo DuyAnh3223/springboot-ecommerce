@@ -39,6 +39,7 @@ import spring.abtechzone.modules.payment.config.PaymentMockPolicy;
 import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.shipment.dto.GhnFeeResult;
 import spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute;
 import spring.abtechzone.modules.shipment.dto.ShippingAddressData;
 import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
@@ -109,6 +110,16 @@ public class OrderCreationService {
             return replayOrConflict(existing, requestHash);
         }
 
+        // Only scalar address data is read here: never populate the cart/SKU
+        // persistence context before the transaction. All provider I/O is outside locks.
+        PreparedShippingQuote shippingQuote = null;
+        if (shippingFeeService != null) {
+            ShippingAddressData source = resolveShippingAddressForQuote(request, user);
+            ShippingAddressData destination = canonicalizeShippingAddress(source);
+            shippingQuote = new PreparedShippingQuote(source, destination, shippingFeeService.calculate(destination));
+        }
+        PreparedShippingQuote preparedQuote = shippingQuote;
+
         // Step 4: Lock keys derive from the reviewed SKU IDs only (R-C04-02).
         // The cart is NOT read outside the transaction: with OSIV enabled the
         // pre-lock read would seed the persistence context, and a query inside
@@ -128,7 +139,7 @@ public class OrderCreationService {
                 0,
                 () -> executeWithIdempotencyRetry(
                         () -> transactionTemplate.execute(
-                                status -> doCreateOrder(request, user, idempotencyKey, requestHash)),
+                                status -> doCreateOrder(request, user, idempotencyKey, requestHash, preparedQuote)),
                         user,
                         idempotencyKey,
                         requestHash));
@@ -156,13 +167,24 @@ public class OrderCreationService {
     }
 
     private OrderResponse doCreateOrder(
-            CreateOrderRequest request, User user, String idempotencyKey, String requestHash) {
+            CreateOrderRequest request,
+            User user,
+            String idempotencyKey,
+            String requestHash,
+            PreparedShippingQuote shippingQuote) {
         // Step 1: Recheck idempotency inside the transaction, after locks
         Order replayed = orderRepository
                 .findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
                 .orElse(null);
         if (replayed != null) {
             return replayOrConflict(replayed, requestHash);
+        }
+
+        if (shippingQuote != null
+                && (!shippingQuote.source().equals(resolveShippingAddressForQuote(request, user))
+                        || shippingQuote.fee().quotedAt().plusSeconds(60).isBefore(OffsetDateTime.now()))) {
+            // A new review must obtain the changed destination's quote after releasing locks.
+            throw new AppException(ErrorCode.CHECKOUT_CHANGED);
         }
 
         // Step 2: Reload active cart and selected items with authoritative state
@@ -178,9 +200,12 @@ public class OrderCreationService {
             // this dependency is always wired and the GHN quote path is used.
             authoritative = checkoutService.recomputeCheckout(user, selectedSkuIds, normalizeVoucherCode(request));
         } else {
-            ShippingAddressData shippingAddress = resolveShippingAddressForQuote(request, user);
             authoritative = checkoutService.recomputeCheckout(
-                    user, selectedSkuIds, normalizeVoucherCode(request), shippingAddress);
+                    user,
+                    selectedSkuIds,
+                    normalizeVoucherCode(request),
+                    shippingQuote.destination(),
+                    shippingQuote.fee().totalFee());
         }
 
         // Step 4: Semantic-compare reviewed snapshot against the authoritative review (R-C04-07)
@@ -509,29 +534,18 @@ public class OrderCreationService {
             throw new AppException(ErrorCode.ADDRESS_REQUIRED);
         }
         if (request.getAddressId() != null) {
-            Address address = addressRepository
-                    .findById(request.getAddressId())
-                    .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
-            if (address.getUser() == null || !address.getUser().getId().equals(user.getId())) {
-                throw new AppException(ErrorCode.ADDRESS_NOT_BELONG_TO_USER);
-            }
-            return canonicalizeShippingAddress(new ShippingAddressData(
-                    address.getId(),
-                    address.getRecipientName(),
-                    address.getPhone(),
-                    address.getProvince(),
-                    address.getDistrict(),
-                    address.getWard(),
-                    address.getStreet(),
-                    address.getGhnProvinceId(),
-                    address.getGhnDistrictId(),
-                    address.getGhnWardCode()));
+            return addressRepository
+                    .findShippingAddress(request.getAddressId(), user.getId())
+                    .orElseThrow(() -> new AppException(
+                            addressRepository.existsById(request.getAddressId())
+                                    ? ErrorCode.ADDRESS_NOT_BELONG_TO_USER
+                                    : ErrorCode.ADDRESS_NOT_FOUND));
         }
         AddressRequest address = request.getNewUserAddress();
         if (address == null) {
             return null;
         }
-        return canonicalizeShippingAddress(new ShippingAddressData(
+        return new ShippingAddressData(
                 null,
                 address.getRecipientName(),
                 address.getPhone(),
@@ -541,8 +555,11 @@ public class OrderCreationService {
                 address.getStreet(),
                 address.getGhnProvinceId(),
                 address.getGhnDistrictId(),
-                address.getGhnWardCode()));
+                address.getGhnWardCode());
     }
+
+    private record PreparedShippingQuote(
+            ShippingAddressData source, ShippingAddressData destination, GhnFeeResult fee) {}
 
     private ShippingAddressData canonicalizeShippingAddress(ShippingAddressData address) {
         if (shippingLocationService == null) {

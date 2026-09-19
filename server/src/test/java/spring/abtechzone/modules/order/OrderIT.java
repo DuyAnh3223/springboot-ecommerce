@@ -277,6 +277,58 @@ class OrderIT extends BaseIT {
     }
 
     @Test
+    void savedAddressChangedDuringQuote_isReloadedFromPostgresAndNoOrderIsCommitted() throws Exception {
+        var address = addressRepository.saveAndFlush(spring.abtechzone.modules.user.entity.Address.builder()
+                .user(user)
+                .recipientName("Tran Thi B")
+                .phone("0123456789")
+                .province("Da Nang")
+                .district("Hai Chau")
+                .ward("Thuan Phuoc")
+                .street("100 Le Loi")
+                .ghnProvinceId(201)
+                .ghnDistrictId(202)
+                .ghnWardCode("203")
+                .build());
+        var cart = cartRepository.save(
+                Cart.builder().user(user).status(CartStatus.ACTIVE).build());
+        cartItemRepository.save(
+                CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var body = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(createOrderBody(null, "0"));
+        body.remove("newUserAddress");
+        body.put("addressId", address.getId().toString());
+        ((com.fasterxml.jackson.databind.node.ObjectNode)
+                        body.path("reviewedCheckout").path("shippingAddress"))
+                .put("addressId", address.getId().toString());
+        doAnswer(invocation -> {
+                    assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
+                                    .isActualTransactionActive())
+                            .as("GHN quote must not hold a database transaction")
+                            .isFalse();
+                    jdbcTemplate.update(
+                            "update address set line1 = ? where id = ?", "Changed while quoting", address.getId());
+                    return new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                            BigDecimal.valueOf(30000), java.time.OffsetDateTime.now());
+                })
+                .when(shippingFeeService)
+                .calculate(any());
+
+        mockMvc.perform(post("/orders")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("code").value(1068));
+        assertThat(orderRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(cartItemRepository.count()).isEqualTo(1);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
+    }
+
+    @Test
     @DisplayName("Create order persists items and SALE_OUT without an inventory reservation table")
     void shouldCreateOrderWithNewAddress() throws Exception {
         Cart cart = cartRepository.save(

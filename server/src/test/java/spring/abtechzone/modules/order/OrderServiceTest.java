@@ -768,6 +768,87 @@ class OrderServiceTest {
         }
 
         @Test
+        void ghnFailureHappensBeforeRedisLocksAndDatabaseTransaction() {
+            var feeService = mock(spring.abtechzone.modules.shipment.service.ShippingFeeService.class);
+            ReflectionTestUtils.setField(orderService, "shippingFeeService", feeService);
+            ReflectionTestUtils.setField(checkoutService, "shippingFeeService", feeService);
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            lenient().when(cartRepository.findByUserIdAndStatus(any(), any())).thenReturn(Optional.of(cart));
+            when(feeService.calculate(any())).thenAnswer(invocation -> {
+                verifyNoInteractions(redissonClient, transactionTemplate);
+                throw new AppException(ErrorCode.SHIPPING_PROVIDER_UNAVAILABLE);
+            });
+            CreateOrderRequest request = CreateOrderRequest.builder()
+                    .reviewedCheckout(reviewedCheckout())
+                    .newUserAddress(AddressRequest.builder()
+                            .recipientName("Recipient")
+                            .phone("0909090909")
+                            .province("HCM")
+                            .district("District")
+                            .ward("Ward")
+                            .street("1 Test")
+                            .ghnProvinceId(202)
+                            .ghnDistrictId(1456)
+                            .ghnWardCode("21504")
+                            .build())
+                    .paymentMethod(PaymentMethod.COD)
+                    .build();
+
+            assertThatThrownBy(() -> orderService.createOrder(request, IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.SHIPPING_PROVIDER_UNAVAILABLE);
+            verify(orderRepository, never()).save(any());
+            verifyNoInteractions(paymentService);
+        }
+
+        @Test
+        void savedAddressChangedWhileQuotingRejectsBeforeAnyOrderMutation() {
+            var source = new spring.abtechzone.modules.shipment.dto.ShippingAddressData(
+                    addressId, "Recipient", "0909090909", "HCM", "District", "Ward", "1 Test", 202, 1456, "21504");
+            var changed = new spring.abtechzone.modules.shipment.dto.ShippingAddressData(
+                    addressId, "Recipient", "0909090909", "HCM", "District", "Ward", "2 Test", 202, 1456, "21504");
+            var feeService = mock(spring.abtechzone.modules.shipment.service.ShippingFeeService.class);
+            ReflectionTestUtils.setField(orderService, "shippingFeeService", feeService);
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(addressRepository.findShippingAddress(addressId, userId))
+                    .thenReturn(Optional.of(source), Optional.of(changed));
+            when(feeService.calculate(source))
+                    .thenReturn(new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                            BigDecimal.valueOf(30000), java.time.OffsetDateTime.now()));
+
+            assertThatThrownBy(() ->
+                            orderService.createOrder(requestWithSavedAddress(reviewedCheckout()), IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.CHECKOUT_CHANGED);
+            verify(orderRepository, never()).save(any());
+            verifyNoInteractions(paymentService);
+            verify(inventoryService, never()).decreaseStock(any(), anyInt(), any());
+        }
+
+        @Test
+        void expiredPreLockQuoteRequiresNewReviewWithoutCallingProviderInsideTransaction() {
+            var source = new spring.abtechzone.modules.shipment.dto.ShippingAddressData(
+                    addressId, "Recipient", "0909090909", "HCM", "District", "Ward", "1 Test", 202, 1456, "21504");
+            var feeService = mock(spring.abtechzone.modules.shipment.service.ShippingFeeService.class);
+            ReflectionTestUtils.setField(orderService, "shippingFeeService", feeService);
+            when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
+            when(addressRepository.findShippingAddress(addressId, userId)).thenReturn(Optional.of(source));
+            when(feeService.calculate(source))
+                    .thenReturn(new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                            BigDecimal.valueOf(30000),
+                            java.time.OffsetDateTime.now().minusMinutes(2)));
+            assertThatThrownBy(() ->
+                            orderService.createOrder(requestWithSavedAddress(reviewedCheckout()), IDEMPOTENCY_KEY))
+                    .isInstanceOf(AppException.class)
+                    .extracting("errorCode")
+                    .isEqualTo(ErrorCode.CHECKOUT_CHANGED);
+            verify(feeService).calculate(source);
+            verify(orderRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("createOrder success with Saved Address ID")
         void createOrderSuccess_savedAddress() throws Exception {
             when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(user));
