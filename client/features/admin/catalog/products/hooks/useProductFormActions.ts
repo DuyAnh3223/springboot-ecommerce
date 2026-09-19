@@ -1,41 +1,20 @@
 import { useState } from "react";
+import type { UseFormSetValue } from "react-hook-form";
+import type { ProductFormValues } from "@/features/products/schemas/product.schema";
 import { useRouter } from "next/navigation";
 import { getAttributesAction } from "@/features/attributes/actions";
 import { uploadFileAction, deleteFileAction } from "@/shared/actions/file.action";
 import {
   createProductAction,
   updateProductAction,
-  createSkusBulkAction,
-  updateSkuAction,
   publishProductAction,
   reconcileSkusAction,
 } from "@/features/products/actions";
 import { useProductWizardStore } from "../stores/product-wizard.store";
 import { formatAttributesForSubmit } from "@/features/products/utils/format-attributes";
 import { ProductResponse } from "@/features/products/product.type";
-import { SkuGalleryItem } from "../components/SkuGalleryDialog";
 import { SkuDraft, ProductReconcilePayload } from "@/features/products/types/sku.draft.type";
-function canonicalStringify(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
-    return JSON.stringify(obj);
-  }
-  if (Array.isArray(obj)) {
-    return "[" + obj.map(canonicalStringify).join(",") + "]";
-  }
-  const keys = Object.keys(obj).sort();
-  const sortedPairs = keys.map(
-    (k) => `${JSON.stringify(k)}:${canonicalStringify(obj[k])}`
-  );
-  return "{" + sortedPairs.join(",") + "}";
-}
-
-function isAttributesEqual(
-  a: Record<string, any> = {},
-  b: Record<string, any> = {}
-): boolean {
-  return canonicalStringify(a || {}) === canonicalStringify(b || {});
-}
-
+import { prepareSkuImages } from "../utils/sku-gallery.utils";
 interface UseProductFormActionsParams {
   product?: ProductResponse | null;
   sectionRefs: {
@@ -48,7 +27,7 @@ interface UseProductFormActionsParams {
   selectedCategoryId: number;
   productSlug: string;
   productDescription?: string;
-  setValue: any;
+  setValue: UseFormSetValue<ProductFormValues>;
 }
 
 export function useProductFormActions({
@@ -104,7 +83,7 @@ export function useProductFormActions({
       const attrs = res.data || [];
       wizard.setCategoryAttributes(attrs);
 
-      const nvInit: Record<string, any> = {};
+      const nvInit: Record<string, unknown> = {};
       const vInit: Record<string, string[]> = {};
       attrs.forEach((a) => {
         if (a.isVariantDefining) {
@@ -186,36 +165,18 @@ export function useProductFormActions({
     try {
       const processedSkus = [];
       for (const skuItem of skus) {
-        const galleryItems: SkuGalleryItem[] = (skuItem as any).galleryItems || [];
-        const imagesPayload: any[] = [];
-        const uploadedKeysForThisSku: string[] = [];
+        const imagesPayload = await prepareSkuImages(skuItem.images, async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("folder", "products");
 
-        // Upload any local files
-        if (skuItem.images) {
-          for (const img of skuItem.images) {
-            let fileKey = img.url;
-            const fileObj = (img as any).file;
-            if (fileObj) {
-              const formData = new FormData();
-              formData.append("file", fileObj);
-              formData.append("folder", "products");
-
-              const uploadRes = await uploadFileAction(formData);
-              if (uploadRes.error || !uploadRes.data) {
-                throw new Error(uploadRes.error || `Tải ảnh cho SKU ${skuItem.sku} thất bại.`);
-              }
-              fileKey = uploadRes.data.fileKey;
-              pendingUploadedKeys.add(fileKey);
-              uploadedKeysForThisSku.push(fileKey);
-            }
-
-            imagesPayload.push({
-              url: fileKey,
-              sortOrder: img.sortOrder ?? 0,
-              primary: Boolean(img.isPrimary),
-            });
+          const uploadRes = await uploadFileAction(formData);
+          if (uploadRes.error || !uploadRes.data) {
+            throw new Error(uploadRes.error || `Tải ảnh cho SKU ${skuItem.sku} thất bại.`);
           }
-        }
+          pendingUploadedKeys.add(uploadRes.data.fileKey);
+          return uploadRes.data.fileKey;
+        });
 
         processedSkus.push({
           id: skuItem.id,
@@ -225,13 +186,12 @@ export function useProductFormActions({
           weightGram: skuItem.weightGram,
           currency: skuItem.currency || "VND",
           attributes: skuItem.attributes || {},
-          images: imagesPayload.length > 0 ? imagesPayload : undefined,
-          uploadedKeysForThisSku,
+          images: imagesPayload,
         });
       }
 
       const reconcilePayload: ProductReconcilePayload = {
-        skus: processedSkus.map(({ uploadedKeysForThisSku, ...rest }) => rest),
+        skus: processedSkus,
         removedSkuIds,
       };
 
@@ -241,11 +201,11 @@ export function useProductFormActions({
       }
 
       return true;
-    } catch (err: any) {
+    } catch (err) {
       for (const key of Array.from(pendingUploadedKeys)) {
         await deleteFileAction(key);
       }
-      wizard.setError(err.message || "Lỗi khi đồng bộ danh sách SKU.");
+      wizard.setError(err instanceof Error && err.message ? err.message : "Lỗi khi đồng bộ danh sách SKU.");
       return false;
     }
   };
@@ -275,8 +235,8 @@ export function useProductFormActions({
         router.push("/admin/products");
         router.refresh();
       }, 1000);
-    } catch (err: any) {
-      wizard.setError(err.message || "Lỗi khi lưu bản nháp.");
+    } catch (err) {
+      wizard.setError(err instanceof Error && err.message ? err.message : "Lỗi khi lưu bản nháp.");
     } finally {
       setIsSavingSkus(false);
     }
@@ -317,8 +277,8 @@ export function useProductFormActions({
         router.push("/admin/products");
         router.refresh();
       }, 1000);
-    } catch (err: any) {
-      wizard.setError(err.message || "Không thể xuất bản sản phẩm.");
+    } catch (err) {
+      wizard.setError(err instanceof Error && err.message ? err.message : "Không thể xuất bản sản phẩm.");
     } finally {
       setIsPublishing(false);
     }
@@ -337,4 +297,3 @@ export function useProductFormActions({
     handlePublishProduct,
   };
 }
-

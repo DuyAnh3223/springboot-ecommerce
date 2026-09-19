@@ -48,8 +48,9 @@ public class OrderController {
     @Operation(
             summary = "Checkout review",
             description =
-                    "Read-only pre-order summary for the selected cart items (selectedSkuIds). Returns a reviewed snapshot "
-                            + "with server-authoritative amounts, typed sellability/voucher issues and canPlaceOrder. "
+                    "Read-only pre-order summary for the selected cart items and one shipping address (addressId or "
+                            + "newUserAddress). The server obtains the GHN route fee using its configured fixed weight. Returns a reviewed snapshot "
+                            + "with server-authoritative product, voucher and GHN shipping amounts, typed sellability/voucher issues and canPlaceOrder. "
                             + "Does NOT create an order or modify any state")
     @ApiResponse(
             responseCode = "200",

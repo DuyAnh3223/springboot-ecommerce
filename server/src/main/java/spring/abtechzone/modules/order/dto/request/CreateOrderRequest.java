@@ -26,4 +26,6 @@ public class CreateOrderRequest {
 
     @NotNull(message = "paymentMethod is required")
     PaymentMethod paymentMethod;
+
+    spring.abtechzone.modules.payment.constant.PaymentProvider paymentProvider;
 }

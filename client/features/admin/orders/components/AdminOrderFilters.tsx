@@ -29,7 +29,7 @@ export function AdminOrderFilters({ query }: { query: AdminOrderListQuery }) {
       <select name="status" defaultValue={query.status || ""} className="h-9 rounded-md border bg-background px-3 text-sm">
         <option value="">Tất cả trạng thái</option>
         <option value="PENDING">Chờ xác nhận</option><option value="CONFIRMED">Đã xác nhận</option>
-        <option value="SHIPPING">Đang giao</option><option value="DELIVERED">Đã giao</option><option value="CANCELLED">Đã hủy</option>
+        <option value="SHIPPING">Đang giao</option><option value="DELIVERED">Đã giao</option><option value="DELIVERY_FAILED">Giao thất bại</option><option value="CANCELLED">Đã hủy</option>
       </select>
       <Input type="date" name="fromDate" defaultValue={query.fromDate?.slice(0, 10)} aria-label="Từ ngày" />
       <Input type="date" name="toDate" defaultValue={query.toDate?.slice(0, 10)} aria-label="Đến ngày" />

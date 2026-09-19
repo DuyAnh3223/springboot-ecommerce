@@ -108,6 +108,21 @@ vừa xác nhận. Không đáp ứng contract review-before-create.
 - Nếu cần price/stock hold, thiết kế một server-side checkout session/reservation
   có TTL riêng và supersede ADR này; không biến reviewed snapshot thành reservation.
 
+## Amendment — External shipping quote boundary (2026-09-18)
+
+Commerce-16 uses GHN as an external fee source. Create order resolves a scalar
+address snapshot and obtains the canonical route and fee before Redis locks and
+the database transaction. A scalar projection avoids populating the OSIV identity
+map with a pre-lock Address; cart, catalog, voucher, inventory and money are still
+recomputed inside the transaction. The current owned address must equal the
+quoted source, and the server quote must be at most 60 seconds old after waiting
+for locks. GHN configuration is fixed for the running application instance.
+
+Changed/expired pre-lock inputs return 409 CHECKOUT_CHANGED without a latest
+review; the client invalidates its snapshot and explicitly refreshes. Other
+semantic mismatches retain the existing latest-review response. No provider call
+is made to refresh a quote while holding locks. Replay remains before quoting.
+
 ## Supersedes
 
 None.

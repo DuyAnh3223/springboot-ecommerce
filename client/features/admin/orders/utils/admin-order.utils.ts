@@ -13,6 +13,7 @@ export const ADMIN_ORDER_STATUS_META: Record<
   CONFIRMED: { label: "Đã xác nhận", className: "bg-blue-100 text-blue-800" },
   SHIPPING: { label: "Đang giao", className: "bg-indigo-100 text-indigo-800" },
   DELIVERED: { label: "Đã giao", className: "bg-emerald-100 text-emerald-800" },
+  DELIVERY_FAILED: { label: "Giao thất bại", className: "bg-orange-100 text-orange-800" },
   CANCELLED: { label: "Đã hủy", className: "bg-rose-100 text-rose-800" },
 };
 

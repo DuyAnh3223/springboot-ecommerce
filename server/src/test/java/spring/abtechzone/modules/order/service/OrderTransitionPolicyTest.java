@@ -10,7 +10,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentMethod;
+import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.service.OrderTransitionPolicy.Actor;
+import spring.abtechzone.modules.payment.dto.PaymentSummary;
 
 class OrderTransitionPolicyTest {
 
@@ -33,6 +36,7 @@ class OrderTransitionPolicyTest {
         "ADMIN, CONFIRMED, CANCELLED, true",
         "ADMIN, CONFIRMED, DELIVERED, false",
         "ADMIN, SHIPPING, DELIVERED, true",
+        "ADMIN, SHIPPING, DELIVERY_FAILED, true",
         "ADMIN, SHIPPING, CANCELLED, false",
         "ADMIN, SHIPPING, CONFIRMED, false",
         // Terminal states: no transition at all
@@ -61,8 +65,10 @@ class OrderTransitionPolicyTest {
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.CONFIRMED, Actor.ADMIN))
                 .containsExactly(OrderStatus.CANCELLED, OrderStatus.SHIPPING);
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.SHIPPING, Actor.ADMIN))
-                .containsExactly(OrderStatus.DELIVERED);
+                .containsExactly(OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED);
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.DELIVERED, Actor.ADMIN))
+                .isEmpty();
+        assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.DELIVERY_FAILED, Actor.ADMIN))
                 .isEmpty();
         assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.CANCELLED, Actor.ADMIN))
                 .isEmpty();
@@ -80,11 +86,28 @@ class OrderTransitionPolicyTest {
     }
 
     @Test
-    @DisplayName("DELIVERED and CANCELLED are terminal")
+    @DisplayName("DELIVERED, DELIVERY_FAILED and CANCELLED are terminal")
     void terminalStates() {
         assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.DELIVERED)).isTrue();
+        assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.DELIVERY_FAILED))
+                .isTrue();
         assertThat(OrderTransitionPolicy.isTerminal(OrderStatus.CANCELLED)).isTrue();
         assertThat(List.of(OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.SHIPPING))
                 .allMatch(status -> !OrderTransitionPolicy.isTerminal(status));
+    }
+
+    @Test
+    @DisplayName("Payment-aware transitions block unpaid MOCK confirmation and paid cancellation")
+    void paymentAwareTransitions() {
+        PaymentSummary mockUnpaid = new PaymentSummary(PaymentMethod.MOCK, PaymentStatus.UNPAID);
+        PaymentSummary mockPaid = new PaymentSummary(PaymentMethod.MOCK, PaymentStatus.PAID);
+        PaymentSummary codUnpaid = new PaymentSummary(PaymentMethod.COD, PaymentStatus.UNPAID);
+
+        assertThat(OrderTransitionPolicy.isAllowed(OrderStatus.PENDING, OrderStatus.CONFIRMED, Actor.ADMIN, mockUnpaid))
+                .isFalse();
+        assertThat(OrderTransitionPolicy.isAllowed(OrderStatus.PENDING, OrderStatus.CONFIRMED, Actor.ADMIN, codUnpaid))
+                .isTrue();
+        assertThat(OrderTransitionPolicy.allowedTransitions(OrderStatus.CONFIRMED, Actor.ADMIN, mockPaid))
+                .containsExactly(OrderStatus.SHIPPING);
     }
 }

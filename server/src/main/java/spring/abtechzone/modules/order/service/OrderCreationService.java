@@ -27,7 +27,6 @@ import spring.abtechzone.modules.cart.entity.CartItem;
 import spring.abtechzone.modules.cart.repository.CartRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
-import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.*;
 import spring.abtechzone.modules.order.dto.response.*;
 import spring.abtechzone.modules.order.entity.Order;
@@ -36,8 +35,16 @@ import spring.abtechzone.modules.order.entity.OrderStatusHistory;
 import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.payment.config.PaymentMockPolicy;
+import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.shipment.dto.GhnFeeResult;
+import spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressData;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
+import spring.abtechzone.modules.shipment.service.ShippingFeeService;
+import spring.abtechzone.modules.shipment.service.ShippingLocationService;
 import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.user.repository.AddressRepository;
@@ -68,12 +75,26 @@ public class OrderCreationService {
     OrderMapper orderMapper;
     AuthService authService;
     CheckoutService checkoutService;
+    ShippingFeeService shippingFeeService;
+    ShippingLocationService shippingLocationService;
+    PaymentService paymentService;
+    PaymentMockPolicy paymentMockPolicy;
+    spring.abtechzone.modules.payment.service.OnlinePaymentService onlinePaymentService;
 
     RedissonClient redissonClient;
     TransactionTemplate transactionTemplate;
 
     /** Creates an order from a previously reviewed checkout snapshot. */
     public OrderResponse createOrder(CreateOrderRequest request, String rawIdempotencyKey) {
+        paymentMockPolicy.requireAvailable(request.getPaymentMethod());
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.MOCK) {
+            throw new AppException(ErrorCode.PAYMENT_METHOD_NOT_AVAILABLE);
+        }
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE) {
+            onlinePaymentService.requireProvider(request.getPaymentProvider());
+        } else if (request.getPaymentProvider() != null) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
         // Step 1: Auth User (idempotency is scoped to the authenticated user)
         User user = getAuthenticatedUser();
 
@@ -88,6 +109,16 @@ public class OrderCreationService {
         if (existing != null) {
             return replayOrConflict(existing, requestHash);
         }
+
+        // Only scalar address data is read here: never populate the cart/SKU
+        // persistence context before the transaction. All provider I/O is outside locks.
+        PreparedShippingQuote shippingQuote = null;
+        if (shippingFeeService != null) {
+            ShippingAddressData source = resolveShippingAddressForQuote(request, user);
+            ShippingAddressData destination = canonicalizeShippingAddress(source);
+            shippingQuote = new PreparedShippingQuote(source, destination, shippingFeeService.calculate(destination));
+        }
+        PreparedShippingQuote preparedQuote = shippingQuote;
 
         // Step 4: Lock keys derive from the reviewed SKU IDs only (R-C04-02).
         // The cart is NOT read outside the transaction: with OSIV enabled the
@@ -108,7 +139,7 @@ public class OrderCreationService {
                 0,
                 () -> executeWithIdempotencyRetry(
                         () -> transactionTemplate.execute(
-                                status -> doCreateOrder(request, user, idempotencyKey, requestHash)),
+                                status -> doCreateOrder(request, user, idempotencyKey, requestHash, preparedQuote)),
                         user,
                         idempotencyKey,
                         requestHash));
@@ -136,13 +167,24 @@ public class OrderCreationService {
     }
 
     private OrderResponse doCreateOrder(
-            CreateOrderRequest request, User user, String idempotencyKey, String requestHash) {
+            CreateOrderRequest request,
+            User user,
+            String idempotencyKey,
+            String requestHash,
+            PreparedShippingQuote shippingQuote) {
         // Step 1: Recheck idempotency inside the transaction, after locks
         Order replayed = orderRepository
                 .findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey)
                 .orElse(null);
         if (replayed != null) {
             return replayOrConflict(replayed, requestHash);
+        }
+
+        if (shippingQuote != null
+                && (!shippingQuote.source().equals(resolveShippingAddressForQuote(request, user))
+                        || shippingQuote.fee().quotedAt().plusSeconds(60).isBefore(OffsetDateTime.now()))) {
+            // A new review must obtain the changed destination's quote after releasing locks.
+            throw new AppException(ErrorCode.CHECKOUT_CHANGED);
         }
 
         // Step 2: Reload active cart and selected items with authoritative state
@@ -152,8 +194,19 @@ public class OrderCreationService {
         validateSelectionInCart(freshCart, selectedSkuIds);
 
         // Step 3: Recompute authoritative checkout review from server state
-        CheckoutService.AuthoritativeCheckout authoritative =
-                checkoutService.recomputeCheckout(user, selectedSkuIds, normalizeVoucherCode(request));
+        CheckoutService.AuthoritativeCheckout authoritative;
+        if (shippingFeeService == null) {
+            // Preserve the pre-shipment unit-test seam. In the Spring application
+            // this dependency is always wired and the GHN quote path is used.
+            authoritative = checkoutService.recomputeCheckout(user, selectedSkuIds, normalizeVoucherCode(request));
+        } else {
+            authoritative = checkoutService.recomputeCheckout(
+                    user,
+                    selectedSkuIds,
+                    normalizeVoucherCode(request),
+                    shippingQuote.destination(),
+                    shippingQuote.fee().totalFee());
+        }
 
         // Step 4: Semantic-compare reviewed snapshot against the authoritative review (R-C04-07)
         CheckoutChangedException mismatch =
@@ -163,7 +216,8 @@ public class OrderCreationService {
         }
 
         // Step 5: Resolve address (existing must belong to user; new address must pass validation)
-        AddressInfo addressInfo = resolveAddress(request, user);
+        AddressInfo addressInfo =
+                resolveAddress(request, user, authoritative.response().getShippingAddress());
 
         // Step 6: Build order with authoritative amounts only (never client money)
         Order order = buildOrder(request, user, addressInfo, idempotencyKey, requestHash, authoritative);
@@ -171,6 +225,11 @@ public class OrderCreationService {
         // Step 7: Save order (cascade saves items) + initial history fromStatus=null -> toStatus=PENDING
         Order savedOrder = orderRepository.save(order);
         createOrderStatusHistory(savedOrder, user);
+        if (request.getPaymentMethod() == spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE) {
+            onlinePaymentService.createInitial(savedOrder, request.getPaymentProvider());
+        } else {
+            paymentService.createInitialPayment(savedOrder, request.getPaymentMethod());
+        }
 
         // Step 8: Atomic stock decrement + SALE_OUT movement, per sorted SKU.
         // Persisted OrderItems are the committed quantity source (ADR-003).
@@ -276,8 +335,6 @@ public class OrderCreationService {
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .status(OrderStatus.PENDING)
-                .paymentMethod(request.getPaymentMethod())
-                .paymentStatus(PaymentStatus.UNPAID)
                 .subtotalAmount(subtotal)
                 .shippingFee(shippingFee)
                 .discountAmount(discountAmount)
@@ -402,7 +459,8 @@ public class OrderCreationService {
     }
 
     /** Resolves exactly one saved or inline shipping address. */
-    private AddressInfo resolveAddress(CreateOrderRequest request, User user) {
+    private AddressInfo resolveAddress(
+            CreateOrderRequest request, User user, ShippingAddressSnapshot canonicalAddress) {
         boolean hasAddressId = request.getAddressId() != null;
         boolean hasNewAddress = request.getNewUserAddress() != null;
         if (hasAddressId == hasNewAddress) {
@@ -414,25 +472,48 @@ public class OrderCreationService {
                     .findById(request.getAddressId())
                     .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
 
-            if (!address.getUser().getId().equals(user.getId())) {
+            if (address.getUser() == null || !address.getUser().getId().equals(user.getId())) {
                 throw new AppException(ErrorCode.ADDRESS_NOT_BELONG_TO_USER);
             }
 
-            String fullAddress = String.join(", ", address.getStreet(), address.getWard(), address.getProvince());
+            String recipientName =
+                    canonicalAddress != null ? canonicalAddress.recipientName() : address.getRecipientName();
+            String phone = canonicalAddress != null ? canonicalAddress.phone() : address.getPhone();
+            String fullAddress = canonicalAddress != null
+                    ? formatFullAddress(
+                            canonicalAddress.street(),
+                            canonicalAddress.ward(),
+                            canonicalAddress.district(),
+                            canonicalAddress.province())
+                    : formatFullAddress(
+                            address.getStreet(), address.getWard(), address.getDistrict(), address.getProvince());
 
-            return new AddressInfo(address.getId(), address.getRecipientName(), address.getPhone(), fullAddress);
+            return new AddressInfo(address.getId(), recipientName, phone, fullAddress);
 
         } else {
             AddressRequest addr = request.getNewUserAddress();
+            String recipientName =
+                    canonicalAddress != null ? canonicalAddress.recipientName() : addr.getRecipientName();
+            String phone = canonicalAddress != null ? canonicalAddress.phone() : addr.getPhone();
+            String province = canonicalAddress != null ? canonicalAddress.province() : addr.getProvince();
+            String district = canonicalAddress != null ? canonicalAddress.district() : addr.getDistrict();
+            String ward = canonicalAddress != null ? canonicalAddress.ward() : addr.getWard();
+            String street = canonicalAddress != null ? canonicalAddress.street() : addr.getStreet();
 
             UUID savedAddressId = null;
             if (addr.isSaveAddress()) {
                 Address newAddress = Address.builder()
-                        .recipientName(addr.getRecipientName())
-                        .phone(addr.getPhone())
-                        .province(addr.getProvince())
-                        .ward(addr.getWard())
-                        .street(addr.getStreet())
+                        .recipientName(recipientName)
+                        .phone(phone)
+                        .province(province)
+                        .district(district)
+                        .ward(ward)
+                        .street(street)
+                        .ghnProvinceId(
+                                canonicalAddress != null ? canonicalAddress.ghnProvinceId() : addr.getGhnProvinceId())
+                        .ghnDistrictId(
+                                canonicalAddress != null ? canonicalAddress.ghnDistrictId() : addr.getGhnDistrictId())
+                        .ghnWardCode(canonicalAddress != null ? canonicalAddress.ghnWardCode() : addr.getGhnWardCode())
                         .isDefault(false)
                         .user(user)
                         .build();
@@ -440,10 +521,73 @@ public class OrderCreationService {
                 savedAddressId = saved.getId();
             }
 
-            String fullAddress = String.join(", ", addr.getStreet(), addr.getWard(), addr.getProvince());
+            String fullAddress = formatFullAddress(street, ward, district, province);
 
-            return new AddressInfo(savedAddressId, addr.getRecipientName(), addr.getPhone(), fullAddress);
+            return new AddressInfo(savedAddressId, recipientName, phone, fullAddress);
         }
+    }
+
+    private ShippingAddressData resolveShippingAddressForQuote(CreateOrderRequest request, User user) {
+        boolean hasAddressId = request.getAddressId() != null;
+        boolean hasNewAddress = request.getNewUserAddress() != null;
+        if (hasAddressId == hasNewAddress) {
+            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
+        }
+        if (request.getAddressId() != null) {
+            return addressRepository
+                    .findShippingAddress(request.getAddressId(), user.getId())
+                    .orElseThrow(() -> new AppException(
+                            addressRepository.existsById(request.getAddressId())
+                                    ? ErrorCode.ADDRESS_NOT_BELONG_TO_USER
+                                    : ErrorCode.ADDRESS_NOT_FOUND));
+        }
+        AddressRequest address = request.getNewUserAddress();
+        if (address == null) {
+            return null;
+        }
+        return new ShippingAddressData(
+                null,
+                address.getRecipientName(),
+                address.getPhone(),
+                address.getProvince(),
+                address.getDistrict(),
+                address.getWard(),
+                address.getStreet(),
+                address.getGhnProvinceId(),
+                address.getGhnDistrictId(),
+                address.getGhnWardCode());
+    }
+
+    private record PreparedShippingQuote(
+            ShippingAddressData source, ShippingAddressData destination, GhnFeeResult fee) {}
+
+    private ShippingAddressData canonicalizeShippingAddress(ShippingAddressData address) {
+        if (shippingLocationService == null) {
+            return address;
+        }
+        if (address.provinceId() == null || address.districtId() == null || address.wardCode() == null) {
+            throw new AppException(ErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+        ResolvedShippingRoute route =
+                shippingLocationService.resolveRoute(address.provinceId(), address.districtId(), address.wardCode());
+        return new ShippingAddressData(
+                address.addressId(),
+                address.recipientName(),
+                address.phone(),
+                route.province(),
+                route.district(),
+                route.ward(),
+                address.street(),
+                route.provinceId(),
+                route.districtId(),
+                route.wardCode());
+    }
+
+    private String formatFullAddress(String... parts) {
+        return Arrays.stream(parts)
+                .filter(part -> part != null && !part.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(", "));
     }
 
     /** Generates an order code in the form ORD-yyyyMMdd-XXXXXXXX. */

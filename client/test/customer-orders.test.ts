@@ -15,12 +15,13 @@ import {
   parseOrderListQuery,
 } from "../features/customer/orders/utils/order.utils.ts";
 
-test("maps exactly the five backend order statuses to Vietnamese metadata", () => {
+test("maps all backend order statuses to Vietnamese metadata", () => {
   assert.deepEqual(Object.keys(ORDER_STATUS_META), [
     "PENDING",
     "CONFIRMED",
     "SHIPPING",
     "DELIVERED",
+    "DELIVERY_FAILED",
     "CANCELLED",
   ]);
   assert.equal(ORDER_STATUS_META.SHIPPING.label, "Đang giao hàng");

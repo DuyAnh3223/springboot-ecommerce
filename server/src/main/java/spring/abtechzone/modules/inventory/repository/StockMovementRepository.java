@@ -8,9 +8,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import spring.abtechzone.modules.inventory.constant.StockMovementReason;
 import spring.abtechzone.modules.inventory.entity.StockMovement;
 
 public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
+
+    boolean existsBySkuIdAndReasonAndReferenceId(Long skuId, StockMovementReason reason, String referenceId);
 
     @Query(
             value = "select m.id as movementId, m.sku_id as skuId, s.sku as skuCode, "

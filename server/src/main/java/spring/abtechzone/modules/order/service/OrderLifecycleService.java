@@ -16,9 +16,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
+import spring.abtechzone.modules.inventory.constant.StockMovementReason;
+import spring.abtechzone.modules.inventory.repository.StockMovementRepository;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
-import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
 import spring.abtechzone.modules.order.dto.response.OrderDetailResponse;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
@@ -31,7 +32,10 @@ import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.order.repository.specification.OrderSpecifications;
 import spring.abtechzone.modules.order.service.OrderTransitionPolicy.Actor;
+import spring.abtechzone.modules.payment.dto.PaymentSummary;
+import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.user.entity.User;
+import spring.abtechzone.modules.voucher.constant.VoucherRedemptionStatus;
 import spring.abtechzone.modules.voucher.repository.VoucherRedemptionRepository;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
 
@@ -48,7 +52,29 @@ public class OrderLifecycleService {
     VoucherRepository voucherRepository;
     VoucherRedemptionRepository voucherRedemptionRepository;
     InventoryService inventoryService;
+    StockMovementRepository stockMovementRepository;
     OrderMapper orderMapper;
+    PaymentService paymentService;
+
+    /** Called with the Order row locked; joins the result/worker transaction. */
+    @Transactional
+    public void expireOnlineOrder(Order order) {
+        if (order.getStatus() != OrderStatus.PENDING) return;
+        boolean applied = paymentService.getAttempts(order).stream().anyMatch(p -> p.getAppliedOrderId() != null);
+        if (applied) return;
+        compensateCancellation(order);
+        paymentService.cancelPendingPayments(order);
+        order.setStatus(OrderStatus.CANCELLED);
+        OrderStatusHistory history = new OrderStatusHistory();
+        history.setOrder(order);
+        history.setStatus("CANCELLED");
+        history.setFromStatus("PENDING");
+        history.setToStatus("CANCELLED");
+        history.setActorType("SYSTEM");
+        history.setNote("Online payment deadline expired");
+        history.setCreatedAt(OffsetDateTime.now());
+        orderStatusHistoryRepository.save(history);
+    }
 
     @Transactional(readOnly = true)
     public Page<OrderSummaryResponse> getMyOrders(OrderStatus status, int page, int size, User user) {
@@ -58,7 +84,8 @@ public class OrderLifecycleService {
         Page<Order> orders = status == null
                 ? orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId(), pageable)
                 : orderRepository.findByUserIdAndStatusOrderByCreatedAtDesc(user.getId(), status, pageable);
-        return orders.map(order -> toSummary(order, Actor.CUSTOMER));
+        var paymentSummaries = paymentService.getSummaries(orders.getContent());
+        return orders.map(order -> toSummary(order, Actor.CUSTOMER, paymentSummaries.get(order.getId())));
     }
 
     @Transactional(readOnly = true)
@@ -66,7 +93,7 @@ public class OrderLifecycleService {
         Order order = orderRepository
                 .findWithItemsByOrderCodeAndUserId(orderCode, user.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
-        OrderDetailResponse detail = toDetail(order, Actor.CUSTOMER);
+        OrderDetailResponse detail = toDetail(order, Actor.CUSTOMER, paymentService.getSummary(order));
         detail.setHistory(orderStatusHistoryRepository.findByOrderIdOrdered(order.getId()).stream()
                 .map(orderMapper::toOrderHistoryResponse)
                 .toList());
@@ -78,7 +105,7 @@ public class OrderLifecycleService {
         Order order = orderRepository
                 .findWithItemsByOrderCode(orderCode)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
-        OrderDetailResponse detail = toDetail(order, Actor.ADMIN);
+        OrderDetailResponse detail = toDetail(order, Actor.ADMIN, paymentService.getSummary(order));
         detail.setHistory(orderStatusHistoryRepository.findByOrderIdOrdered(order.getId()).stream()
                 .map(orderMapper::toOrderHistoryResponse)
                 .toList());
@@ -101,7 +128,9 @@ public class OrderLifecycleService {
                 Math.max(request.getPage(), 0), safeSize, Sort.by(CREATED_AT).descending());
         Specification<Order> spec = OrderSpecifications.adminSearch(
                 request.getSearch(), status, request.getFromDate(), request.getToDate());
-        return orderRepository.findAll(spec, pageable).map(order -> toSummary(order, Actor.ADMIN));
+        Page<Order> orders = orderRepository.findAll(spec, pageable);
+        var paymentSummaries = paymentService.getSummaries(orders.getContent());
+        return orders.map(order -> toSummary(order, Actor.ADMIN, paymentSummaries.get(order.getId())));
     }
 
     @Transactional
@@ -118,9 +147,14 @@ public class OrderLifecycleService {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
         }
+        PaymentSummary payment = paymentService.getSummary(order);
+        if (!OrderTransitionPolicy.isAllowed(order.getStatus(), OrderStatus.CANCELLED, Actor.CUSTOMER, payment)) {
+            throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
+        }
         compensateCancellation(order);
+        paymentService.cancelPendingPayments(order);
         applyTransition(
-                order, OrderStatus.CANCELLED, Actor.CUSTOMER, user.getId().toString(), normalizeNote(reason));
+                order, OrderStatus.CANCELLED, Actor.CUSTOMER, user.getId().toString(), normalizeNote(reason), payment);
         orderRepository.save(order);
         orderRepository.flush();
         return orderMapper.toOrderResponse(order);
@@ -131,20 +165,33 @@ public class OrderLifecycleService {
         Order order = orderRepository
                 .findByOrderCodeForUpdate(orderCode)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
+        PaymentSummary payment = paymentService.getSummary(order);
+        if (order.getStatus() != target
+                && !OrderTransitionPolicy.isAllowed(order.getStatus(), target, Actor.ADMIN, payment)) {
+            throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
+        }
+        if (target == OrderStatus.DELIVERY_FAILED && (note == null || note.isBlank())) {
+            throw new AppException(ErrorCode.INVALID_KEY);
+        }
         if (order.getStatus() != OrderStatus.CANCELLED && target == OrderStatus.CANCELLED) {
             compensateCancellation(order);
+            paymentService.cancelPendingPayments(order);
+        } else if (target == OrderStatus.DELIVERED) {
+            paymentService.markCodSucceeded(order);
         }
-        applyTransition(order, target, Actor.ADMIN, admin.getId().toString(), normalizeNote(note));
+        applyTransition(order, target, Actor.ADMIN, admin.getId().toString(), normalizeNote(note), payment);
         orderRepository.save(order);
         orderRepository.flush();
         return orderMapper.toOrderResponse(order);
     }
 
-    private OrderSummaryResponse toSummary(Order order, Actor actor) {
+    private OrderSummaryResponse toSummary(Order order, Actor actor, PaymentSummary payment) {
         OrderSummaryResponse summary = orderMapper.toOrderSummaryResponse(order);
-        summary.setAllowedTransitions(OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor).stream()
-                .map(Enum::name)
-                .toList());
+        applyPaymentSummary(summary, payment);
+        summary.setAllowedTransitions(
+                OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor, payment).stream()
+                        .map(Enum::name)
+                        .toList());
         if (order.getItems() != null && !order.getItems().isEmpty()) {
             summary.setPreviewItem(
                     orderMapper.toOrderItemResponse(order.getItems().getFirst()));
@@ -152,13 +199,21 @@ public class OrderLifecycleService {
         return summary;
     }
 
-    private OrderDetailResponse toDetail(Order order, Actor actor) {
+    private OrderDetailResponse toDetail(Order order, Actor actor, PaymentSummary payment) {
         OrderDetailResponse detail = orderMapper.toOrderDetailResponse(order);
-        detail.setAllowedTransitions(OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor).stream()
-                .map(Enum::name)
-                .toList());
+        detail.setPaymentMethod(payment.method().name());
+        detail.setPaymentStatus(payment.status().name());
+        detail.setAllowedTransitions(
+                OrderTransitionPolicy.allowedTransitions(order.getStatus(), actor, payment).stream()
+                        .map(Enum::name)
+                        .toList());
         detail.setItems(orderMapper.toOrderItemResponses(order.getItems()));
         return detail;
+    }
+
+    private void applyPaymentSummary(OrderSummaryResponse response, PaymentSummary payment) {
+        response.setPaymentMethod(payment.method().name());
+        response.setPaymentStatus(payment.status().name());
     }
 
     private OrderStatus parseStatus(String raw) {
@@ -187,6 +242,11 @@ public class OrderLifecycleService {
     private void restoreCancellationStockItem(Order order, OrderItem item) {
         validateCancellationItem(item);
         Long skuId = item.getSkuId();
+        if (stockMovementRepository != null
+                && stockMovementRepository.existsBySkuIdAndReasonAndReferenceId(
+                        skuId, StockMovementReason.ORDER_CANCEL_RETURN, String.valueOf(order.getId()))) {
+            return;
+        }
         inventoryService.increaseStock(skuId, item.getQuantity(), order, item.getSku());
     }
 
@@ -204,7 +264,13 @@ public class OrderLifecycleService {
             throw new AppException(ErrorCode.SYSTEM_ERROR);
         }
 
-        requireSingleUpdatedRow(voucherRedemptionRepository.reverseRedemptionByOrderId(order.getId()));
+        int reversed = voucherRedemptionRepository.reverseRedemptionByOrderId(order.getId());
+        if (reversed == 0) {
+            if (voucherRedemptionRepository.existsByOrderIdAndStatus(order.getId(), VoucherRedemptionStatus.REVERSED)) {
+                return;
+            }
+            throw new AppException(ErrorCode.SYSTEM_ERROR);
+        }
         requireSingleUpdatedRow(
                 voucherRepository.decreaseUsedCount(order.getVoucher().getId()));
     }
@@ -228,7 +294,8 @@ public class OrderLifecycleService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private void applyTransition(Order order, OrderStatus target, Actor actor, String actorId, String note) {
+    private void applyTransition(
+            Order order, OrderStatus target, Actor actor, String actorId, String note, PaymentSummary payment) {
         if (order.getStatus() == target) {
             return;
         }
@@ -236,15 +303,10 @@ public class OrderLifecycleService {
         if (OrderTransitionPolicy.isTerminal(from)) {
             throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
         }
-        if (!OrderTransitionPolicy.isAllowed(from, target, actor)) {
+        if (!OrderTransitionPolicy.isAllowed(from, target, actor, payment)) {
             throw new AppException(ErrorCode.ORDER_STATUS_CONFLICT);
         }
         order.setStatus(target);
-        if (target == OrderStatus.CANCELLED) {
-            order.setPaymentStatus(PaymentStatus.CANCELLED);
-        } else if (target == OrderStatus.DELIVERED) {
-            order.setPaymentStatus(PaymentStatus.PAID);
-        }
         OrderStatusHistory history = new OrderStatusHistory();
         history.setOrder(order);
         history.setStatus(target.name());

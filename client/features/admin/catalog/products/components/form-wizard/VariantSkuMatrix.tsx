@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { SkuDraft } from "@/features/products/types/sku.draft.type";
 import { SkuGalleryDialog, SkuGalleryItem } from "../SkuGalleryDialog";
+import { fromSkuGalleryItems, toSkuGalleryItems } from "../../utils/sku-gallery.utils";
 import { getCanonicalVariantKey } from "@/features/products/utils/reconcile-sku.util";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,14 +21,13 @@ interface VariantSkuMatrixProps {
 export function VariantSkuMatrix({
   skus,
   onChange,
-  productSlug,
   onRegenerateCodes,
 }: VariantSkuMatrixProps) {
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(null);
   const [bulkPrice, setBulkPrice] = useState<string>("");
   const [bulkStock, setBulkStock] = useState<string>("");
 
-  const handleFieldChange = (index: number, field: keyof SkuDraft, value: any) => {
+  const handleFieldChange = <K extends keyof SkuDraft>(index: number, field: K, value: SkuDraft[K]) => {
     const updated = [...skus];
     updated[index] = {
       ...updated[index],
@@ -56,13 +56,7 @@ export function VariantSkuMatrix({
 
   const handleGalleryChange = (newItems: SkuGalleryItem[]) => {
     if (activeGalleryIndex === null) return;
-    const updatedImages = newItems.map((item) => ({
-      url: item.url || item.previewUrl,
-      file: item.file,
-      isPrimary: item.isPrimary,
-      sortOrder: item.sortOrder,
-    }));
-    handleFieldChange(activeGalleryIndex, "images", updatedImages);
+    handleFieldChange(activeGalleryIndex, "images", fromSkuGalleryItems(newItems));
   };
 
   return (
@@ -241,12 +235,7 @@ export function VariantSkuMatrix({
           open={activeGalleryIndex !== null}
           onOpenChange={() => setActiveGalleryIndex(null)}
           skuTitle={activeSku.sku || `SKU #${(activeGalleryIndex ?? 0) + 1}`}
-          items={(activeSku.images || []).map((img, i) => ({
-            url: img.url,
-            previewUrl: img.url,
-            isPrimary: Boolean(img.isPrimary),
-            sortOrder: img.sortOrder ?? i,
-          }))}
+          items={toSkuGalleryItems(activeSku.images)}
           onChange={handleGalleryChange}
         />
       )}

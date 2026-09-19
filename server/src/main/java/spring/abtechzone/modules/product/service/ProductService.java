@@ -103,6 +103,9 @@ public class ProductService {
             for (ProductSku sku : product.getSkus()) {
                 inventoryService.createForSku(sku, requestedStockBySku.getOrDefault(sku.getSku(), 0));
             }
+
+            productSkuService.recalculateProductAggregates(product);
+            productRepository.save(product);
         }
 
         return toDetailResponse(product);
@@ -176,11 +179,16 @@ public class ProductService {
             }
         }
 
+        boolean productAttributesChanged = request.getAttributes() != null
+                && !attributeValuesEqual(product.getAttributes(), request.getAttributes());
         productMapper.updateProduct(product, request);
 
-        // Validate final state of attributes
-        productAttributeValidator.validateProductAttributes(product);
-        productAttributeValidator.validateProductSkus(product);
+        // Product metadata updates must not revalidate unchanged SKU data. Older
+        // products may contain SKU attributes that are no longer defined by the
+        // current category. Validate only a product attribute map that changed.
+        if (productAttributesChanged) {
+            productAttributeValidator.validateProductAttributes(product);
+        }
 
         product = productRepository.save(product);
 
@@ -198,6 +206,30 @@ public class ProductService {
         if (request.getName() != null && request.getName().isBlank()) {
             throw new AppException(ErrorCode.PRODUCT_NAME_INVALID);
         }
+    }
+
+    private boolean attributeValuesEqual(Object left, Object right) {
+        if (left instanceof Number leftNumber && right instanceof Number rightNumber) {
+            return Double.compare(leftNumber.doubleValue(), rightNumber.doubleValue()) == 0;
+        }
+        if (left instanceof Map<?, ?> leftMap && right instanceof Map<?, ?> rightMap) {
+            if (!leftMap.keySet().equals(rightMap.keySet())) {
+                return false;
+            }
+            return leftMap.keySet().stream().allMatch(key -> attributeValuesEqual(leftMap.get(key), rightMap.get(key)));
+        }
+        if (left instanceof List<?> leftList && right instanceof List<?> rightList) {
+            if (leftList.size() != rightList.size()) {
+                return false;
+            }
+            for (int i = 0; i < leftList.size(); i++) {
+                if (!attributeValuesEqual(leftList.get(i), rightList.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return Objects.equals(left, right);
     }
 
     private void validateSkusForCreate(ProductCreateRequest request) {

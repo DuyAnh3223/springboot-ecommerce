@@ -1,6 +1,7 @@
 package spring.abtechzone.modules.order.dto.request;
 
 import java.util.List;
+import java.util.UUID;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -20,4 +21,9 @@ public class CheckoutRequest {
     List<@NotNull @Positive Long> selectedSkuIds;
 
     String voucherCode;
+
+    UUID addressId;
+
+    @jakarta.validation.Valid
+    AddressRequest newUserAddress;
 }

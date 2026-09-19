@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +31,7 @@ import spring.abtechzone.common.exception.AppException;
 import spring.abtechzone.common.exception.ErrorCode;
 import spring.abtechzone.modules.inventory.service.InventoryService;
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentMethod;
 import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.order.dto.request.AdminOrderSearchRequest;
 import spring.abtechzone.modules.order.dto.response.OrderResponse;
@@ -40,6 +42,8 @@ import spring.abtechzone.modules.order.mapper.OrderMapper;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
 import spring.abtechzone.modules.order.service.OrderLifecycleService;
+import spring.abtechzone.modules.payment.dto.PaymentSummary;
+import spring.abtechzone.modules.payment.service.PaymentService;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.user.entity.User;
 import spring.abtechzone.modules.voucher.entity.Voucher;
@@ -63,6 +67,9 @@ class OrderLifecycleServiceTest {
 
     @Mock
     InventoryService inventoryService;
+
+    @Mock
+    PaymentService paymentService;
 
     @Spy
     OrderMapper orderMapper = Mappers.getMapper(OrderMapper.class);
@@ -107,7 +114,6 @@ class OrderLifecycleServiceTest {
                 .orderCode("ORD-20260818-ABCD1234")
                 .userId(userId)
                 .status(OrderStatus.PENDING)
-                .paymentStatus(PaymentStatus.UNPAID)
                 .subtotalAmount(BigDecimal.valueOf(2000000))
                 .shippingFee(BigDecimal.valueOf(30000))
                 .discountAmount(BigDecimal.ZERO)
@@ -115,6 +121,9 @@ class OrderLifecycleServiceTest {
                 .items(new ArrayList<>(List.of(orderItem)))
                 .build();
         orderItem.setOrder(order);
+        lenient()
+                .when(paymentService.getSummary(order))
+                .thenReturn(new PaymentSummary(PaymentMethod.COD, PaymentStatus.UNPAID));
     }
 
     private void stubLockedOrder() {
@@ -140,7 +149,7 @@ class OrderLifecycleServiceTest {
                     orderService.cancelOrder("ORD-20260818-ABCD1234", "  Tôi muốn thay đổi sản phẩm  ", user);
 
             assertThat(response.getStatus()).isEqualTo("CANCELLED");
-            assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
+            verify(paymentService).cancelPendingPayments(order);
             verify(inventoryService).increaseStock(100L, 2, order, sku);
             verify(voucherRedemptionRepository).reverseRedemptionByOrderId(999L);
             verify(voucherRepository).decreaseUsedCount(77L);
@@ -202,7 +211,6 @@ class OrderLifecycleServiceTest {
         @DisplayName("Repeated cancel returns current order without second compensation")
         void repeatedCancel_isIdempotent() {
             order.setStatus(OrderStatus.CANCELLED);
-            order.setPaymentStatus(PaymentStatus.CANCELLED);
             stubLockedOrder();
 
             OrderResponse response = orderService.cancelOrder("ORD-20260818-ABCD1234", "again", user);
@@ -279,7 +287,38 @@ class OrderLifecycleServiceTest {
                     orderService.updateOrderStatus("ORD-20260818-ABCD1234", OrderStatus.DELIVERED, null, admin);
 
             assertThat(response.getStatus()).isEqualTo("DELIVERED");
-            assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+            verify(paymentService).markCodSucceeded(order);
+        }
+
+        @Test
+        @DisplayName("SHIPPING -> DELIVERY_FAILED stores admin reason and keeps COD unpaid")
+        void deliveryFailed_storesReasonWithoutMarkingPaymentPaid() {
+            order.setStatus(OrderStatus.SHIPPING);
+            stubLockedOrder();
+
+            OrderResponse response = orderService.updateOrderStatus(
+                    "ORD-20260818-ABCD1234", OrderStatus.DELIVERY_FAILED, "  Không liên lạc được  ", admin);
+
+            assertThat(response.getStatus()).isEqualTo("DELIVERY_FAILED");
+            verify(paymentService, never()).markCodSucceeded(order);
+            ArgumentCaptor<OrderStatusHistory> historyCaptor = ArgumentCaptor.forClass(OrderStatusHistory.class);
+            verify(orderStatusHistoryRepository).save(historyCaptor.capture());
+            assertThat(historyCaptor.getValue().getNote()).isEqualTo("Không liên lạc được");
+            assertThat(historyCaptor.getValue().getToStatus()).isEqualTo("DELIVERY_FAILED");
+        }
+
+        @Test
+        @DisplayName("SHIPPING -> DELIVERY_FAILED requires an admin reason")
+        void deliveryFailed_requiresReason() {
+            order.setStatus(OrderStatus.SHIPPING);
+            stubLockedOrder();
+
+            assertThatThrownBy(() -> orderService.updateOrderStatus(
+                            "ORD-20260818-ABCD1234", OrderStatus.DELIVERY_FAILED, "  ", admin))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage(ErrorCode.INVALID_KEY.getMessage());
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.SHIPPING);
+            verify(orderStatusHistoryRepository, never()).save(any());
         }
 
         @Test

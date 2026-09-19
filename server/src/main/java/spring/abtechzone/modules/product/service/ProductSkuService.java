@@ -93,6 +93,8 @@ public class ProductSkuService {
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
         ProductSku sku = createSingleSkuInternal(product, request, product.getSkus());
+        recalculateProductAggregates(product);
+        productRepository.save(product);
         return toSkuResponse(sku, inventoryService.getOnHandOrZero(sku.getId()));
     }
 
@@ -105,10 +107,14 @@ public class ProductSkuService {
 
         Map<String, Object> updatedAttributes =
                 request.getAttributes() == null ? sku.getAttributes() : request.getAttributes();
-        productAttributeValidator.validateSkuAttributes(sku.getProduct(), updatedAttributes);
+        boolean attributesChanged =
+                request.getAttributes() != null && !attributeValuesEqual(sku.getAttributes(), request.getAttributes());
+        if (attributesChanged) {
+            productAttributeValidator.validateSkuAttributes(sku.getProduct(), updatedAttributes);
+        }
 
         // Validate SKU duplicate variant combination for updated attributes
-        if (request.getAttributes() != null) {
+        if (attributesChanged) {
             List<ProductSku> otherSkus = sku.getProduct().getSkus().stream()
                     .filter(s -> !s.getId().equals(skuId))
                     .toList();
@@ -126,6 +132,9 @@ public class ProductSkuService {
         if (request.getImages() != null) {
             skuImageService.syncSkuImages(sku, request.getImages());
         }
+
+        recalculateProductAggregates(sku.getProduct());
+        productRepository.save(sku.getProduct());
 
         return toSkuResponse(sku);
     }
@@ -154,6 +163,8 @@ public class ProductSkuService {
         sku.setImageUrl(null);
         sku.softDelete();
         productSkuRepository.save(sku);
+        recalculateProductAggregates(product);
+        productRepository.save(product);
     }
 
     @PreAuthorize("permitAll()")
@@ -374,13 +385,19 @@ public class ProductSkuService {
         validateSkuForUpdate(sku.getId(), item.getSku());
 
         Map<String, Object> updatedAttrs = item.getAttributes() != null ? item.getAttributes() : sku.getAttributes();
-        productAttributeValidator.validateSkuAttributes(product, updatedAttrs);
+        boolean attributesChanged =
+                item.getAttributes() != null && !attributeValuesEqual(sku.getAttributes(), item.getAttributes());
+        if (attributesChanged) {
+            productAttributeValidator.validateSkuAttributes(product, updatedAttrs);
+        }
 
         Long targetId = sku.getId();
         List<ProductSku> otherSkus = workingActiveSkus.stream()
                 .filter(s -> !s.getId().equals(targetId))
                 .toList();
-        productAttributeValidator.validateSkuNotDuplicate(product, otherSkus, updatedAttrs);
+        if (attributesChanged) {
+            productAttributeValidator.validateSkuNotDuplicate(product, otherSkus, updatedAttrs);
+        }
 
         sku.setSku(item.getSku());
         sku.setPrice(item.getPrice());
@@ -432,7 +449,31 @@ public class ProductSkuService {
         workingActiveSkus.add(newSku);
     }
 
-    private void recalculateProductAggregates(Product product) {
+    private boolean attributeValuesEqual(Object left, Object right) {
+        if (left instanceof Number leftNumber && right instanceof Number rightNumber) {
+            return Double.compare(leftNumber.doubleValue(), rightNumber.doubleValue()) == 0;
+        }
+        if (left instanceof Map<?, ?> leftMap && right instanceof Map<?, ?> rightMap) {
+            if (!leftMap.keySet().equals(rightMap.keySet())) {
+                return false;
+            }
+            return leftMap.keySet().stream().allMatch(key -> attributeValuesEqual(leftMap.get(key), rightMap.get(key)));
+        }
+        if (left instanceof List<?> leftList && right instanceof List<?> rightList) {
+            if (leftList.size() != rightList.size()) {
+                return false;
+            }
+            for (int i = 0; i < leftList.size(); i++) {
+                if (!attributeValuesEqual(leftList.get(i), rightList.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return Objects.equals(left, right);
+    }
+
+    void recalculateProductAggregates(Product product) {
         Long productId = product.getId();
         int totalSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNull(productId);
         int activeSkuCount = (int) productSkuRepository.countByProductIdAndDeletedAtIsNullAndActiveTrue(productId);
@@ -484,6 +525,8 @@ public class ProductSkuService {
             currentSkus.add(sku);
             savedResponses.add(toSkuResponse(sku));
         }
+        recalculateProductAggregates(product);
+        productRepository.save(product);
         return savedResponses;
     }
 }

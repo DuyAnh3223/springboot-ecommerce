@@ -1,7 +1,11 @@
+import type { ProductImageRequest } from "@/features/skus/sku.type";
+
 export type SellingMode = "single" | "multi";
 
 export interface SkuImageDraft {
+  id?: number;
   url: string;
+  previewUrl?: string;
   file?: File;
   isPrimary?: boolean;
   sortOrder?: number;
@@ -28,7 +32,7 @@ export interface ProductReconcilePayload {
     weightGram?: number;
     currency?: string;
     attributes: Record<string, unknown>;
-    images?: SkuImageDraft[];
+    images?: ProductImageRequest[];
   }[];
   removedSkuIds: number[];
 }

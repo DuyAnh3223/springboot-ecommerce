@@ -5,6 +5,7 @@ import java.util.List;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
 
 @Data
 @Builder
@@ -19,5 +20,6 @@ public class CheckoutResponse {
     BigDecimal discountAmount;
     BigDecimal totalAmount;
     VoucherReviewResponse voucher;
+    ShippingAddressSnapshot shippingAddress;
     boolean canPlaceOrder;
 }

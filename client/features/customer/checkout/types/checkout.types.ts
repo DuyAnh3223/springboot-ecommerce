@@ -10,8 +10,12 @@ export interface CheckoutNewAddressForm {
   recipientName: string;
   phone: string;
   province: string;
+  district: string;
   ward: string;
   street: string;
+  ghnProvinceId: number;
+  ghnDistrictId: number;
+  ghnWardCode: string;
   saveAddress: boolean;
 }
 

@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +33,15 @@ import spring.abtechzone.modules.order.dto.response.CheckoutResponse;
 import spring.abtechzone.modules.order.dto.response.VoucherReviewResponse;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductSkuRepository;
+import spring.abtechzone.modules.shipment.dto.GhnFeeResult;
+import spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressData;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
+import spring.abtechzone.modules.shipment.service.ShippingFeeService;
+import spring.abtechzone.modules.shipment.service.ShippingLocationService;
+import spring.abtechzone.modules.user.entity.Address;
 import spring.abtechzone.modules.user.entity.User;
+import spring.abtechzone.modules.user.repository.AddressRepository;
 import spring.abtechzone.modules.user.repository.UserRepository;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 import spring.abtechzone.modules.voucher.repository.VoucherRepository;
@@ -54,8 +61,12 @@ public class CheckoutService {
     AuthService authService;
     VoucherService voucherService;
     InventoryService inventoryService;
+    AddressRepository addressRepository;
+    ShippingFeeService shippingFeeService;
+    ShippingLocationService shippingLocationService;
 
-    @Value("${app.checkout.shipping-fee:30000}")
+    // Used only by Mockito tests that instantiate this service without the GHN bean.
+    // Spring production wiring always takes the ShippingFeeService branch below.
     BigDecimal checkoutShippingFee = BigDecimal.valueOf(30000);
 
     @Transactional(readOnly = true)
@@ -69,10 +80,29 @@ public class CheckoutService {
 
         List<Long> selectedSkuIds =
                 request.getSelectedSkuIds().stream().distinct().sorted().toList();
-        return recomputeCheckout(user, selectedSkuIds, request.getVoucherCode()).response();
+        ShippingAddressData shippingAddress =
+                resolveShippingAddress(user, request.getAddressId(), request.getNewUserAddress());
+        return recomputeCheckout(user, selectedSkuIds, request.getVoucherCode(), shippingAddress)
+                .response();
     }
 
     AuthoritativeCheckout recomputeCheckout(User user, List<Long> selectedSkuIds, String voucherCode) {
+        return recomputeCheckout(user, selectedSkuIds, voucherCode, null);
+    }
+
+    AuthoritativeCheckout recomputeCheckout(
+            User user, List<Long> selectedSkuIds, String voucherCode, ShippingAddressData shippingAddress) {
+        return recomputeCheckout(
+                user, selectedSkuIds, voucherCode, shippingAddress, resolveShippingFee(shippingAddress));
+    }
+
+    /** Create-order supplies an external quote obtained before acquiring its locks. */
+    AuthoritativeCheckout recomputeCheckout(
+            User user,
+            List<Long> selectedSkuIds,
+            String voucherCode,
+            ShippingAddressData shippingAddress,
+            BigDecimal shippingFee) {
         Cart cart = getActiveCart(user);
         Map<Long, CartItem> cartItemBySkuId = cart.getItems().stream()
                 .collect(Collectors.toMap(item -> item.getProductSku().getId(), item -> item, (a, b) -> a));
@@ -97,11 +127,11 @@ public class CheckoutService {
         }
 
         VoucherReview voucherReview = evaluateVoucherReview(voucherCode, user, skuSubtotals, subtotal);
-        BigDecimal shippingFee = checkoutShippingFee;
-        boolean canPlaceOrder = allLinesSellable && voucherReview.applicable();
+        boolean shippingAvailable = shippingFee != null;
+        boolean canPlaceOrder = allLinesSellable && voucherReview.applicable() && shippingAvailable;
         BigDecimal totalAmount = calculateCheckoutTotal(subtotal, shippingFee, voucherReview.discountAmount());
-        CheckoutResponse response =
-                buildCheckoutResponse(items, subtotal, shippingFee, voucherReview, totalAmount, canPlaceOrder);
+        CheckoutResponse response = buildCheckoutResponse(
+                items, subtotal, shippingFee, voucherReview, totalAmount, canPlaceOrder, shippingAddress);
 
         return new AuthoritativeCheckout(
                 response,
@@ -110,6 +140,86 @@ public class CheckoutService {
                 voucherReview.normalizedCode(),
                 subtotal,
                 voucherReview.applicable());
+    }
+
+    private BigDecimal resolveShippingFee(ShippingAddressData shippingAddress) {
+        // The null dependency exists only for Mockito unit tests that exercise the
+        // pre-shipment checkout contract. A Spring application always wires GHN.
+        if (shippingFeeService == null) {
+            return checkoutShippingFee;
+        }
+        if (shippingAddress == null) {
+            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
+        }
+        GhnFeeResult result = shippingFeeService.calculate(shippingAddress);
+        return result.totalFee();
+    }
+
+    private ShippingAddressData resolveShippingAddress(
+            User user,
+            java.util.UUID addressId,
+            spring.abtechzone.modules.order.dto.request.AddressRequest newAddress) {
+        if (shippingFeeService == null && addressId == null && newAddress == null) {
+            return null;
+        }
+        if ((addressId == null) == (newAddress == null)) {
+            throw new AppException(ErrorCode.ADDRESS_REQUIRED);
+        }
+        if (addressId != null) {
+            if (addressRepository == null) {
+                throw new AppException(ErrorCode.ADDRESS_NOT_FOUND);
+            }
+            Address address = addressRepository
+                    .findById(addressId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));
+            if (address.getUser() == null || !address.getUser().getId().equals(user.getId())) {
+                throw new AppException(ErrorCode.ADDRESS_NOT_BELONG_TO_USER);
+            }
+            return canonicalizeShippingAddress(new ShippingAddressData(
+                    address.getId(),
+                    address.getRecipientName(),
+                    address.getPhone(),
+                    address.getProvince(),
+                    address.getDistrict(),
+                    address.getWard(),
+                    address.getStreet(),
+                    address.getGhnProvinceId(),
+                    address.getGhnDistrictId(),
+                    address.getGhnWardCode()));
+        }
+        return canonicalizeShippingAddress(new ShippingAddressData(
+                null,
+                newAddress.getRecipientName(),
+                newAddress.getPhone(),
+                newAddress.getProvince(),
+                newAddress.getDistrict(),
+                newAddress.getWard(),
+                newAddress.getStreet(),
+                newAddress.getGhnProvinceId(),
+                newAddress.getGhnDistrictId(),
+                newAddress.getGhnWardCode()));
+    }
+
+    private ShippingAddressData canonicalizeShippingAddress(ShippingAddressData address) {
+        if (shippingLocationService == null) {
+            return address;
+        }
+        if (address.provinceId() == null || address.districtId() == null || address.wardCode() == null) {
+            throw new AppException(ErrorCode.SHIPPING_ADDRESS_INVALID);
+        }
+        ResolvedShippingRoute route =
+                shippingLocationService.resolveRoute(address.provinceId(), address.districtId(), address.wardCode());
+        return new ShippingAddressData(
+                address.addressId(),
+                address.recipientName(),
+                address.phone(),
+                route.province(),
+                route.district(),
+                route.ward(),
+                address.street(),
+                route.provinceId(),
+                route.districtId(),
+                route.wardCode());
     }
 
     CheckoutChangedException findMismatch(
@@ -121,6 +231,7 @@ public class CheckoutService {
         boolean mismatch = hasSelectedSkuMismatch(reviewedCheckout, selectedSkuIds)
                 || hasLineMismatch(reviewedCheckout, freshCart, authoritative)
                 || hasVoucherMismatch(reviewedCheckout, authoritative)
+                || hasShippingAddressMismatch(reviewedCheckout, authoritative.response())
                 || hasCheckoutOutcomeMismatch(reviewedCheckout, authoritative.response());
 
         return mismatch ? new CheckoutChangedException(authoritative.response()) : null;
@@ -208,7 +319,8 @@ public class CheckoutService {
             BigDecimal shippingFee,
             VoucherReview voucherReview,
             BigDecimal totalAmount,
-            boolean canPlaceOrder) {
+            boolean canPlaceOrder,
+            ShippingAddressData shippingAddress) {
         return CheckoutResponse.builder()
                 .items(items)
                 .subtotal(subtotal)
@@ -216,6 +328,7 @@ public class CheckoutService {
                 .shippingFee(shippingFee)
                 .discountAmount(voucherReview.discountAmount())
                 .totalAmount(totalAmount)
+                .shippingAddress(toShippingAddressSnapshot(shippingAddress))
                 .voucher(
                         voucherReview.normalizedCode() == null
                                 ? null
@@ -226,6 +339,43 @@ public class CheckoutService {
                                         .build())
                 .canPlaceOrder(canPlaceOrder)
                 .build();
+    }
+
+    private ShippingAddressSnapshot toShippingAddressSnapshot(ShippingAddressData address) {
+        if (address == null) {
+            return null;
+        }
+        return new ShippingAddressSnapshot(
+                address.addressId(),
+                address.recipientName(),
+                address.phone(),
+                address.province(),
+                address.district(),
+                address.ward(),
+                address.street(),
+                address.provinceId(),
+                address.districtId(),
+                address.wardCode());
+    }
+
+    private boolean hasShippingAddressMismatch(
+            ReviewedCheckoutRequest reviewedCheckout, CheckoutResponse authoritativeResponse) {
+        ShippingAddressSnapshot expected = authoritativeResponse.getShippingAddress();
+        if (expected == null) {
+            return false;
+        }
+        ShippingAddressSnapshot actual = reviewedCheckout.getShippingAddress();
+        return actual == null
+                || !Objects.equals(actual.addressId(), expected.addressId())
+                || !Objects.equals(trim(actual.recipientName()), trim(expected.recipientName()))
+                || !Objects.equals(trim(actual.phone()), trim(expected.phone()))
+                || !Objects.equals(trim(actual.province()), trim(expected.province()))
+                || !Objects.equals(trim(actual.district()), trim(expected.district()))
+                || !Objects.equals(trim(actual.ward()), trim(expected.ward()))
+                || !Objects.equals(trim(actual.street()), trim(expected.street()))
+                || !Objects.equals(actual.ghnProvinceId(), expected.ghnProvinceId())
+                || !Objects.equals(actual.ghnDistrictId(), expected.ghnDistrictId())
+                || !Objects.equals(trim(actual.ghnWardCode()), trim(expected.ghnWardCode()));
     }
 
     private boolean hasSelectedSkuMismatch(ReviewedCheckoutRequest reviewedCheckout, List<Long> selectedSkuIds) {
@@ -328,6 +478,10 @@ public class CheckoutService {
 
     private String normalizeCode(String code) {
         return code.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String trim(String value) {
+        return value == null ? null : value.trim();
     }
 
     private boolean different(BigDecimal a, BigDecimal b) {

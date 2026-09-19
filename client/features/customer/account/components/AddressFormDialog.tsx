@@ -1,270 +1,147 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@/shared/hooks";
 import { createAddressAction, updateAddressAction } from "@/features/users/actions";
-import { AddressResponse } from "@/features/users/address.type";
-import { addressSchema, AddressInput } from "@/features/users/schemas/address.schema";
-import { useLocationData } from "../hooks/useLocationData";
+import type { AddressResponse } from "@/features/users/address.type";
+import { addressSchema, type AddressInput } from "@/features/users/schemas/address.schema";
+import { ShippingAddressFields } from "@/features/shipment/components/ShippingAddressFields";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 interface AddressFormDialogProps {
-    isOpen: boolean;
-    onClose: () => void;
-    editingAddress: AddressResponse | null;
+  isOpen: boolean;
+  onClose: () => void;
+  editingAddress: AddressResponse | null;
 }
 
+const emptyAddress: AddressInput = {
+  recipientName: "",
+  phone: "",
+  province: "",
+  district: "",
+  ward: "",
+  street: "",
+  ghnProvinceId: 0,
+  ghnDistrictId: 0,
+  ghnWardCode: "",
+  country: "VN",
+  isDefault: false,
+};
+
 export default function AddressFormDialog({
-    isOpen,
-    onClose,
-    editingAddress,
+  isOpen,
+  onClose,
+  editingAddress,
 }: AddressFormDialogProps) {
-    const isEdit = !!editingAddress;
-    const { isLoading, error, run } = useAsyncAction();
+  const isEdit = Boolean(editingAddress);
+  const { isLoading, error, run } = useAsyncAction();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    control,
+    formState: { errors },
+  } = useForm<AddressInput>({
+    resolver: zodResolver(addressSchema),
+    defaultValues: emptyAddress,
+  });
+  const routeValues = useWatch({ control });
 
-    const {
-        register,
-        handleSubmit,
-        reset,
-        setValue,
-        watch,
-        formState: { errors },
-    } = useForm<AddressInput>({
-        resolver: zodResolver(addressSchema),
-        defaultValues: {
-            recipientName: "",
-            phone: "",
-            province: "",
-            ward: "",
-            street: "",
-            country: "VN",
-            isDefault: false,
-        },
+  useEffect(() => {
+    if (!isOpen) return;
+    reset(editingAddress ? {
+      recipientName: editingAddress.recipientName,
+      phone: editingAddress.phone,
+      province: editingAddress.province,
+      district: editingAddress.district || "",
+      ward: editingAddress.ward,
+      street: editingAddress.street,
+      ghnProvinceId: editingAddress.ghnProvinceId ?? 0,
+      ghnDistrictId: editingAddress.ghnDistrictId ?? 0,
+      ghnWardCode: editingAddress.ghnWardCode || "",
+      country: editingAddress.country || "VN",
+      isDefault: Boolean(editingAddress.isDefault),
+    } : emptyAddress);
+  }, [editingAddress, isOpen, reset]);
+
+  const onSubmit = (data: AddressInput) => {
+    run(async () => {
+      const result = isEdit && editingAddress
+        ? await updateAddressAction(editingAddress.id, data)
+        : await createAddressAction(data);
+      if (result.error) throw new Error(result.error);
+      onClose();
     });
+  };
 
-    const selectedProvince = watch("province");
-
-    const {
-        provinces,
-        wards,
-        isLoadingProvinces,
-        isLoadingWards,
-        handleProvinceSelect,
-    } = useLocationData(isOpen, editingAddress?.province);
-
-    // Reset form when opening/closing or changing editing address
-    useEffect(() => {
-        if (isOpen) {
-            if (editingAddress) {
-                reset({
-                    recipientName: editingAddress.recipientName,
-                    phone: editingAddress.phone,
-                    province: editingAddress.province,
-                    ward: editingAddress.ward,
-                    street: editingAddress.street,
-                    country: editingAddress.country || "VN",
-                    isDefault: editingAddress.isDefault || false,
-                });
-            } else {
-                reset({
-                    recipientName: "",
-                    phone: "",
-                    province: "",
-                    ward: "",
-                    street: "",
-                    country: "VN",
-                    isDefault: false,
-                });
-            }
-        }
-    }, [isOpen, editingAddress, reset]);
-
-    const onProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const val = e.target.value;
-        setValue("province", val, { shouldValidate: true });
-        setValue("ward", "", { shouldValidate: true });
-        handleProvinceSelect(val);
-    };
-
-    const onSubmit = (data: AddressInput) => {
-        run(async () => {
-            let result;
-            if (isEdit && editingAddress) {
-                result = await updateAddressAction(editingAddress.id, data);
-            } else {
-                result = await createAddressAction(data);
-            }
-
-            if (result.error) {
-                throw new Error(result.error);
-            }
-
-            onClose();
-        });
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-lg bg-white p-6 rounded-xl border border-slate-100 shadow-lg outline-none">
-                <DialogHeader>
-                    <DialogTitle className="text-lg font-bold text-slate-850">
-                        {isEdit ? "Cập nhật địa chỉ nhận hàng" : "Thêm địa chỉ nhận hàng mới"}
-                    </DialogTitle>
-                </DialogHeader>
-
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-                    {error && (
-                        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs font-medium animate-in fade-in duration-200">
-                            {error}
-                        </div>
-                    )}
-
-                    {/* Họ tên người nhận */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-slate-700">Họ và tên người nhận</label>
-                        <input
-                            type="text"
-                            {...register("recipientName")}
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-shop_orange/20 focus:border-shop_orange text-sm transition-all"
-                            placeholder="Ví dụ: Nguyễn Văn A"
-                        />
-                        {errors.recipientName && (
-                            <span className="text-xs text-rose-600 font-medium">
-                                {errors.recipientName.message}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Số điện thoại */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-slate-700">Số điện thoại liên hệ</label>
-                        <input
-                            type="text"
-                            {...register("phone")}
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-shop_orange/20 focus:border-shop_orange text-sm transition-all"
-                            placeholder="Ví dụ: 0987654321"
-                        />
-                        {errors.phone && (
-                            <span className="text-xs text-rose-600 font-medium">{errors.phone.message}</span>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Tỉnh / Thành phố Select */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-slate-700">Tỉnh / Thành phố</label>
-                            <select
-                                {...register("province")}
-                                onChange={onProvinceChange}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-shop_orange/20 focus:border-shop_orange text-sm transition-all bg-white cursor-pointer"
-                                disabled={isLoadingProvinces}
-                            >
-                                <option value="">
-                                    {isLoadingProvinces ? "-- Đang tải Tỉnh/Thành --" : "-- Chọn Tỉnh / Thành phố --"}
-                                </option>
-                                {editingAddress?.province &&
-                                    !provinces.some((p) => p.name === editingAddress.province) && (
-                                        <option value={editingAddress.province}>{editingAddress.province}</option>
-                                    )}
-                                {provinces.map((p) => (
-                                    <option key={p.code} value={p.name}>
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.province && (
-                                <span className="text-xs text-rose-600 font-medium">{errors.province.message}</span>
-                            )}
-                        </div>
-
-                        {/* Phường / Xã Select */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-semibold text-slate-700">Phường / Xã</label>
-                            <select
-                                {...register("ward")}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-shop_orange/20 focus:border-shop_orange text-sm transition-all bg-white cursor-pointer disabled:bg-slate-50 disabled:cursor-not-allowed"
-                                disabled={!selectedProvince || isLoadingWards}
-                            >
-                                <option value="">
-                                    {isLoadingWards
-                                        ? "-- Đang tải Phường/Xã --"
-                                        : !selectedProvince
-                                        ? "-- Vui lòng chọn Tỉnh/Thành trước --"
-                                        : "-- Chọn Phường / Xã --"}
-                                </option>
-                                {editingAddress?.ward &&
-                                    !wards.some((w) => w.name === editingAddress.ward) && (
-                                        <option value={editingAddress.ward}>{editingAddress.ward}</option>
-                                    )}
-                                {wards.map((w) => (
-                                    <option key={w.code} value={w.name}>
-                                        {w.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.ward && (
-                                <span className="text-xs text-rose-600 font-medium">{errors.ward.message}</span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Địa chỉ chi tiết */}
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-slate-700">
-                            Địa chỉ chi tiết (số nhà, tên đường...)
-                        </label>
-                        <input
-                            type="text"
-                            {...register("street")}
-                            className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-shop_orange/20 focus:border-shop_orange text-sm transition-all"
-                            placeholder="Ví dụ: 123 Đường Lê Lợi"
-                        />
-                        {errors.street && (
-                            <span className="text-xs text-rose-600 font-medium">
-                                {errors.street.message}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Đặt làm mặc định */}
-                    <div className="flex items-center gap-2 pt-2">
-                        <input
-                            type="checkbox"
-                            id="isDefault"
-                            {...register("isDefault")}
-                            className="rounded border-slate-300 text-shop_orange focus:ring-shop_orange/20 cursor-pointer"
-                        />
-                        <label htmlFor="isDefault" className="text-sm text-slate-600 cursor-pointer select-none">
-                            Đặt làm địa chỉ nhận hàng mặc định
-                        </label>
-                    </div>
-
-                    <DialogFooter className="pt-4 flex justify-end gap-2 border-t border-slate-100 mt-6">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer text-slate-600"
-                        >
-                            Hủy
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="px-4 py-2 text-sm font-semibold bg-shop_orange hover:bg-shop_orange/90 text-white rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-20"
-                        >
-                            {isLoading ? "Đang lưu..." : "Lưu"}
-                        </button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg bg-white p-6 rounded-xl border border-slate-100 shadow-lg outline-none">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold text-slate-850">
+            {isEdit ? "Cập nhật địa chỉ nhận hàng" : "Thêm địa chỉ nhận hàng mới"}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+          {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
+          {isEdit && (!editingAddress?.ghnProvinceId || !editingAddress?.ghnDistrictId || !editingAddress?.ghnWardCode) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              Địa chỉ cũ thiếu mã tuyến vận chuyển. Vui lòng chọn lại đủ tỉnh, quận/huyện và phường/xã trước khi lưu.
+            </div>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1.5 text-xs font-semibold text-slate-700">
+              Họ và tên người nhận
+              <input {...register("recipientName")} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              {errors.recipientName && <span className="font-medium text-rose-600">{errors.recipientName.message}</span>}
+            </label>
+            <label className="space-y-1.5 text-xs font-semibold text-slate-700">
+              Số điện thoại
+              <input {...register("phone")} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              {errors.phone && <span className="font-medium text-rose-600">{errors.phone.message}</span>}
+            </label>
+          </div>
+          <ShippingAddressFields
+            provinceId={routeValues.ghnProvinceId}
+            districtId={routeValues.ghnDistrictId}
+            wardCode={routeValues.ghnWardCode}
+            provinceError={errors.province?.message || errors.ghnProvinceId?.message}
+            districtError={errors.district?.message || errors.ghnDistrictId?.message}
+            wardError={errors.ward?.message || errors.ghnWardCode?.message}
+            onChange={(selection) => {
+              setValue("province", selection.province, { shouldValidate: true });
+              setValue("district", selection.district, { shouldValidate: true });
+              setValue("ward", selection.ward, { shouldValidate: true });
+              setValue("ghnProvinceId", selection.provinceId ?? 0, { shouldValidate: true });
+              setValue("ghnDistrictId", selection.districtId ?? 0, { shouldValidate: true });
+              setValue("ghnWardCode", selection.wardCode, { shouldValidate: true });
+            }}
+          />
+          <label className="space-y-1.5 text-xs font-semibold text-slate-700">
+            Địa chỉ chi tiết
+            <input {...register("street")} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Số nhà, tên đường..." />
+            {errors.street && <span className="font-medium text-rose-600">{errors.street.message}</span>}
+          </label>
+          <label className="flex items-center gap-2 pt-2 text-sm text-slate-600">
+            <input type="checkbox" {...register("isDefault")} /> Đặt làm địa chỉ nhận hàng mặc định
+          </label>
+          <DialogFooter className="border-t border-slate-100 pt-4">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">Hủy</button>
+            <button type="submit" disabled={isLoading} className="rounded-lg bg-shop_orange px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              {isLoading ? "Đang lưu..." : "Lưu"}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }

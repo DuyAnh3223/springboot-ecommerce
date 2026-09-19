@@ -30,6 +30,11 @@ export const ORDER_STATUS_META: Record<OrderStatus, OrderStatusMeta> = {
     className: "border-emerald-200 bg-emerald-50 text-emerald-700",
     progress: 4,
   },
+  DELIVERY_FAILED: {
+    label: "Giao thất bại",
+    className: "border-orange-200 bg-orange-50 text-orange-700",
+    progress: 3,
+  },
   CANCELLED: {
     label: "Đã hủy",
     className: "border-rose-200 bg-rose-50 text-rose-700",
@@ -101,7 +106,7 @@ export function getHistoryTargetStatus(
 }
 
 export function getPaymentMethodLabel(paymentMethod: string): string {
-  return paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)" : "Phương thức thanh toán";
+  return paymentMethod === "COD" ? "Thanh toán khi nhận hàng (COD)" : paymentMethod === "ONLINE" ? "Thanh toán trực tuyến" : "Phương thức thanh toán";
 }
 
 export function getPaymentStatusLabel(paymentStatus: string): string {

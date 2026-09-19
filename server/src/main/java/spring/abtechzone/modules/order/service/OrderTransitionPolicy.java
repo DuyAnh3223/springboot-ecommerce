@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 import spring.abtechzone.modules.order.constant.OrderStatus;
+import spring.abtechzone.modules.order.constant.PaymentMethod;
+import spring.abtechzone.modules.order.constant.PaymentStatus;
+import spring.abtechzone.modules.payment.dto.PaymentSummary;
 
 /**
  * Shared order transition policy (R-C05-01). Single source of truth for which
@@ -30,11 +33,12 @@ public final class OrderTransitionPolicy {
         ALLOWED.get(Actor.CUSTOMER).put(OrderStatus.PENDING, EnumSet.of(OrderStatus.CANCELLED));
 
         // Admin: PENDING -> CONFIRMED|CANCELLED, CONFIRMED -> SHIPPING|CANCELLED,
-        // SHIPPING -> DELIVERED. DELIVERED/CANCELLED are terminal.
+        // SHIPPING -> DELIVERED|DELIVERY_FAILED. DELIVERED/DELIVERY_FAILED/CANCELLED are terminal.
         ALLOWED.put(Actor.ADMIN, new EnumMap<>(OrderStatus.class));
         ALLOWED.get(Actor.ADMIN).put(OrderStatus.PENDING, EnumSet.of(OrderStatus.CONFIRMED, OrderStatus.CANCELLED));
         ALLOWED.get(Actor.ADMIN).put(OrderStatus.CONFIRMED, EnumSet.of(OrderStatus.SHIPPING, OrderStatus.CANCELLED));
-        ALLOWED.get(Actor.ADMIN).put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.DELIVERED));
+        ALLOWED.get(Actor.ADMIN)
+                .put(OrderStatus.SHIPPING, EnumSet.of(OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED));
     }
 
     private OrderTransitionPolicy() {}
@@ -46,6 +50,20 @@ public final class OrderTransitionPolicy {
         }
         Set<OrderStatus> targets = byActor.get(from);
         return targets != null && targets.contains(to);
+    }
+
+    public static boolean isAllowed(OrderStatus from, OrderStatus to, Actor actor, PaymentSummary payment) {
+        if (!isAllowed(from, to, actor) || payment == null) {
+            return false;
+        }
+        if (to == OrderStatus.CANCELLED && payment.status() == PaymentStatus.PAID) {
+            return false;
+        }
+        return !(actor == Actor.ADMIN
+                && from == OrderStatus.PENDING
+                && to == OrderStatus.CONFIRMED
+                && payment.method() != PaymentMethod.COD
+                && payment.status() != PaymentStatus.PAID);
     }
 
     public static List<OrderStatus> allowedTransitions(OrderStatus from, Actor actor) {
@@ -60,7 +78,15 @@ public final class OrderTransitionPolicy {
         return targets.stream().sorted(Comparator.comparing(Enum::name)).toList();
     }
 
+    public static List<OrderStatus> allowedTransitions(OrderStatus from, Actor actor, PaymentSummary payment) {
+        return allowedTransitions(from, actor).stream()
+                .filter(target -> isAllowed(from, target, actor, payment))
+                .toList();
+    }
+
     public static boolean isTerminal(OrderStatus status) {
-        return status == OrderStatus.DELIVERED || status == OrderStatus.CANCELLED;
+        return status == OrderStatus.DELIVERED
+                || status == OrderStatus.DELIVERY_FAILED
+                || status == OrderStatus.CANCELLED;
     }
 }

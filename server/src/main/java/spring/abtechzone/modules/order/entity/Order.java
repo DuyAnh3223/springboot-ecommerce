@@ -15,8 +15,6 @@ import org.hibernate.annotations.ColumnDefault;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.order.constant.OrderStatus;
-import spring.abtechzone.modules.order.constant.PaymentMethod;
-import spring.abtechzone.modules.order.constant.PaymentStatus;
 import spring.abtechzone.modules.voucher.entity.Voucher;
 
 @Entity
@@ -83,14 +81,6 @@ public class Order {
     @JoinColumn(name = "voucher_id")
     Voucher voucher;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_method", length = 20)
-    PaymentMethod paymentMethod;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_status", nullable = false, length = 20)
-    PaymentStatus paymentStatus;
-
     @NotNull
     @Column(name = "idempotency_key", nullable = false, length = 36)
     String idempotencyKey;
@@ -139,9 +129,6 @@ public class Order {
         updatedAt = OffsetDateTime.now();
         if (currency == null) {
             currency = "VND";
-        }
-        if (paymentStatus == null) {
-            paymentStatus = PaymentStatus.UNPAID;
         }
     }
 

@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import spring.abtechzone.common.service.AwsS3FileService;
 import spring.abtechzone.modules.inventory.service.InventoryService;
+import spring.abtechzone.modules.product.dto.request.ProductImageRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuItemRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuReconcileRequest;
 import spring.abtechzone.modules.product.dto.request.ProductSkuUpdateRequest;
@@ -95,6 +96,37 @@ class ProductSkuServiceTest {
 
         assertThat(response).isNotNull();
         verify(skuImageService, never()).syncSkuImages(any(), any());
+    }
+
+    @Test
+    @DisplayName("updateSku should refresh product price bounds even for image-only updates")
+    void updateSku_ImageOnly_ShouldRefreshProductPriceBounds() {
+        ProductSkuUpdateRequest request = ProductSkuUpdateRequest.builder()
+                .images(java.util.List.of(ProductImageRequest.builder()
+                        .url("products/10/new-primary.png")
+                        .primary(true)
+                        .sortOrder(0)
+                        .build()))
+                .build();
+
+        when(productSkuRepository.findById(10L)).thenReturn(Optional.of(sampleSku));
+        when(productSkuRepository.save(any(ProductSku.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.countByProductIdAndDeletedAtIsNull(100L)).thenReturn(1L);
+        when(productSkuRepository.countByProductIdAndDeletedAtIsNullAndActiveTrue(100L))
+                .thenReturn(1L);
+        when(productSkuRepository.findPriceMinAndMaxByProductIdAndActiveTrue(100L))
+                .thenReturn(new Object[] {BigDecimal.valueOf(100000), BigDecimal.valueOf(100000)});
+        when(productRepository.save(any(Product.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuMapper.toProductSkuResponse(any()))
+                .thenReturn(
+                        ProductSkuResponse.builder().id(10L).sku("SKU-100-RED").build());
+
+        productSkuService.updateSku(10L, request);
+
+        assertThat(sampleProduct.getPriceMin()).isEqualByComparingTo("100000");
+        assertThat(sampleProduct.getPriceMax()).isEqualByComparingTo("100000");
+        verify(productRepository).save(sampleProduct);
+        verify(skuImageService).syncSkuImages(eq(sampleSku), eq(request.getImages()));
     }
 
     @Test

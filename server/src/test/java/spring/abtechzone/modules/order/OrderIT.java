@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -55,6 +57,8 @@ import spring.abtechzone.modules.order.entity.Order;
 import spring.abtechzone.modules.order.repository.OrderItemRepository;
 import spring.abtechzone.modules.order.repository.OrderRepository;
 import spring.abtechzone.modules.order.repository.OrderStatusHistoryRepository;
+import spring.abtechzone.modules.payment.constant.PaymentAttemptStatus;
+import spring.abtechzone.modules.payment.repository.PaymentRepository;
 import spring.abtechzone.modules.product.entity.Product;
 import spring.abtechzone.modules.product.entity.ProductSku;
 import spring.abtechzone.modules.product.repository.ProductRepository;
@@ -104,6 +108,12 @@ class OrderIT extends BaseIT {
     private OrderRepository orderRepository;
 
     @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private spring.abtechzone.modules.payment.service.OnlinePaymentService onlinePaymentService;
+
+    @Autowired
     private OrderItemRepository orderItemRepository;
 
     @Autowired
@@ -127,6 +137,12 @@ class OrderIT extends BaseIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @MockitoSpyBean
+    private spring.abtechzone.modules.shipment.service.ShippingFeeService shippingFeeService;
+
+    @MockitoSpyBean
+    private spring.abtechzone.modules.shipment.service.ShippingLocationService shippingLocationService;
+
     @Autowired
     private spring.abtechzone.modules.auth.repository.RoleRepository roleRepository;
 
@@ -143,14 +159,30 @@ class OrderIT extends BaseIT {
 
     private static final String IDEMPOTENCY_KEY = "550e8400-e29b-41d4-a716-446655440000";
     private static final UUID GLOBAL_SCOPE_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String SHIPPING_ADDRESS = """
+			{"recipientName":"Tran Thi B","phone":"0123456789",
+			"province":"Da Nang","district":"Hai Chau","ward":"Thuan Phuoc",
+			"street":"100 Le Loi","ghnProvinceId":201,"ghnDistrictId":202,"ghnWardCode":"203"}
+			""";
+    private static final String NEW_USER_ADDRESS = SHIPPING_ADDRESS.replace("}", ",\"saveAddress\":false}");
 
     @BeforeEach
     void setUp() {
+        // Keep GHN deterministic; checkout, inventory and rollback use real PostgreSQL.
+        doReturn(new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                        BigDecimal.valueOf(30000), java.time.OffsetDateTime.now()))
+                .when(shippingFeeService)
+                .calculate(any());
+        doReturn(new spring.abtechzone.modules.shipment.dto.ResolvedShippingRoute(
+                        201, "Da Nang", 202, "Hai Chau", "203", "Thuan Phuoc"))
+                .when(shippingLocationService)
+                .resolveRoute(201, 202, "203");
         jdbcTemplate.update("UPDATE product_sku SET deleted_at = NULL WHERE deleted_at IS NOT NULL");
         voucherRedemptionRepository.deleteAll();
         stockMovementRepository.deleteAll();
         orderStatusHistoryRepository.deleteAll();
         orderItemRepository.deleteAll();
+        paymentRepository.deleteAll();
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();
@@ -236,16 +268,64 @@ class OrderIT extends BaseIT {
 					"items": [{"skuId": %d, "quantity": 2, "unitPrice": 1000000, "lineTotal": 2000000}],
 					"subtotal": 2000000, "eligibleSubtotal": 2000000, "shippingFee": 30000,
 					"discountAmount": %s, "totalAmount": %s%s,
-					"canPlaceOrder": true
+					"canPlaceOrder": true, "shippingAddress": %s
 				},
-				"newUserAddress": {
-					"recipientName": "Tran Thi B", "phone": "0123456789",
-					"province": "Da Nang", "ward": "Thuan Phuoc", "street": "100 Le Loi",
-					"saveAddress": false
-				},
+				"newUserAddress": %s,
 				"paymentMethod": "COD"
 				}
-				""".formatted(sku.getId(), discountAmount, totalAmount, voucherJson);
+				""".formatted(sku.getId(), discountAmount, totalAmount, voucherJson, SHIPPING_ADDRESS, NEW_USER_ADDRESS);
+    }
+
+    @Test
+    void savedAddressChangedDuringQuote_isReloadedFromPostgresAndNoOrderIsCommitted() throws Exception {
+        var address = addressRepository.saveAndFlush(spring.abtechzone.modules.user.entity.Address.builder()
+                .user(user)
+                .recipientName("Tran Thi B")
+                .phone("0123456789")
+                .province("Da Nang")
+                .district("Hai Chau")
+                .ward("Thuan Phuoc")
+                .street("100 Le Loi")
+                .ghnProvinceId(201)
+                .ghnDistrictId(202)
+                .ghnWardCode("203")
+                .build());
+        var cart = cartRepository.save(
+                Cart.builder().user(user).status(CartStatus.ACTIVE).build());
+        cartItemRepository.save(
+                CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var body = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(createOrderBody(null, "0"));
+        body.remove("newUserAddress");
+        body.put("addressId", address.getId().toString());
+        ((com.fasterxml.jackson.databind.node.ObjectNode)
+                        body.path("reviewedCheckout").path("shippingAddress"))
+                .put("addressId", address.getId().toString());
+        doAnswer(invocation -> {
+                    assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
+                                    .isActualTransactionActive())
+                            .as("GHN quote must not hold a database transaction")
+                            .isFalse();
+                    jdbcTemplate.update(
+                            "update address set line1 = ? where id = ?", "Changed while quoting", address.getId());
+                    return new spring.abtechzone.modules.shipment.dto.GhnFeeResult(
+                            BigDecimal.valueOf(30000), java.time.OffsetDateTime.now());
+                })
+                .when(shippingFeeService)
+                .calculate(any());
+
+        mockMvc.perform(post("/orders")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .with(jwt().jwt(j -> j.subject("testuser")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("code").value(1068));
+        assertThat(orderRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(cartItemRepository.count()).isEqualTo(1);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
     }
 
     @Test
@@ -378,7 +458,9 @@ class OrderIT extends BaseIT {
                         .with(jwt().jwt(j -> j.subject("testuser")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createOrderBody("ROLLBACK10", "100000")))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VOUCHER_ARE_OUT.getCode()));
+        verify(voucherRedemptionRepository).save(any(VoucherRedemption.class));
 
         // Full rollback of every mutated row (AC-C04-07):
         assertThat(orderRepository.count()).isZero();
@@ -623,12 +705,21 @@ class OrderIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("Concurrent different-key orders for the same SKU never oversell")
+    @DisplayName(
+            "50 concurrent checkouts: PostgreSQL commits only available stock, with consistent orders and SALE_OUT")
     void concurrentDifferentKeys_sameSku_doesNotOversell() throws Exception {
-        inventoryService.setOnHand(sku.getId(), 2);
+        // Real PostgreSQL transactions are essential here. TestRedisConfig deliberately
+        // lets every lock through, so Redis cannot hide a broken database stock guard.
+        int initialStock = 20;
+        int quantityPerCheckout = 2;
+        int expectedOrders = initialStock / quantityPerCheckout;
+        inventoryService.setOnHand(sku.getId(), initialStock);
 
-        int threads = 4;
+        String body = createOrderBody(null, "0");
+
+        int threads = 50;
         List<User> buyers = new java.util.ArrayList<>();
+        List<Cart> carts = new java.util.ArrayList<>();
         for (int i = 0; i < threads; i++) {
             User buyer = userRepository.save(User.builder()
                     .username("concurrent-user-" + i)
@@ -641,53 +732,112 @@ class OrderIT extends BaseIT {
                     .build());
             Cart cart = cartRepository.save(
                     Cart.builder().user(buyer).status(CartStatus.ACTIVE).build());
-            cartItemRepository.save(
-                    CartItem.builder().cart(cart).productSku(sku).quantity(2).build());
+            cartItemRepository.save(CartItem.builder()
+                    .cart(cart)
+                    .productSku(sku)
+                    .quantity(quantityPerCheckout)
+                    .build());
             buyers.add(buyer);
+            carts.add(cart);
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
         CountDownLatch start = new CountDownLatch(1);
-        CountDownLatch done = new CountDownLatch(threads);
+        List<java.util.concurrent.Future<org.springframework.test.web.servlet.MvcResult>> futures =
+                new java.util.ArrayList<>();
         List<org.springframework.mock.web.MockHttpServletResponse> responses =
                 java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
-        for (int i = 0; i < threads; i++) {
-            String key = UUID.randomUUID().toString();
-            String username = buyers.get(i).getUsername();
-            executor.submit(() -> {
-                ready.countDown();
-                try {
-                    start.await();
-                    responses.add(mockMvc.perform(post("/orders")
+        try {
+            for (User buyer : buyers) {
+                String key = UUID.randomUUID().toString();
+                String username = buyer.getUsername();
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    assertThat(start.await(15, TimeUnit.SECONDS)).isTrue();
+                    return mockMvc.perform(post("/orders")
                                     .header("Idempotency-Key", key)
                                     .with(jwt().jwt(j -> j.subject(username)))
                                     .contentType(MediaType.APPLICATION_JSON)
-                                    .content(createOrderBody(null, "0")))
-                            .andReturn()
-                            .getResponse());
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    done.countDown();
+                                    .content(body))
+                            .andReturn();
+                }));
+            }
+            assertThat(ready.await(15, TimeUnit.SECONDS))
+                    .as("all 50 workers must be ready before releasing checkout requests")
+                    .isTrue();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+            start.countDown();
+            // Read every Future: worker exceptions must fail the test, never disappear.
+            for (var future : futures) {
+                var result = future.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+                var response = result.getResponse();
+                if (response.getStatus() != 200) {
+                    assertThat(response.getStatus())
+                            .as("checkout response: %s", response.getContentAsString())
+                            .isIn(400, 409);
+                    assertThat((Integer) com.jayway.jsonpath.JsonPath.read(response.getContentAsString(), "$.code"))
+                            .as(
+                                    "checkout response: %s; exception: %s",
+                                    response.getContentAsString(), result.getResolvedException())
+                            .isIn(ErrorCode.INSUFFICIENT_STOCK.getCode(), ErrorCode.CHECKOUT_CHANGED.getCode());
                 }
-            });
+                responses.add(response);
+            }
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
         }
-        ready.await();
-        start.countDown();
-        assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
-        executor.shutdown();
 
         assertThat(responses).hasSize(threads);
         assertThat(responses.stream().filter(response -> response.getStatus() == 200))
-                .hasSize(1);
+                .hasSize(expectedOrders);
         assertThat(responses.stream().filter(response -> response.getStatus() != 200))
-                .hasSize(threads - 1)
-                .allSatisfy(response -> assertThat(response.getStatus()).isIn(400, 409));
-        assertThat(orderRepository.count()).isEqualTo(1);
+                .hasSize(threads - expectedOrders)
+                .allSatisfy(response -> {
+                    int code = com.jayway.jsonpath.JsonPath.read(response.getContentAsString(), "$.code");
+                    if (code == ErrorCode.INSUFFICIENT_STOCK.getCode()) {
+                        assertThat(response.getStatus()).isEqualTo(400);
+                    } else {
+                        assertThat(response.getStatus()).isEqualTo(409);
+                        assertThat(code).isEqualTo(ErrorCode.CHECKOUT_CHANGED.getCode());
+                        assertThat((String) com.jayway.jsonpath.JsonPath.read(
+                                        response.getContentAsString(), "$.result.items[0].issueCode"))
+                                .isEqualTo(ErrorCode.INSUFFICIENT_STOCK.name());
+                    }
+                });
+        assertThat(orderRepository.count()).isEqualTo(expectedOrders);
+        assertThat(orderItemRepository.findAll())
+                .hasSize(expectedOrders)
+                .allSatisfy(item -> assertThat(item.getQuantity()).isEqualTo(quantityPerCheckout));
+        assertThat(orderStatusHistoryRepository.count()).isEqualTo(expectedOrders);
+        assertThat(paymentRepository.count()).isEqualTo(expectedOrders);
+        assertThat(stockMovementRepository.findAll())
+                .filteredOn(movement -> movement.getReason() == StockMovementReason.SALE_OUT)
+                .hasSize(expectedOrders)
+                .allSatisfy(movement -> assertThat(movement.getChangeQty()).isEqualTo(-quantityPerCheckout));
+        assertThat(stockMovementRepository.findAll().stream()
+                        .filter(movement -> movement.getReason() == StockMovementReason.SALE_OUT)
+                        .map(StockMovement::getReferenceId))
+                .containsExactlyInAnyOrderElementsOf(orderRepository.findAll().stream()
+                        .map(order -> String.valueOf(order.getId()))
+                        .toList());
         assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
                 .isZero();
+        for (int i = 0; i < threads; i++) {
+            boolean succeeded = responses.get(i).getStatus() == 200;
+            Cart cart = cartRepository.findById(carts.get(i).getId()).orElseThrow();
+            assertThat(cart.getStatus()).isEqualTo(succeeded ? CartStatus.COMPLETED : CartStatus.ACTIVE);
+            assertThat(cartItemRepository
+                            .findByCartIdAndProductSkuId(cart.getId(), sku.getId())
+                            .isPresent())
+                    .isEqualTo(!succeeded);
+            assertThat(orderRepository.findByUserIdOrderByCreatedAtDesc(
+                            buyers.get(i).getId()))
+                    .hasSize(succeeded ? 1 : 0);
+        }
     }
 
     @Test
@@ -717,9 +867,9 @@ class OrderIT extends BaseIT {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
 								{
-								"selectedSkuIds": [%d]
+								"selectedSkuIds": [%d], "newUserAddress": %s
 								}
-								""".formatted(sku.getId())))
+								""".formatted(sku.getId(), NEW_USER_ADDRESS)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.items[0].skuId").value(sku.getId()))
                 .andExpect(jsonPath("$.result.items[0].lineTotal").value(2000000))
@@ -803,7 +953,9 @@ class OrderIT extends BaseIT {
 
         Order cancelled = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(cancelled.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(cancelled.getPaymentStatus().name()).isEqualTo("CANCELLED");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(cancelled.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.CANCELLED);
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(cancelled.getId()))
                 .hasSize(2); // created + cancelled
     }
@@ -935,7 +1087,9 @@ class OrderIT extends BaseIT {
 
         Order unchanged = orderRepository.findByOrderCode(orderCode).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(unchanged.getPaymentStatus().name()).isEqualTo("UNPAID");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(unchanged.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.PENDING);
         assertThat(orderStatusHistoryRepository.findByOrderIdOrdered(unchanged.getId()))
                 .hasSize(1); // create history only
 
@@ -949,6 +1103,100 @@ class OrderIT extends BaseIT {
         List<VoucherRedemption> redemptions = voucherRedemptionRepository.findAll();
         assertThat(redemptions).hasSize(1);
         assertThat(redemptions.get(0).getStatus()).isEqualTo(VoucherRedemptionStatus.REDEEMED);
+    }
+
+    @Test
+    void onlineLateSuccessRacingExpiryCompensatesStockAndVoucherOnce() throws Exception {
+        Voucher voucher = onlineVoucher("ONLINE-EXPIRY");
+        String code = createOrderViaApi(voucher.getCode(), "100000");
+        var payment = expiredOnlineAttempt(code);
+        var result = new spring.abtechzone.modules.payment.gateway.PaymentGateway.Result(
+                payment.getMerchantRequestId(),
+                payment.getAmount(),
+                "VND",
+                spring.abtechzone.modules.payment.gateway.PaymentGateway.Outcome.SUCCEEDED,
+                "ONLINE-SETTLED",
+                null);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            var expiry = executor.submit(() -> {
+                start.await();
+                onlinePaymentService.expire(payment.getId());
+                return null;
+            });
+            var callback = executor.submit(() -> {
+                start.await();
+                return onlinePaymentService.apply(payment.getProvider(), result);
+            });
+            start.countDown();
+            expiry.get(20, TimeUnit.SECONDS);
+            callback.get(20, TimeUnit.SECONDS);
+        }
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(50);
+        assertThat(stockMovementRepository.findAll())
+                .filteredOn(m -> m.getReason() == StockMovementReason.ORDER_CANCEL_RETURN)
+                .hasSize(1);
+        assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
+                .isZero();
+        assertThat(voucherRedemptionRepository.findAll())
+                .allMatch(r -> r.getStatus() == VoucherRedemptionStatus.REVERSED);
+        assertThat(orderRepository.findByOrderCode(code).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.CANCELLED);
+        var paid = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertThat(paid.getStatus()).isEqualTo(PaymentAttemptStatus.SUCCEEDED);
+        assertThat(paid.getReviewReason()).isEqualTo("LATE_SUCCESS");
+    }
+
+    @Test
+    void onlineExpiryCompensationFailureRollsBackAllResources() throws Exception {
+        Voucher voucher = onlineVoucher("ONLINE-ROLLBACK");
+        String code = createOrderViaApi(voucher.getCode(), "100000");
+        var payment = expiredOnlineAttempt(code);
+        doThrow(new AppException(ErrorCode.SYSTEM_ERROR))
+                .when(voucherRepository)
+                .decreaseUsedCount(anyLong());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> onlinePaymentService.expire(payment.getId()))
+                .isInstanceOf(AppException.class);
+        assertThat(inventoryRepository.findById(sku.getId()).orElseThrow().getOnHand())
+                .isEqualTo(48);
+        assertThat(stockMovementRepository.findAll())
+                .noneMatch(m -> m.getReason() == StockMovementReason.ORDER_CANCEL_RETURN);
+        assertThat(voucherRepository.findById(voucher.getId()).orElseThrow().getUsedCount())
+                .isEqualTo(1);
+        assertThat(voucherRedemptionRepository.findAll())
+                .allMatch(r -> r.getStatus() == VoucherRedemptionStatus.REDEEMED);
+        assertThat(orderRepository.findByOrderCode(code).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.PENDING);
+        assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getStatus())
+                .isEqualTo(PaymentAttemptStatus.PENDING);
+    }
+
+    private Voucher onlineVoucher(String code) {
+        return voucherRepository.save(Voucher.builder()
+                .name("Online voucher")
+                .code(code)
+                .type(VoucherType.FIXED_AMOUNT)
+                .value(BigDecimal.valueOf(100000))
+                .isActive(true)
+                .applyScope(VoucherApplyScope.ALL)
+                .usedCount(0)
+                .build());
+    }
+
+    private spring.abtechzone.modules.payment.entity.Payment expiredOnlineAttempt(String code) {
+        // Reuse the real checkout fixture, then seed an initiated online attempt for the expiry boundary.
+        Order order = orderRepository.findByOrderCode(code).orElseThrow();
+        var payment = paymentRepository
+                .findByOrderIdOrderByCreatedAtAscIdAsc(order.getId())
+                .getFirst();
+        payment.setMethod(spring.abtechzone.modules.order.constant.PaymentMethod.ONLINE);
+        payment.setProvider(spring.abtechzone.modules.payment.constant.PaymentProvider.MOMO);
+        payment.setMerchantRequestId("online-" + payment.getId());
+        payment.setInitiationState("READY");
+        payment.setApplicationStatus("NONE");
+        payment.setPaymentDeadline(java.time.OffsetDateTime.now().minusSeconds(1));
+        return paymentRepository.saveAndFlush(payment);
     }
 
     @Test
@@ -1075,7 +1323,9 @@ class OrderIT extends BaseIT {
                 .andExpect(jsonPath("$.result.status").value("DELIVERED"));
 
         Order delivered = orderRepository.findByOrderCode(orderCode).orElseThrow();
-        assertThat(delivered.getPaymentStatus().name()).isEqualTo("PAID");
+        assertThat(paymentRepository.findByOrderIdOrderByCreatedAtAscIdAsc(delivered.getId()))
+                .extracting(payment -> payment.getStatus())
+                .containsExactly(PaymentAttemptStatus.SUCCEEDED);
 
         // Terminal state: no further transition
         mockMvc.perform(patch("/admin/orders/{orderCode}/status", orderCode)

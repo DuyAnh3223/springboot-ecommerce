@@ -63,6 +63,7 @@ export function buildCreateCheckoutOrderRequest(
           }
         : null,
       canPlaceOrder: review.canPlaceOrder,
+      ...(review.shippingAddress ? { shippingAddress: review.shippingAddress } : {}),
     },
     addressId: values.addressMode === "EXISTING" ? values.addressId || null : null,
     newUserAddress:
@@ -71,12 +72,17 @@ export function buildCreateCheckoutOrderRequest(
             recipientName: values.newAddress.recipientName.trim(),
             phone: values.newAddress.phone.trim(),
             province: values.newAddress.province.trim(),
+            district: values.newAddress.district.trim(),
             ward: values.newAddress.ward.trim(),
             street: values.newAddress.street.trim(),
+            ghnProvinceId: values.newAddress.ghnProvinceId,
+            ghnDistrictId: values.newAddress.ghnDistrictId,
+            ghnWardCode: values.newAddress.ghnWardCode.trim(),
             saveAddress: values.newAddress.saveAddress,
           }
         : null,
-    paymentMethod: "COD",
+    paymentMethod: values.paymentProvider && values.paymentProvider !== "COD" ? "ONLINE" : "COD",
+    ...(values.paymentProvider && values.paymentProvider !== "COD" ? { paymentProvider: values.paymentProvider } : {}),
   };
 
   return request;
@@ -114,6 +120,12 @@ export function getCheckoutErrorMessage(code?: number, status?: number): string 
     case 1036:
     case 1037:
       return "Địa chỉ nhận hàng không hợp lệ hoặc không còn khả dụng.";
+    case 1079:
+      return "Địa chỉ nhận hàng thiếu mã tuyến GHN. Vui lòng kiểm tra lại.";
+    case 1080:
+      return "Không thể tính phí vận chuyển lúc này. Vui lòng thử lại sau.";
+    case 1081:
+      return "Không thể tải danh sách địa chỉ GHN. Vui lòng thử lại sau.";
     case 1038:
       return "Voucher đã đạt giới hạn sử dụng của tài khoản.";
     case 1044:
@@ -150,7 +162,7 @@ export function getCreateFailureResolution(
   if (error.code === 1068 && error.latestReview) {
     return "RECONFIRM_LATEST_REVIEW";
   }
-  if (error.code === 1067) {
+  if (error.code === 1067 || error.code === 1068) {
     return "REFRESH_BEFORE_NEW_ATTEMPT";
   }
   return "RETRY_SAME_ATTEMPT";

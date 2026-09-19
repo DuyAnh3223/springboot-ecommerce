@@ -1,4 +1,5 @@
 "use server";
+import { createPaymentCheckout } from "@/features/payments/services/payment.service";
 
 import {
   createCheckoutOrder,
@@ -47,10 +48,17 @@ export async function createCheckoutOrderAction(
   idempotencyKey: string,
 ): Promise<CheckoutActionResult<CheckoutOrderResponse>> {
   try {
-    return {
-      success: true,
-      data: await createCheckoutOrder(request, idempotencyKey),
-    };
+    const order = await createCheckoutOrder(request, idempotencyKey);
+    if (request.paymentMethod === "ONLINE" && request.paymentProvider) {
+      try {
+        const checkout = await createPaymentCheckout(order.orderCode, request.paymentProvider, idempotencyKey);
+        return { success: true, data: { ...order, paymentCheckoutUrl: checkout.checkoutUrl || undefined } };
+      } catch {
+        // Order already committed: show its status instead of creating another order.
+        return { success: true, data: order };
+      }
+    }
+    return { success: true, data: order };
   } catch (error: unknown) {
     return { success: false, error: toCheckoutError(error) };
   }

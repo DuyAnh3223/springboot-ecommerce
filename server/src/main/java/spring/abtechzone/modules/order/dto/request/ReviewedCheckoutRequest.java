@@ -9,6 +9,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import spring.abtechzone.modules.order.validator.UniqueSkuIds;
+import spring.abtechzone.modules.shipment.dto.ShippingAddressSnapshot;
 
 @Data
 @Builder
@@ -44,6 +45,9 @@ public class ReviewedCheckoutRequest {
 
     @Valid
     ReviewedVoucherRequest voucher;
+
+    @Valid
+    ShippingAddressSnapshot shippingAddress;
 
     @NotNull(message = "canPlaceOrder is required")
     @AssertTrue(message = "canPlaceOrder must be true")

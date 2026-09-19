@@ -3,6 +3,7 @@ import {
   AddressResponse,
   GetAddressesParams,
   AddressRequest,
+  AddressUpdateRequest,
 } from "../address.type";
 import { PageResponse } from "@/shared/types/page.type";
 
@@ -27,7 +28,7 @@ export async function createAddress(
 
 export async function updateAddress(
   addressId: string,
-  values: AddressRequest,
+  values: AddressUpdateRequest,
 ): Promise<AddressResponse> {
   const response = await api.patch(`/addresses/${addressId}`, values);
   return response.data.result;

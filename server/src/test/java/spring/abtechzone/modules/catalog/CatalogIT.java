@@ -69,6 +69,9 @@ class CatalogIT extends BaseIT {
     @Autowired
     private spring.abtechzone.modules.order.repository.OrderRepository orderRepository;
 
+    @Autowired
+    private spring.abtechzone.modules.payment.repository.PaymentRepository paymentRepository;
+
     private Category category;
     private Brand brandA;
     private Brand brandB;
@@ -77,6 +80,7 @@ class CatalogIT extends BaseIT {
     @BeforeEach
     void setUp() {
         orderItemRepository.deleteAll();
+        paymentRepository.deleteAll();
         orderRepository.deleteAll();
         cartItemRepository.deleteAll();
         cartRepository.deleteAll();

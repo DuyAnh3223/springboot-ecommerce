@@ -29,8 +29,20 @@ public class Address {
     @Column(nullable = false)
     String province;
 
+    @Column
+    String district;
+
     @Column(nullable = false)
     String ward;
+
+    @Column(name = "ghn_province_id")
+    Integer ghnProvinceId;
+
+    @Column(name = "ghn_district_id")
+    Integer ghnDistrictId;
+
+    @Column(name = "ghn_ward_code", length = 20)
+    String ghnWardCode;
 
     @Column(name = "line1", nullable = false)
     String street;
