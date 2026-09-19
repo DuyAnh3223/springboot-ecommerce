@@ -31,7 +31,7 @@ Admin tự cập nhật giao hàng qua state machine hiện có:
 - **AC4:** Đổi địa chỉ hoặc fee sau review trả 409 `CHECKOUT_CHANGED`.
 - **AC5:** Admin chỉ chuyển được `CONFIRMED -> SHIPPING`, `SHIPPING -> DELIVERED` hoặc `SHIPPING -> DELIVERY_FAILED`; failure không có note bị từ chối.
 - **AC6:** Customer không được gọi admin mutation; terminal state không được chuyển tiếp.
-- **AC7:** Automated tests cover GHN request/response mapping, provider failure, fixed weight, fee validation và delivery failure side effects. Human UAT remains pending.
+- **AC7:** Automated tests cover GHN request/response mapping, provider failure, fixed weight, fee validation và delivery failure side effects. Human UAT was accepted under the user's conditional authorization on 2026-09-19 after every scenario in the shipment regression UAT passed.
 
 ## Out of scope
 
