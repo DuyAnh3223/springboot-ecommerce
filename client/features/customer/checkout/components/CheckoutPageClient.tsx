@@ -226,6 +226,10 @@ export function CheckoutPageClient({
   const refreshReview = useCallback(
     async (code?: string | null): Promise<CheckoutActionResult<CheckoutResponse> | null> => {
       const requestVersion = ++reviewRequestVersionRef.current;
+      // A replacement quote cannot leave the previous destination's review actionable.
+      setReview(null);
+      attemptRef.current = null;
+      setRequiresReconfirmation(false);
       const values = form.getValues();
       const result = await runReview(() =>
         reviewCheckoutAction({
@@ -469,6 +473,8 @@ export function CheckoutPageClient({
                     shouldValidate: true,
                   });
                   setValue("addressId", undefined, { shouldValidate: true });
+                  reviewRequestVersionRef.current += 1;
+                  attemptRef.current = null;
                   setReview(null);
                 }}
               />

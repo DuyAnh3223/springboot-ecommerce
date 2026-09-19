@@ -125,7 +125,7 @@ export function getCheckoutErrorMessage(code?: number, status?: number): string 
     case 1080:
       return "Không thể tính phí vận chuyển lúc này. Vui lòng thử lại sau.";
     case 1081:
-      return "KhÃ´ng thá»ƒ táº£i danh sÃ¡ch Ä‘á»‹a chá»‰ GHN. Vui lÃ²ng thá»­ láº¡i sau.";
+      return "Không thể tải danh sách địa chỉ GHN. Vui lòng thử lại sau.";
     case 1038:
       return "Voucher đã đạt giới hạn sử dụng của tài khoản.";
     case 1044:
@@ -162,7 +162,7 @@ export function getCreateFailureResolution(
   if (error.code === 1068 && error.latestReview) {
     return "RECONFIRM_LATEST_REVIEW";
   }
-  if (error.code === 1067) {
+  if (error.code === 1067 || error.code === 1068) {
     return "REFRESH_BEFORE_NEW_ATTEMPT";
   }
   return "RETRY_SAME_ATTEMPT";

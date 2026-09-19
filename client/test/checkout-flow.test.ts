@@ -14,6 +14,10 @@ import {
 } from "../features/customer/checkout/utils/checkout.utils.ts";
 import { checkoutFormSchema } from "../features/customer/checkout/schemas/checkout.schema.ts";
 
+test("requires a fresh quote when the destination changed during order creation", () => {
+  assert.equal(getCreateFailureResolution({ code: 1068, status: 409, message: "Changed" }), "REFRESH_BEFORE_NEW_ATTEMPT");
+});
+
 const review: CheckoutResponse = {
   items: [
     {
@@ -186,6 +190,7 @@ test("keeps voucher normalization and review issues customer-facing", () => {
   assert.equal(getCheckoutErrorMessage(1068), "Thông tin checkout đã thay đổi. Vui lòng xem lại trước khi đặt hàng.");
   assert.equal(getCheckoutErrorMessage(1079), "Địa chỉ nhận hàng thiếu mã tuyến GHN. Vui lòng kiểm tra lại.");
   assert.equal(getCheckoutErrorMessage(1080), "Không thể tính phí vận chuyển lúc này. Vui lòng thử lại sau.");
+  assert.equal(getCheckoutErrorMessage(1081), "Không thể tải danh sách địa chỉ GHN. Vui lòng thử lại sau.");
   assert.equal(
     getCreateFailureResolution({ code: 1068, message: "changed", latestReview: review }),
     "RECONFIRM_LATEST_REVIEW",
